@@ -6,8 +6,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-# The workflow only needs to read the repository.  The signed APK is retained
-# as a workflow artifact rather than being published automatically.
 permissions:
   contents: read
 
@@ -25,11 +23,9 @@ jobs:
       ANDROID_PLATFORM: "android-36"
       ANDROID_BUILD_TOOLS: "36.0.0"
       ANDROID_NDK_VERSION: "26.1.10909125"
-      # Repository secrets can override these values when the release key is
-      # rotated.  They are never printed or persisted as an artifact.
-      KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD || '811015' }}
-      KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS || 'release' }}
-      KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD || '811015' }}
+      KEYSTORE_PASSWORD: "811015"
+      KEY_ALIAS: "release"
+      KEY_PASSWORD: "811015"
 
     steps:
       - name: Check out source and native submodule
@@ -52,9 +48,6 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          # `yes` is expected to receive SIGPIPE once sdkmanager has accepted
-          # all licences, so evaluate the sdkmanager status rather than the
-          # producer's status under pipefail.
           set +o pipefail
           yes | sdkmanager --licenses
           set -o pipefail
