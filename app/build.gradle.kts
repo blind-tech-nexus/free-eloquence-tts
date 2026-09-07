@@ -13,20 +13,6 @@ val rulesForm = findProperty("evvdroid.rules") as String? ?: "c"
 val languages = findProperty("evvdroid.langs") as String? ?: "lang/enus"
 val nativeOut = layout.buildDirectory.dir("native/jniLibs")
 
-// Release signing, from a keystore.properties the repo does not carry. Without
-// it a clone still builds and the release APK comes out unsigned.
-val keystore = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { where ->
-	Properties().apply { where.inputStream().use { stream -> load(stream) } }
-} ?: run {
-	// If keystore.properties doesn't exist, use release.jks with environment variables
-	val props = Properties()
-	props.setProperty("storeFile", "release.jks")
-	props.setProperty("storePassword", System.getenv("KEYSTORE_PASSWORD") ?: "")
-	props.setProperty("keyAlias", System.getenv("KEY_ALIAS") ?: "")
-	props.setProperty("keyPassword", System.getenv("KEY_PASSWORD") ?: "")
-	props
-}
-
 // The engine is built by its own Makefile rather than by CMake, because that
 // Makefile writes the language rules with Python before it compiles them and
 // nothing here has a reason to reimplement that.
@@ -98,10 +84,10 @@ android {
 
 	signingConfigs {
 		create("release") {
-			storeFile = file(keystore.getProperty("storeFile"))
-			storePassword = keystore.getProperty("storePassword")
-			keyAlias = keystore.getProperty("keyAlias")
-			keyPassword = keystore.getProperty("keyPassword")
+			storeFile = file("release.jks")
+			storePassword = "811015"
+			keyAlias = "release"
+			keyPassword = "811015"
 			// Off by default in AGP. It is what lets the key be rotated
 			// later without every install having to be thrown away.
 			enableV3Signing = true
