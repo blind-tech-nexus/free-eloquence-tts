@@ -84,7 +84,7 @@ android {
 
 	signingConfigs {
 		create("release") {
-			storeFile = file("release.jks")
+			storeFile = rootProject.file("release.jks")
 			storePassword = "811015"
 			keyAlias = "release"
 			keyPassword = "811015"
