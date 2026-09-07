@@ -1,0 +1,135 @@
+name: Build signed APK
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+# The workflow only needs to read the repository.  The signed APK is retained
+# as a workflow artifact rather than being published automatically.
+permissions:
+  contents: read
+
+concurrency:
+  group: build-apk-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and verify signed release APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      JAVA_VERSION: "17"
+      ANDROID_PLATFORM: "android-36"
+      ANDROID_BUILD_TOOLS: "36.0.0"
+      ANDROID_NDK_VERSION: "26.1.10909125"
+      # Repository secrets can override these values when the release key is
+      # rotated.  They are never printed or persisted as an artifact.
+      KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD || '811015' }}
+      KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS || 'release' }}
+      KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD || '811015' }}
+
+    steps:
+      - name: Check out source and native submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Set up Android SDK command-line tools
+        uses: android-actions/setup-android@v3
+
+      - name: Install required Android SDK, build tools, and NDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # `yes` is expected to receive SIGPIPE once sdkmanager has accepted
+          # all licences, so evaluate the sdkmanager status rather than the
+          # producer's status under pipefail.
+          set +o pipefail
+          yes | sdkmanager --licenses
+          set -o pipefail
+          sdkmanager \
+            "platform-tools" \
+            "platforms;${ANDROID_PLATFORM}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "ndk;${ANDROID_NDK_VERSION}"
+          sdkmanager --list | sed -n '1,220p'
+          java -version
+          javac -version
+          python3 --version
+          make --version | head -n 1
+          bash --version | head -n 1
+
+      - name: Restore Android and native build caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.android/build-cache
+            native/openevv/build
+          key: ${{ runner.os }}-android-${{ env.ANDROID_NDK_VERSION }}-${{ hashFiles('**/*.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', 'native/android.mk', 'native/build-native.sh', 'native/patches/**/*.patch') }}
+          restore-keys: |
+            ${{ runner.os }}-android-${{ env.ANDROID_NDK_VERSION }}-
+
+      - name: Show checked-out build inputs
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git status --short
+          git submodule status --recursive
+          chmod +x gradlew native/build-native.sh
+          ./gradlew --version
+          echo "ANDROID_HOME=${ANDROID_HOME}"
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}"
+          test -x "${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+
+      - name: Configure release signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f release.jks
+          umask 077
+          {
+            printf 'storeFile=release.jks\n'
+            printf 'storePassword=%s\n' "$KEYSTORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+          } > keystore.properties
+
+      - name: Build release APK and native libraries
+        shell: bash
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
+        run: |
+          set -euxo pipefail
+          ./gradlew --no-daemon --stacktrace --info :app:assembleRelease
+          find app/build/native/jniLibs -type f -name '*.so' -printf '%p %s bytes\n' | sort
+          find app/build/outputs/apk/release -maxdepth 1 -type f -printf '%p %s bytes\n' | sort
+
+      - name: Verify and report the signed APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          apk="app/build/outputs/apk/release/app-release.apk"
+          test -s "$apk"
+          "${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS}/zipalign" -c -P 16 -v 4 "$apk"
+          "${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner" verify --verbose --print-certs "$apk"
+          sha256sum "$apk"
+          unzip -l "$apk" | sed -n '1,240p'
+
+      - name: Upload signed release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: evvdroid-signed-release-apk-${{ github.run_number }}
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
