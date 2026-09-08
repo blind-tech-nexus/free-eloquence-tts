@@ -177,7 +177,9 @@ class Settings(context: Context) {
 		 *  rewrites these when it moves the files, so it needs the name too. */
 		fun dictionaryPathKey(volume: Int) = "dict_path_$volume"
 
-		/** The eight, in the order the settings screen shows them. */
+		/** The eight. The order they have always been written and read in,
+		 *  which is not the order the screen shows them in: [BEHAVIOURS] is
+		 *  that one. */
 		val SHAPE = listOf(
 			Eci.VOICE_GENDER,
 			Eci.VOICE_SPEED,
@@ -194,5 +196,23 @@ class Settings(context: Context) {
 
 		/** The seven that are a slider. Gender is a choice of two. */
 		val SLIDERS = SHAPE.filter { it != Eci.VOICE_GENDER }
+
+		/** The seven that are a slider again, in the order the screen shows
+		 *  them: how fast, then how high, then the three that give a voice its
+		 *  colour, then how loud. The order above puts head size between
+		 *  inflection and roughness for a reason nobody can hear, and rate --
+		 *  which is what everybody else calls the engine's speed, and what the
+		 *  slider is labelled -- last but for volume. A test says the two
+		 *  lists are the same seven, so a parameter added to one cannot go
+		 *  missing from the screen. */
+		val BEHAVIOURS = listOf(
+			Eci.VOICE_SPEED,
+			Eci.VOICE_PITCH_BASELINE,
+			Eci.VOICE_PITCH_FLUCTUATION,
+			Eci.VOICE_BREATHINESS,
+			Eci.VOICE_HEAD_SIZE,
+			Eci.VOICE_ROUGHNESS,
+			Eci.VOICE_VOLUME
+		)
 	}
 }

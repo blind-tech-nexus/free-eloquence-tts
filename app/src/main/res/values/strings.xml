@@ -3,57 +3,154 @@
 	<string name="app_name">Alt eloquence TTS</string>
 	<string name="engine_name">Alt eloquence TTS</string>
 
-	<string name="welcome_title">Welcome to Alt eloquence TTS, a free alternative to eloquence TTS.</string>
-	<string name="welcome_open_source">This application is built from open source projects to deliver a robust experience to the users.</string>
-	<string name="welcome_free">This application is provided free of charge to break the barriers of paying.</string>
-	<string name="welcome_solution">We are very proud to present all in one solution for paid eloquence TTS.</string>
-	<string name="welcome_more">For more, Read about section to understand it more clearly.</string>
-	<string name="welcome_continue">Continue to app</string>
+	<!-- The four screens. Every one of them is written for somebody who hears
+	     it rather than looks at it, so a label says what a control is and what
+	     it is set to, and never depends on a colour, a shape or a position to
+	     mean anything. -->
 
-	<string name="default_tts_title">Alt eloquence TTS is not the default tts.</string>
-	<string name="default_tts_message">Set Alt eloquence TTS as the preferd text to speech engine to experience robust and all time TTS.</string>
-	<string name="set_as_default">Set as default</string>
+	<string name="go_back">Go back</string>
 
-	<string name="sample_text">Hello from Eloquence.</string>
-	<string name="preview_text">Hello from Eloquence. This is a test of the current voice.</string>
+	<!-- Welcome -->
+	<string name="welcome_title">Welcome to Alt eloquence TTS</string>
+	<string name="welcome_alternative">A free alternative to the paid eloquence text to speech engine.</string>
+	<string name="welcome_open_source">It is built from open source projects to deliver a robust experience of text to speech.</string>
+	<string name="welcome_free">It is provided free of charge, to break the barrier of paying for a screen reader voice.</string>
+	<string name="welcome_solution">It is an all in one replacement for the paid eloquence TTS: eight voices, every setting a voice has, and your own pronunciation dictionaries.</string>
+	<string name="welcome_permissions">The next screen asks for two permissions: notifications, and an exemption from battery optimization. The exemption is required, because without it Android puts the engine to sleep and the voice stops while the phone is idle.</string>
+	<string name="welcome_about">You can read about the app and its developers at any time from the main screen.</string>
+	<string name="welcome_continue">Continue</string>
 
+	<!-- Main -->
+	<string name="main_tagline">A free alternative to the paid eloquence text to speech engine.</string>
+	<string name="main_configure_description">Customize eloquence settings for a robust experience of text to speech.</string>
+	<string name="main_configure_action">Configure eloquence settings</string>
+	<string name="main_system_description">Open the system text to speech settings and choose your preferred engine there.</string>
+	<string name="main_system_action">Open system text to speech settings</string>
+	<string name="main_about_description">Read about the app and its developers.</string>
+	<string name="main_about_action">About</string>
+	<string name="main_system_unavailable">Nothing on this device opens the system text to speech settings.</string>
+	<string name="main_required_heading">Required permission</string>
+	<string name="main_required_description">Alt eloquence TTS speaks for your screen reader, so Android must not put it to sleep. Without an exemption from battery optimization the voice stops whenever the phone decides the app has used too much power in the background.</string>
+	<string name="main_required_allowed">Battery optimization exemption: currently allowed.</string>
+	<string name="main_required_missing">Battery optimization exemption: currently not allowed. This permission is required.</string>
+	<string name="main_required_action">Allow battery optimization exemption</string>
+
+	<!-- The exemption is asked for in so many words as well, because the
+	     system screen that grants it is a yes or no with nothing said about
+	     why it matters. -->
+	<string name="battery_title">Battery optimization exemption is required</string>
+	<string name="battery_message">Alt eloquence TTS is the voice of your screen reader, and Android stops an app it counts as using too much power in the background. Allowing the exemption keeps the voice working at all times, including on the lock screen. Choose Allow now, and then allow it on the system screen that opens.</string>
+	<string name="battery_allow">Allow now</string>
+	<string name="battery_later">Not now</string>
+
+	<!-- Being the chosen engine -->
+	<string name="default_tts_title">Alt eloquence TTS is not the default engine</string>
+	<string name="default_tts_message">Choose Alt eloquence TTS as your preferred text to speech engine in the system settings, for a robust voice that is always available.</string>
+	<string name="set_as_default">Open system text to speech settings</string>
+
+	<!-- Eloquence settings -->
+	<string name="settings_title">Eloquence settings</string>
+
+	<string name="section_voice">Voice customization</string>
+	<string name="section_voice_description">Select a voice variant and set the gender.</string>
 	<string name="voice_label">Voice</string>
 	<string name="gender_label">Gender</string>
 	<string name="gender_male">Male</string>
 	<string name="gender_female">Female</string>
 
-	<string name="speed_label">Speed</string>
+	<string name="section_behaviour">Voice behaviors</string>
+	<string name="rate_label">Rate</string>
+	<string name="rate_description">Customize the voice rate.</string>
 	<string name="pitch_label">Pitch</string>
+	<string name="pitch_description">Customize the voice pitch.</string>
 	<string name="inflection_label">Inflection</string>
-	<string name="head_size_label">Head size</string>
-	<string name="roughness_label">Roughness</string>
+	<string name="inflection_description">Customize the voice inflection, which is how far the pitch rises and falls across a sentence.</string>
 	<string name="breathiness_label">Breathiness</string>
+	<string name="breathiness_description">Customize the voice breathiness, which is how much breath is heard in it.</string>
+	<string name="head_size_label">Head size</string>
+	<string name="head_size_description">Customize the voice head size, which is how large the head speaking it is, and so how much it resonates.</string>
+	<string name="roughness_label">Roughness</string>
+	<string name="roughness_description">Customize the voice roughness, which is how rough or how smooth it sounds.</string>
 	<string name="volume_label">Volume</string>
+	<string name="volume_description">Customize the voice volume.</string>
 
-	<string name="speak_label">Speak a sample</string>
-	<string name="reset_label">Reset voice to defaults</string>
+	<string name="section_quality">Voice quality</string>
+	<string name="sample_rate_label">Sample rate</string>
+	<string name="sample_rate_description">The rate the speech is made at. A higher one is clearer and costs more power.</string>
 
-	<string name="pauses_label">Pauses</string>
-	<string name="pauses_keep">Do not shorten</string>
-	<string name="pauses_end">Shorten at end of text</string>
-	<string name="pauses_all">Shorten all pauses</string>
-	<string name="phrase_prediction_label">Phrase prediction</string>
-	<string name="abbreviations_label">Expand abbreviations</string>
-
+	<string name="section_dictionaries">Voice dictionary settings</string>
+	<string name="dictionaries_description">Choose a pronunciation dictionary for each of the three volumes. A dictionary teaches the engine the words it would otherwise spell out, letter by letter.</string>
 	<string name="dictionary_main">Main dictionary</string>
 	<string name="dictionary_root">Root dictionary</string>
 	<string name="dictionary_abbreviation">Abbreviation dictionary</string>
 	<string name="dictionary_none">None</string>
 	<string name="dictionary_entries">%1$s, %2$d words</string>
-	<string name="dictionary_remove">Remove dictionaries</string>
+	<string name="dictionary_refused">Nothing was taken from that file. It could not be read, or it has no entries the engine can use.</string>
+	<string name="dictionary_removed">All dictionaries removed.</string>
+	<string name="dictionary_remove">Remove all dictionaries</string>
+	<string name="dictionary_remove_description">Forgets the three files above and deletes the copies this app took of them.</string>
+	<string name="abbreviations_label">Expand abbreviations</string>
+	<string name="abbreviations_description">Reads an abbreviation as the words it stands for. Off by default, because it expands whatever it takes for an abbreviation whether that was wanted or not.</string>
 
-	<string name="sample_rate_label">Sample rate</string>
-	<string name="hertz">%1$d Hz</string>
+	<string name="section_other">Other settings</string>
+	<string name="pauses_label">Pauses</string>
+	<string name="pauses_description">Eloquence pauses generously, which reads well in prose and slowly in a screen reader, where most of what is read is a few words.</string>
+	<string name="pauses_keep">Do not shorten</string>
+	<string name="pauses_end">Shorten at end of text</string>
+	<string name="pauses_all">Shorten all pauses</string>
+	<string name="phrase_prediction_label">Phrase prediction</string>
+	<string name="phrase_prediction_description">Lets the engine guess where the phrases in a sentence are and shape the intonation to match. Off by default, because a screen reader reads a fragment at a time and the guess is usually wrong.</string>
+	<string name="reset_label">Reset this voice to its defaults</string>
+	<string name="voice_reset">%1$s is back to the settings it shipped with.</string>
+	<string name="reset_description">Forgets what has been changed for the voice chosen above. Every other voice is left alone, and so is the rate, which is yours rather than the voice\'s.</string>
 
-	<string name="percent">%1$d%%</string>
-	<string name="percent_spoken">%1$d percent</string>
+	<string name="section_test">Test voice</string>
+	<string name="test_description">Nothing here speaks by itself. Every setting is in force the moment it is changed, and this is how you hear the result.</string>
+	<string name="speak_label">Speak a sample</string>
+	<string name="stop_label">Stop the sample</string>
+
+	<!-- About -->
+	<string name="about_title">About us</string>
+	<string name="about_app">Alt eloquence TTS is a free eloquence text to speech engine for Android and for Wear OS.</string>
+	<string name="about_engine_speech">The speech comes from openevv, an open source rebuild of IBM\'s Embedded ViaVoice, put behind the text to speech interface Android already has, so that any app that can speak can speak in it.</string>
+	<string name="about_accessibility">It is built for blind and low vision people. Every control on every screen is one stop for a screen reader, says what it is and what it is set to, and can be changed without leaving the screen.</string>
+	<string name="about_free">It is free, it is open source, and it asks for no account, no payment and nothing from the network. The two permissions it asks for are notifications and an exemption from battery optimization, and both are about staying available while the phone is idle.</string>
+	<string name="about_unofficial">It is a hobby project, and nobody\'s product. It is not from IBM, Nuance, Cerence or Google, and none of them have endorsed or reviewed it.</string>
+	<string name="about_developer_heading">Developers</string>
+	<string name="about_developer">Developed by Sujan Rai, with the Blind Tech Nexus team.</string>
+	<string name="about_team">Blind Tech Nexus builds apps and tools for blind and low vision people, and writes about the everyday use of them.</string>
+	<string name="about_contact_heading">Contact</string>
+	<string name="about_contact_whatsapp">For bugs, feedback or a feature request, contact us on WhatsApp.</string>
+	<string name="about_whatsapp_action">Contact on WhatsApp</string>
+	<string name="about_contact_telegram">Join the Telegram channel for update broadcasts, more apps and tools, and everyday information.</string>
+	<string name="about_telegram_action">Join the Telegram channel</string>
+	<string name="about_contact_email">Email us for a reliable reply and faster contact.</string>
+	<string name="about_email_action">Send email</string>
+	<string name="about_email_subject">Alt eloquence TTS</string>
+	<string name="about_build_heading">This build</string>
+	<string name="about_version">App version %1$s.</string>
+	<string name="about_speech_engine">Speech engine: openevv %1$s.</string>
+	<string name="about_licence">The Kotlin, the C bridge, the build and the tests are MIT licensed. The engine is openevv\'s own, and the language data in it is IBM\'s.</string>
+	<string name="about_unavailable">Nothing on this device can open %1$s.</string>
+
+	<!-- How a row speaks. A label and a value are one control and one stop, so
+	     both of these end up in the same node. -->
 	<string name="labelled_value">%1$s: %2$s</string>
+	<string name="state_selected">%1$s selected</string>
+	<string name="choice_value">Currently %1$s selected. Click to change.</string>
+	<string name="file_value">Currently %1$s. Click to choose a file.</string>
+	<string name="action_change">Change</string>
+	<string name="action_choose_file">Choose a file</string>
 	<string name="switch_on">On</string>
 	<string name="switch_off">Off</string>
 	<string name="cancel">Cancel</string>
+
+	<!-- The engine's own numbers are on three scales, so the screen shows and
+	     speaks hundredths of whichever one a setting has. -->
+	<string name="percent">%1$d%%</string>
+	<string name="percent_spoken">%1$d percent</string>
+	<string name="hertz">%1$d Hz</string>
+
+	<string name="sample_text">Hello from Eloquence.</string>
+	<string name="preview_text">Hello from Eloquence. This is a test of the current voice.</string>
 </resources>
