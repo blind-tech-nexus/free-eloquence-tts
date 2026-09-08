@@ -37,19 +37,38 @@ fun WelcomeScreen(onContinue: () -> Unit) {
             style = MaterialTheme.typography.headlineMedium
         )
         Spacer(modifier = Modifier.height(24.dp))
-        Text(text = stringResource(R.string.welcome_open_source))
+        Text(
+            text = stringResource(R.string.welcome_open_source),
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.bodyLarge
+        )
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = stringResource(R.string.welcome_free))
+        Text(
+            text = stringResource(R.string.welcome_free),
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.bodyLarge
+        )
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = stringResource(R.string.welcome_solution))
+        Text(
+            text = stringResource(R.string.welcome_solution),
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.bodyLarge
+        )
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = stringResource(R.string.welcome_more))
+        Text(
+            text = stringResource(R.string.welcome_more),
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.bodyLarge
+        )
         Spacer(modifier = Modifier.height(32.dp))
         Button(
             onClick = onContinue,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(text = stringResource(R.string.welcome_continue))
+            Text(
+                text = stringResource(R.string.welcome_continue),
+                style = MaterialTheme.typography.labelLarge
+            )
         }
     }
 }
