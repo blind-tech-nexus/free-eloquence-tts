@@ -1,6 +1,6 @@
-# evvdroid
+# Alt eloquence TTS
 
-Eloquence as a text-to-speech engine for Android and Wear OS.
+Alt eloquence TTS is a free alternative Eloquence text-to-speech engine for Android and Wear OS.
 
 The speech comes from [openevv](https://github.com/Mudb0y/openevv), a C rebuild of IBM's Embedded ViaVoice. This repo cross-compiles that engine for Android, wraps it in JNI, and puts a `TextToSpeechService` around it. openevv is a submodule and is not edited in place.
 
@@ -25,7 +25,7 @@ No warranty. See LICENSE, and read the part about language data before redistrib
 
 ## Turning it on
 
-TalkBack settings, Text-to-speech settings, Preferred engine, Eloquence (openevv). The gear next to it opens the voice settings.
+TalkBack settings, Text-to-speech settings, Preferred engine, Alt eloquence TTS. The gear next to it opens the voice settings.
 
 ## Turning it off
 

@@ -57,16 +57,16 @@ val buildNative by tasks.registering(Exec::class) {
 }
 
 android {
-	namespace = "org.evvdroid"
+	namespace = "com.blindtechnexus.alteloquencetts"
 	compileSdk = 36
 	ndkVersion = "26.1.10909125"
 
 	defaultConfig {
-		applicationId = "org.evvdroid"
+		applicationId = "com.blindtechnexus.alteloquencetts"
 		minSdk = 23
 		targetSdk = 36
 		versionCode = 1
-		versionName = "0.1.0"
+		versionName = "1.1"
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 		ndk {
 			abiFilters += abis
