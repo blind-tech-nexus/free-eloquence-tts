@@ -8,7 +8,12 @@
 	<string name="welcome_free">This application is provided free of charge to break the barriers of paying.</string>
 	<string name="welcome_solution">We are very proud to present all in one solution for paid eloquence TTS.</string>
 	<string name="welcome_more">For more, Read about section to understand it more clearly.</string>
-	<string name="welcome_continue">Continues</string>
+	<string name="welcome_continue">Continue to app</string>
+
+	<string name="default_tts_title">Alt eloquence TTS is not the default tts.</string>
+	<string name="default_tts_message">Set Alt eloquence TTS as the preferd text to speech engine to experience robust and all time TTS.</string>
+	<string name="set_as_default">Set as default</string>
+
 	<string name="sample_text">Hello from Eloquence.</string>
 	<string name="preview_text">Hello from Eloquence. This is a test of the current voice.</string>
 

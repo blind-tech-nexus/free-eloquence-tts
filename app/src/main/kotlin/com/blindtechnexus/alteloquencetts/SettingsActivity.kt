@@ -10,12 +10,16 @@ import android.os.PowerManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
 
 /** The engine's own settings, reached from the system's text-to-speech screen
  *  and from the launcher. */
@@ -36,8 +40,10 @@ class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val firstLaunch = !firstLaunchPreferences.getBoolean(FIRST_LAUNCH_COMPLETE, false)
+        val notDefaultTts = !isDefaultTts()
         setContent {
             var showWelcome by remember { mutableStateOf(firstLaunch) }
+            var showDefaultTtsDialog by remember { mutableStateOf(notDefaultTts) }
             MaterialTheme {
                 Surface {
                     if (showWelcome) {
@@ -54,6 +60,76 @@ class SettingsActivity : ComponentActivity() {
                         }
                         SettingsScreen(state)
                     }
+
+                    if (showDefaultTtsDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showDefaultTtsDialog = false },
+                            title = {
+                                Text(text = stringResource(R.string.default_tts_title))
+                            },
+                            text = {
+                                Text(text = stringResource(R.string.default_tts_message))
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        showDefaultTtsDialog = false
+                                        openTtsSettings()
+                                    }
+                                ) {
+                                    Text(text = stringResource(R.string.set_as_default))
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(
+                                    onClick = { showDefaultTtsDialog = false }
+                                ) {
+                                    Text(text = stringResource(R.string.cancel))
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /** Checks whether Alt Eloquence TTS is currently the default speech engine. */
+    private fun isDefaultTts(): Boolean {
+        return try {
+            val defaultEngine = android.provider.Settings.Secure.getString(
+                contentResolver,
+                android.provider.Settings.Secure.TTS_DEFAULT_SYNTH
+            )
+            defaultEngine == packageName
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** Opens the system Text-to-speech settings screen. */
+    private fun openTtsSettings() {
+        val intent = Intent("com.android.settings.TTS_SETTINGS").apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                startActivity(
+                    Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                )
+            } catch (_: Exception) {
+                try {
+                    startActivity(
+                        Intent(android.provider.Settings.ACTION_SETTINGS).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                    )
+                } catch (_: Exception) {
+                    // Ignore if settings cannot be opened
                 }
             }
         }
