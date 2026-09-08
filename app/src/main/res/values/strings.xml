@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<string name="app_name">evvdroid</string>
-	<string name="engine_name">Eloquence (openevv)</string>
+	<string name="app_name">Alt eloquence TTS</string>
+	<string name="engine_name">Alt eloquence TTS</string>
+
+	<string name="welcome_title">Welcome to Alt eloquence TTS, a free alternative to eloquence TTS.</string>
+	<string name="welcome_open_source">This application is built from open source projects to deliver a robust experience to the users.</string>
+	<string name="welcome_free">This application is provided free of charge to break the barriers of paying.</string>
+	<string name="welcome_solution">We are very proud to present all in one solution for paid eloquence TTS.</string>
+	<string name="welcome_more">For more, Read about section to understand it more clearly.</string>
+	<string name="welcome_continue">Continues</string>
 	<string name="sample_text">Hello from Eloquence.</string>
 	<string name="preview_text">Hello from Eloquence. This is a test of the current voice.</string>
 
