@@ -68,6 +68,38 @@ class Settings(context: Context) {
 		get() = prefs.getBoolean(KEY_PHRASE_PREDICTION, false)
 		set(value) = prefs.edit().putBoolean(KEY_PHRASE_PREDICTION, value).apply()
 
+	/** Which of the symbols in the text are spoken by name. One of the
+	 *  [Symbols] levels, and not a voice's business. */
+	var symbolMode: Int
+		get() = prefs.getInt(KEY_SYMBOL_MODE, Symbols.SOME).coerceIn(Symbols.NONE, Symbols.CUSTOM)
+		set(value) = prefs.edit().putInt(KEY_SYMBOL_MODE, value.coerceIn(Symbols.NONE, Symbols.CUSTOM)).apply()
+
+	/** The symbols a [Symbols.CUSTOM] level names. Stored as written, because
+	 *  it is the caller's list and not ours to tidy. */
+	var customSymbols: String
+		get() = prefs.getString(KEY_CUSTOM_SYMBOLS, "") ?: ""
+		set(value) = prefs.edit().putString(KEY_CUSTOM_SYMBOLS, value).apply()
+
+	/** Whether the rate set here is spoken at even when the app asking for
+	 *  speech asks for its own. A screen reader that sets a rate is not wrong
+	 *  to, so this is off until somebody decides otherwise. */
+	var forceRate: Boolean
+		get() = prefs.getBoolean(KEY_FORCE_RATE, false)
+		set(value) = prefs.edit().putBoolean(KEY_FORCE_RATE, value).apply()
+
+	var forcePitch: Boolean
+		get() = prefs.getBoolean(KEY_FORCE_PITCH, false)
+		set(value) = prefs.edit().putBoolean(KEY_FORCE_PITCH, value).apply()
+
+	/** The same for volume. Android hands no volume to the engine -- the
+	 *  volume a client chooses is applied to the stream after the speech has
+	 *  left here -- so this is the engine's own volume parameter being pinned
+	 *  to what this app says rather than a client's number being ignored,
+	 *  because there is no client's number to ignore. */
+	var forceVolume: Boolean
+		get() = prefs.getBoolean(KEY_FORCE_VOLUME, false)
+		set(value) = prefs.edit().putBoolean(KEY_FORCE_VOLUME, value).apply()
+
 	/** One speed for every voice. */
 	var speed: Int
 		get() = Eci.clampVoice(Eci.VOICE_SPEED, prefs.getInt(KEY_SPEED, Eci.DEFAULT_SPEED))
@@ -171,6 +203,11 @@ class Settings(context: Context) {
 		const val KEY_SPEED = "speed"
 		const val KEY_PAUSES = "pauses"
 		const val KEY_PHRASE_PREDICTION = "phrase_prediction"
+		const val KEY_SYMBOL_MODE = "symbol_mode"
+		const val KEY_CUSTOM_SYMBOLS = "custom_symbols"
+		const val KEY_FORCE_RATE = "force_rate"
+		const val KEY_FORCE_PITCH = "force_pitch"
+		const val KEY_FORCE_VOLUME = "force_volume"
 		const val DEFAULT_SAMPLE_RATE = 11025
 
 		/** Where the copy taken of a picked dictionary is recorded. DirectBoot

@@ -56,7 +56,6 @@ fun WelcomeScreen(onContinue: () -> Unit) {
 					.semantics { heading() }
 			)
 			Paragraph(text = stringResource(R.string.welcome_alternative))
-			Paragraph(text = stringResource(R.string.welcome_open_source))
 			Paragraph(text = stringResource(R.string.welcome_free))
 			Paragraph(text = stringResource(R.string.welcome_solution))
 			Paragraph(text = stringResource(R.string.welcome_permissions))

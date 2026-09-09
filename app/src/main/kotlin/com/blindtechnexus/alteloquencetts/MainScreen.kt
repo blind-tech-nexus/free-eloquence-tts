@@ -18,9 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 /**
@@ -36,19 +33,18 @@ import androidx.compose.ui.unit.dp
  * to be guessed and then swiped back for, so each description is the stop
  * before the thing it describes.
  *
- * The permission at the bottom is the one the engine cannot do without, and it
- * says whether it has been given. A screen that asks once and then never
- * mentions it again leaves somebody who said no at the wrong moment with a
- * voice that stops working and nothing said about why.
+ * The permissions are not here. They are asked for on the way in, on every
+ * launch, by the activity that owns this screen: a row saying what has and has
+ * not been given is a stop to swipe past on every visit for a question that is
+ * asked and answered once, and the asking itself is where the explanation
+ * belongs.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
-	exemptFromBatteryOptimization: Boolean,
 	onConfigure: () -> Unit,
 	onOpenSystemSpeechSettings: () -> Boolean,
-	onAbout: () -> Unit,
-	onRequestExemption: () -> Unit
+	onAbout: () -> Unit
 ) {
 	// Resolved here rather than where it is used: the click that needs it is
 	// not a composition, and a stringResource there would not compile.
@@ -90,14 +86,6 @@ fun MainScreen(
 				action = stringResource(R.string.main_about_action),
 				onClick = onAbout
 			)
-
-			RequiredPermission(
-				granted = exemptFromBatteryOptimization,
-				onRequest = {
-					notice = ""
-					onRequestExemption()
-				}
-			)
 		}
 	}
 }
@@ -126,47 +114,4 @@ private fun Step(description: String, action: String, onClick: () -> Unit) {
 		Text(text = action, style = MaterialTheme.typography.labelLarge)
 	}
 	Gap(24.dp)
-}
-
-/**
- * The exemption from battery optimization, and whether it has been given.
- *
- * The state is spoken rather than left to the button's absence to imply. "The
- * button is gone" is not a sentence, and a status that can only be worked out
- * from what is missing from a screen is a status nobody who cannot see the
- * screen has. It is a live region as well, so that coming back from the
- * system's own confirmation screen says whether it worked.
- */
-@Composable
-private fun RequiredPermission(granted: Boolean, onRequest: () -> Unit) {
-	val status = stringResource(
-		if (granted) R.string.main_required_allowed else R.string.main_required_missing
-	)
-	SectionHeading(text = stringResource(R.string.main_required_heading), horizontal = 0.dp)
-	Text(
-		text = stringResource(R.string.main_required_description),
-		style = MaterialTheme.typography.bodyMedium,
-		modifier = Modifier
-			.fillMaxWidth()
-			.padding(bottom = 8.dp)
-	)
-	Text(
-		text = status,
-		style = MaterialTheme.typography.bodyLarge,
-		modifier = Modifier
-			.fillMaxWidth()
-			.padding(bottom = 12.dp)
-			.semantics { liveRegion = LiveRegionMode.Polite }
-	)
-	if (!granted) {
-		Button(
-			onClick = onRequest,
-			modifier = Modifier.fillMaxWidth()
-		) {
-			Text(
-				text = stringResource(R.string.main_required_action),
-				style = MaterialTheme.typography.labelLarge
-			)
-		}
-	}
 }
