@@ -45,10 +45,10 @@ internal enum class Destination { WELCOME, MAIN, SETTINGS, ABOUT }
  * Two permissions are asked for, and neither can be taken for granted:
  * notifications, which is a runtime permission on Android 13 and later, and an
  * exemption from battery optimization, which is required and is explained in
- * [BatteryExemption]. Both are asked for on the way in from the welcome screen
- * and both are answered again every time the activity is resumed, because the
- * screens that grant them are not ours and the answer can change while they are
- * up.
+ * [BatteryExemption]. Both are asked for on every launch, in [onCreate] or on
+ * the way past the welcome screen, and both are answered again every time the
+ * activity is resumed, because the screens that grant them are not ours and
+ * the answer can change while they are up.
  */
 class SettingsActivity : ComponentActivity() {
 
@@ -67,17 +67,10 @@ class SettingsActivity : ComponentActivity() {
 	 *  is no main screen behind the one that is up. */
 	private var enteredAt = Destination.MAIN
 
-	/** Whether the device will leave the engine alone while the phone is idle.
-	 *  Read again on every resume, which is when the answer can have changed:
-	 *  the system's own confirmation screen is another activity. */
-	private var exemptFromBatteryOptimization by mutableStateOf(true)
-
 	/** Whether to say in so many words why the exemption is required. The
 	 *  system's screen is a yes or no with nothing said about it, and a yes
 	 *  asked for out of nowhere is refused. */
 	private var asksForTheExemption by mutableStateOf(false)
-
-	private var hasAskedForTheExemption = false
 
 	/** Whether this engine is the one the phone speaks in, which only the
 	 *  system can make it and which is asked about once rather than nagged. */
@@ -86,10 +79,10 @@ class SettingsActivity : ComponentActivity() {
 	private val notificationPermissionLauncher = registerForActivityResult(
 		ActivityResultContracts.RequestPermission()
 	) {
-		// Asked for whether it was given or not: the notification is how the
-		// engine keeps itself alive on a locked phone, and the exemption that
-		// comes next matters more than either.
-		requestTheExemption()
+		// Whether the notification was given or refused, the asking goes on
+		// to the exemption: the question is put whatever the answer was, and
+		// a refusal here does not cancel the asking there.
+		askAboutTheExemption()
 	}
 
 	override fun onCreate(savedInstanceState: Bundle?) {
@@ -100,6 +93,11 @@ class SettingsActivity : ComponentActivity() {
 		destination = if (firstLaunch) Destination.WELCOME else enteredAt
 		asksAboutTheDefaultEngine = !isDefaultTts()
 		refresh()
+		// Every launch, not only the first: whatever has not been given is
+		// asked for now, so a refusal at the wrong moment does not become a
+		// voice that stops working with nothing said about why. The welcome
+		// screen does its own asking on the way past it.
+		if (!firstLaunch) checkPermissions()
 		setContent {
 			MaterialTheme {
 				Surface {
@@ -112,13 +110,11 @@ class SettingsActivity : ComponentActivity() {
 					when (destination) {
 						Destination.WELCOME -> WelcomeScreen(onContinue = ::continueFromWelcome)
 						Destination.MAIN -> MainScreen(
-							exemptFromBatteryOptimization = exemptFromBatteryOptimization,
 							onConfigure = { destination = Destination.SETTINGS },
 							onOpenSystemSpeechSettings = {
 								SystemSpeechSettings.open(this@SettingsActivity)
 							},
-							onAbout = { destination = Destination.ABOUT },
-							onRequestExemption = ::requestTheExemption
+							onAbout = { destination = Destination.ABOUT }
 						)
 						Destination.SETTINGS -> SettingsScreen(
 							state = remember { settingsModel() },
@@ -185,14 +181,16 @@ class SettingsActivity : ComponentActivity() {
 		}
 	}
 
-	/** The welcome screen is read once, and the two permissions it warned about
-	 *  are asked for on the way past it. */
+	/** The welcome screen is read once, and the two permissions it warned
+	 *  about are asked for on the way past it -- which is the same asking
+	 *  every other launch does, so that the first launch and the hundredth
+	 *  behave alike. */
 	private fun continueFromWelcome() {
 		firstLaunchPreferences.edit()
 			.putBoolean(FIRST_LAUNCH_COMPLETE, true)
 			.apply()
 		destination = enteredAt
-		requestNotificationPermission()
+		checkPermissions()
 	}
 
 	/** The engine's own preview, made the first time the settings screen is
@@ -204,22 +202,45 @@ class SettingsActivity : ComponentActivity() {
 
 	// ---- what the device has to say ---------------------------------------
 
+	/**
+	 * Every permission the engine needs, asked for on every launch.
+	 *
+	 * Both are gone from the main screen: a row saying what has been given is
+	 * a stop to swipe past on every visit for a question that is asked and
+	 * answered once. Here instead, each launch checks what is missing and asks
+	 * for it, so somebody who said no at the wrong moment is asked again the
+	 * next time they open the app rather than never.
+	 *
+	 * The notification permission is asked for first and the exemption second:
+	 * the notification is a system dialog that is answered and gone, while the
+	 * exemption is this app's own explanation and then a system screen, and the
+	 * longer asking belongs at the end.
+	 */
+	private fun checkPermissions() {
+		if (
+			Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+			checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+		) {
+			notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+		} else {
+			askAboutTheExemption()
+		}
+	}
+
+	/** Puts the exemption question, in so many words, in front of the system's
+	 *  own yes-or-no screen -- unless it has already been given. Nothing in
+	 *  this app can grant it; the answer comes back through [refresh]. */
+	private fun askAboutTheExemption() {
+		if (BatteryExemption.isGranted(this)) return
+		asksForTheExemption = true
+	}
+
 	/** Asks the device the two questions whose answers are not ours to keep:
 	 *  whether the exemption has been given, and whether this is the engine the
 	 *  phone speaks in. Both are read again on every resume, because both are
 	 *  answered on screens belonging to somebody else. */
 	private fun refresh() {
-		exemptFromBatteryOptimization = BatteryExemption.isGranted(this)
-		if (exemptFromBatteryOptimization) {
-			asksForTheExemption = false
-		} else if (!hasAskedForTheExemption) {
-			// Once per launch. A dialog that comes back every time the app is
-			// resumed is a dialog that gets refused every time the app is
-			// resumed, and the row on the main screen goes on saying what the
-			// state is and offering the way to change it.
-			hasAskedForTheExemption = true
-			asksForTheExemption = true
-		}
+		if (BatteryExemption.isGranted(this)) asksForTheExemption = false
 		if (isDefaultTts()) asksAboutTheDefaultEngine = false
 	}
 
@@ -230,18 +251,6 @@ class SettingsActivity : ComponentActivity() {
 			android.provider.Settings.Secure.TTS_DEFAULT_SYNTH
 		) == packageName
 	}.getOrDefault(false)
-
-	/** Notification access is a runtime permission on Android 13 and later. */
-	private fun requestNotificationPermission() {
-		if (
-			Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-			checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-		) {
-			notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-		} else {
-			requestTheExemption()
-		}
-	}
 
 	/** Hands the exemption over to the system to grant or refuse, and leaves
 	 *  the answer to [refresh]. Nothing in this app can grant it. */

@@ -148,6 +148,17 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 		currentPitch = percent
 	}
 
+	/** Puts the voice's own volume back on the voice being spoken in. Nothing
+	 *  a client can ask for reaches the volume -- Android applies a client's
+	 *  volume to the stream after the speech has left the engine -- so this is
+	 *  the whole of what forcing the volume can be: re-asserting this app's
+	 *  own number each time, the way [setAbbreviations] is re-sent. */
+	fun setVolume(value: Int) = synchronized(guard) {
+		if (!closed) EvvNative.setVoiceParam(
+			handle, Eci.VOICE_CURRENT, Eci.VOICE_VOLUME, Eci.clampVoice(Eci.VOICE_VOLUME, value)
+		)
+	}
+
 	fun getVoiceParam(param: Int): Int = synchronized(guard) {
 		if (closed) -1 else EvvNative.getVoiceParam(handle, Eci.VOICE_CURRENT, param)
 	}

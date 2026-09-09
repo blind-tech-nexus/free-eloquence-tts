@@ -202,9 +202,27 @@ class EvvTtsService : TextToSpeechService() {
 		// Re-sent every time rather than once, because it is the one setting
 		// with no way of telling whether something else has moved it.
 		s?.let { target.setAbbreviations(it.abbreviations) }
-		target.setRatePercent(request.speechRate)
-		target.setPitchPercent(request.pitch)
-		val text = TextFixes.apply(request.charSequenceText?.toString().orEmpty())
+		// The rate and pitch a client asks for are scaled onto the voice,
+		// unless the settings say this app's own are to be forced over them:
+		// a screen reader that has set a rate is asking for that rate, and
+		// this is the one place its asking is listened to or not.
+		if (s?.forceRate != true) target.setRatePercent(request.speechRate)
+		if (s?.forcePitch != true) target.setPitchPercent(request.pitch)
+		// Volume is the engine's own parameter and no client's number ever
+		// reaches it -- Android applies a client's volume to the stream, after
+		// the speech has left here -- so forcing it is re-asserting this app's
+		// own number on every utterance, the way the abbreviation switch is
+		// re-sent above.
+		s?.let { held ->
+			if (held.forceVolume) {
+				held.shape(held.voice)[Eci.VOICE_VOLUME]?.let { volume -> target.setVolume(volume) }
+			}
+		}
+		val text = Symbols.apply(
+			TextFixes.apply(request.charSequenceText?.toString().orEmpty()),
+			s?.symbolMode ?: Symbols.SOME,
+			s?.customSymbols.orEmpty()
+		)
 		if (text.isEmpty()) {
 			callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
 			callback.done()

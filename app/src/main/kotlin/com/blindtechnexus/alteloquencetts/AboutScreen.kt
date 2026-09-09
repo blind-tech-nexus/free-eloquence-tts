@@ -71,7 +71,6 @@ fun AboutScreen(onBack: () -> Unit) {
 			LiveNotice(text = notice)
 
 			Paragraph(text = stringResource(R.string.about_app))
-			Paragraph(text = stringResource(R.string.about_engine_speech))
 			Paragraph(text = stringResource(R.string.about_accessibility))
 			Paragraph(text = stringResource(R.string.about_free))
 			Paragraph(text = stringResource(R.string.about_unofficial))
@@ -102,13 +101,6 @@ fun AboutScreen(onBack: () -> Unit) {
 
 			SectionHeading(text = stringResource(R.string.about_build_heading), horizontal = 0.dp)
 			Paragraph(text = stringResource(R.string.about_version, BuildConfig.VERSION_NAME))
-			// The engine answers with nothing at all when its library did not
-			// load, and a line saying "openevv" is worse than no line.
-			val engine = remember { EvvEngine.version }
-			if (engine.isNotEmpty()) {
-				Paragraph(text = stringResource(R.string.about_speech_engine, engine))
-			}
-			Paragraph(text = stringResource(R.string.about_licence))
 		}
 	}
 }

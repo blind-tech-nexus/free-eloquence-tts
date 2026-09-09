@@ -13,7 +13,6 @@
 	<!-- Welcome -->
 	<string name="welcome_title">Welcome to Alt eloquence TTS</string>
 	<string name="welcome_alternative">A free alternative to the paid eloquence text to speech engine.</string>
-	<string name="welcome_open_source">It is built from open source projects to deliver a robust experience of text to speech.</string>
 	<string name="welcome_free">It is provided free of charge, to break the barrier of paying for a screen reader voice.</string>
 	<string name="welcome_solution">It is an all in one replacement for the paid eloquence TTS: eight voices, every setting a voice has, and your own pronunciation dictionaries.</string>
 	<string name="welcome_permissions">The next screen asks for two permissions: notifications, and an exemption from battery optimization. The exemption is required, because without it Android puts the engine to sleep and the voice stops while the phone is idle.</string>
@@ -29,11 +28,6 @@
 	<string name="main_about_description">Read about the app and its developers.</string>
 	<string name="main_about_action">About</string>
 	<string name="main_system_unavailable">Nothing on this device opens the system text to speech settings.</string>
-	<string name="main_required_heading">Required permission</string>
-	<string name="main_required_description">Alt eloquence TTS speaks for your screen reader, so Android must not put it to sleep. Without an exemption from battery optimization the voice stops whenever the phone decides the app has used too much power in the background.</string>
-	<string name="main_required_allowed">Battery optimization exemption: currently allowed.</string>
-	<string name="main_required_missing">Battery optimization exemption: currently not allowed. This permission is required.</string>
-	<string name="main_required_action">Allow battery optimization exemption</string>
 
 	<!-- The exemption is asked for in so many words as well, because the
 	     system screen that grants it is a yes or no with nothing said about
@@ -59,19 +53,30 @@
 	<string name="gender_female">Female</string>
 
 	<string name="section_behaviour">Voice behaviors</string>
-	<string name="rate_label">Rate</string>
 	<string name="rate_description">Customize the voice rate.</string>
-	<string name="pitch_label">Pitch</string>
 	<string name="pitch_description">Customize the voice pitch.</string>
-	<string name="inflection_label">Inflection</string>
+	<string name="set_rate">Set voice rate</string>
+	<string name="set_pitch">Set voice pitch</string>
+	<string name="set_inflection">Set voice inflection</string>
+	<string name="set_breathiness">Set voice breathiness</string>
+	<string name="set_head_size">Set voice head size</string>
+	<string name="set_roughness">Set voice roughness</string>
+	<string name="set_volume">Set voice volume</string>
+	<string name="dialog_rate_title">Voice rate</string>
+	<string name="dialog_pitch_title">Voice pitch</string>
+	<string name="dialog_inflection_title">Voice inflection</string>
+	<string name="dialog_breathiness_title">Voice breathiness</string>
+	<string name="dialog_head_size_title">Voice head size</string>
+	<string name="dialog_roughness_title">Voice roughness</string>
+	<string name="dialog_volume_title">Voice volume</string>
+	<string name="force_over">Force over other apps</string>
+	<string name="force_rate_description">Speak at the rate set here even when another app, such as TalkBack, asks for a different one.</string>
+	<string name="force_pitch_description">Speak at the pitch set here even when another app, such as TalkBack, asks for a different one.</string>
+	<string name="force_volume_description">Speak at the volume set here even when another app, such as TalkBack, asks for a different one.</string>
 	<string name="inflection_description">Customize the voice inflection, which is how far the pitch rises and falls across a sentence.</string>
-	<string name="breathiness_label">Breathiness</string>
 	<string name="breathiness_description">Customize the voice breathiness, which is how much breath is heard in it.</string>
-	<string name="head_size_label">Head size</string>
 	<string name="head_size_description">Customize the voice head size, which is how large the head speaking it is, and so how much it resonates.</string>
-	<string name="roughness_label">Roughness</string>
 	<string name="roughness_description">Customize the voice roughness, which is how rough or how smooth it sounds.</string>
-	<string name="volume_label">Volume</string>
 	<string name="volume_description">Customize the voice volume.</string>
 
 	<string name="section_quality">Voice quality</string>
@@ -100,6 +105,20 @@
 	<string name="pauses_all">Shorten all pauses</string>
 	<string name="phrase_prediction_label">Phrase prediction</string>
 	<string name="phrase_prediction_description">Lets the engine guess where the phrases in a sentence are and shape the intonation to match. Off by default, because a screen reader reads a fragment at a time and the guess is usually wrong.</string>
+	<string name="symbol_label">Symbol pronunciation</string>
+	<string name="symbol_description">How much of the punctuation and the other symbols in the text is spoken by name.</string>
+	<string name="symbol_mode_label">Symbol pronunciation mode</string>
+	<string name="symbol_mode_all">All</string>
+	<string name="symbol_mode_most">Most</string>
+	<string name="symbol_mode_some">Some</string>
+	<string name="symbol_mode_custom">Custom</string>
+	<string name="symbol_mode_none">None</string>
+	<string name="symbol_all_description">Every symbol is spoken by name, including periods and commas.</string>
+	<string name="symbol_most_description">Brackets, quotes, question marks and the like are spoken as well.</string>
+	<string name="symbol_some_description">Currency and math symbols are spoken, and a symbol standing on its own is always named.</string>
+	<string name="symbol_custom_description">Only the symbols you enter are spoken by name.</string>
+	<string name="symbol_none_description">No symbol is spoken by name.</string>
+	<string name="symbol_custom_hint">Enter the symbols that should be pronounced</string>
 	<string name="reset_label">Reset this voice to its defaults</string>
 	<string name="voice_reset">%1$s is back to the settings it shipped with.</string>
 	<string name="reset_description">Forgets what has been changed for the voice chosen above. Every other voice is left alone, and so is the rate, which is yours rather than the voice\'s.</string>
@@ -112,9 +131,8 @@
 	<!-- About -->
 	<string name="about_title">About us</string>
 	<string name="about_app">Alt eloquence TTS is a free eloquence text to speech engine for Android and for Wear OS.</string>
-	<string name="about_engine_speech">The speech comes from openevv, an open source rebuild of IBM\'s Embedded ViaVoice, put behind the text to speech interface Android already has, so that any app that can speak can speak in it.</string>
 	<string name="about_accessibility">It is built for blind and low vision people. Every control on every screen is one stop for a screen reader, says what it is and what it is set to, and can be changed without leaving the screen.</string>
-	<string name="about_free">It is free, it is open source, and it asks for no account, no payment and nothing from the network. The two permissions it asks for are notifications and an exemption from battery optimization, and both are about staying available while the phone is idle.</string>
+	<string name="about_free">It is free, and it asks for no account, no payment and nothing from the network. The two permissions it asks for are notifications and an exemption from battery optimization, and both are about staying available while the phone is idle.</string>
 	<string name="about_unofficial">It is a hobby project, and nobody\'s product. It is not from IBM, Nuance, Cerence or Google, and none of them have endorsed or reviewed it.</string>
 	<string name="about_developer_heading">Developers</string>
 	<string name="about_developer">Developed by Sujan Rai, with the Blind Tech Nexus team.</string>
@@ -129,21 +147,20 @@
 	<string name="about_email_subject">Alt eloquence TTS</string>
 	<string name="about_build_heading">This build</string>
 	<string name="about_version">App version %1$s.</string>
-	<string name="about_speech_engine">Speech engine: openevv %1$s.</string>
-	<string name="about_licence">The Kotlin, the C bridge, the build and the tests are MIT licensed. The engine is openevv\'s own, and the language data in it is IBM\'s.</string>
 	<string name="about_unavailable">Nothing on this device can open %1$s.</string>
 
 	<!-- How a row speaks. A label and a value are one control and one stop, so
 	     both of these end up in the same node. -->
 	<string name="labelled_value">%1$s: %2$s</string>
-	<string name="state_selected">%1$s selected</string>
-	<string name="choice_value">Currently %1$s selected. Click to change.</string>
+	<string name="value_selected">%1$s (%2$s) selected</string>
+	<string name="mode_value">%1$s (%2$s)</string>
+	<string name="action_click_to_change">Click to change</string>
 	<string name="file_value">Currently %1$s. Click to choose a file.</string>
-	<string name="action_change">Change</string>
 	<string name="action_choose_file">Choose a file</string>
 	<string name="switch_on">On</string>
 	<string name="switch_off">Off</string>
 	<string name="cancel">Cancel</string>
+	<string name="save">Save</string>
 
 	<!-- The engine's own numbers are on three scales, so the screen shows and
 	     speaks hundredths of whichever one a setting has. -->

@@ -36,6 +36,21 @@ class SettingsModel(context: Context) {
 	var phrasePrediction by mutableStateOf(settings.phrasePrediction)
 		private set
 
+	var symbolMode by mutableStateOf(settings.symbolMode)
+		private set
+
+	var customSymbols by mutableStateOf(settings.customSymbols)
+		private set
+
+	var forceRate by mutableStateOf(settings.forceRate)
+		private set
+
+	var forcePitch by mutableStateOf(settings.forcePitch)
+		private set
+
+	var forceVolume by mutableStateOf(settings.forceVolume)
+		private set
+
 	private val shape = mutableStateMapOf<Int, Int>().apply { putAll(settings.shape(settings.voice)) }
 
 	private var dictionaries: Map<Int, String> by mutableStateOf(
@@ -78,16 +93,6 @@ class SettingsModel(context: Context) {
 	}
 
 	fun setPercent(param: Int, percent: Int) = setShape(param, Eci.fromPercent(param, percent))
-
-	/** One percent up or down from wherever the setting is now.
-	 *
-	 *  It reads the value rather than taking one, because a held key sends
-	 *  several of these before the screen has drawn any of them, and a step
-	 *  measured from what the screen last showed would land on the same number
-	 *  every time. */
-	fun stepPercent(param: Int, by: Int) {
-		setPercent(param, (percentOf(param) + by).coerceIn(0, Eci.PERCENT_MAX))
-	}
 
 	fun setShape(param: Int, value: Int) {
 		val settled = Eci.clampVoice(param, value)
@@ -174,6 +179,31 @@ class SettingsModel(context: Context) {
 	fun choosePhrasePrediction(on: Boolean) {
 		phrasePrediction = on
 		settings.phrasePrediction = on
+	}
+
+	fun chooseSymbolMode(mode: Int) {
+		symbolMode = mode
+		settings.symbolMode = mode
+	}
+
+	fun chooseCustomSymbols(list: String) {
+		customSymbols = list
+		settings.customSymbols = list
+	}
+
+	fun chooseForceRate(on: Boolean) {
+		forceRate = on
+		settings.forceRate = on
+	}
+
+	fun chooseForcePitch(on: Boolean) {
+		forcePitch = on
+		settings.forcePitch = on
+	}
+
+	fun chooseForceVolume(on: Boolean) {
+		forceVolume = on
+		settings.forceVolume = on
 	}
 
 	fun choosePauses(mode: Int) {
