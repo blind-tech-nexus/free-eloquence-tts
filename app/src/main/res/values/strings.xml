@@ -170,4 +170,77 @@
 
 	<string name="sample_text">Hello from Eloquence.</string>
 	<string name="preview_text">Hello from Eloquence. This is a test of the current voice.</string>
+
+	<!-- Camera Feature -->
+	<string name="camera_title">Camera with Voice Guidance</string>
+	<string name="camera_description">Take photos with voice guidance for proper face alignment</string>
+	<string name="camera_tab">Photo</string>
+	<string name="voice_guidance_settings">Voice Guidance Settings</string>
+	<string name="voice_guidance_enabled">Voice Guidance Enabled</string>
+	<string name="vibration_enabled">Vibration Enabled</string>
+	<string name="vibration_intensity">Vibration Intensity</string>
+	<string name="vibration_weak">Weak</string>
+	<string name="vibration_medium">Medium</string>
+	<string name="vibration_strong">Strong</string>
+	<string name="face_aligned_message">Your face is aligned. Please wait until capture the photo.</string>
+	<string name="move_away">Move your device away</string>
+	<string name="move_closer">Move your device closer</string>
+	<string name="move_up">Move up</string>
+	<string name="move_down">Move down</string>
+	<string name="move_left">Move left</string>
+	<string name="move_right">Move right</string>
+	<string name="move_a_little_left">A little left</string>
+	<string name="move_a_little_right">A little right</string>
+	<string name="move_a_little_up">A little up</string>
+	<string name="move_a_little_down">A little down</string>
+	<string name="face_detected">Face detected</string>
+	<string name="no_face_detected">No face detected</string>
+	<string name="capture_button">Take Photo</string>
+	<string name="settings_button">Settings</string>
+	<string name="camera_permission_required">Camera permission is required to use this feature</string>
+	<string name="camera_permission_rationale">This app needs camera access to help you take properly aligned photos</string>
+
+	<!-- Reminder Feature -->
+	<string name="reminder_title">Reminders</string>
+	<string name="reminder_description">Set and manage reminders with background notifications</string>
+	<string name="add_reminder">Add Reminder</string>
+	<string name="reminder_time">Reminder Time</string>
+	<string name="reminder_message">Reminder Message</string>
+	<string name="reminder_repeat">Repeat</string>
+	<string name="reminder_once">Once</string>
+	<string name="reminder_daily">Daily</string>
+	<string name="reminder_weekly">Weekly</string>
+	<string name="reminder_monthly">Monthly</string>
+	<string name="reminder_yearly">Yearly</string>
+	<string name="reminder_notification_title">Reminder: %1$s</string>
+	<string name="reminder_notification_content">%1$s</string>
+	<string name="reminder_alert_title">Reminder Alert</string>
+	<string name="reminder_alert_message">%1$s
+	<string name="reminder_snooze">Snooze</string>
+	<string name="reminder_dismiss">Dismiss</string>
+	<string name="reminder_delete">Delete</string>
+	<string name="reminder_edit">Edit</string>
+	<string name="reminder_save">Save Reminder</string>
+	<string name="reminder_no_reminders">No reminders set</string>
+	<string name="reminder_upcoming">Upcoming Reminders</string>
+	<string name="reminder_overlay_title">Reminder Notification</string>
+	<string name="overlay_permission_required">Display over other apps permission is required</string>
+	<string name="overlay_permission_rationale">This allows reminders to show as pop-ups even when other apps are open</string>
+	<string name="background_permission_required">Background execution permission is required</string>
+	<string name="background_permission_rationale">This allows reminders to work even when the app is closed</string>
+
+	<!-- Productivity Companion -->
+	<string name="productivity_title">Productivity Companion</string>
+	<string name="productivity_description">Track your productivity and stay on task</string>
+	<string name="productivity_active_reminders">Active Reminders: %1$d</string>
+	<string name="productivity_tracking_enabled">Tracking Enabled</string>
+	<string name="productivity_tracking_disabled">Tracking Disabled</string>
+
+	<!-- General -->
+	<string name="enable">Enable</string>
+	<string name="disable">Disable</string>
+	<string name="intensity_low">Low</string>
+	<string name="intensity_high">High</string>
+	<string name="save_settings">Save Settings</string>
+	<string name="close">Close</string>
 </resources>

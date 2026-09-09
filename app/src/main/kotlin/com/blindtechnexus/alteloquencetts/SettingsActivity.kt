@@ -9,20 +9,27 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 
 /** Which of the four screens is up. */
-internal enum class Destination { WELCOME, MAIN, SETTINGS, ABOUT }
+internal enum class Destination { WELCOME, MAIN, SETTINGS, ABOUT, CAMERA, REMINDERS }
 
 /**
  * The app's one activity, and the four screens it shows.
@@ -103,7 +110,9 @@ class SettingsActivity : ComponentActivity() {
 				Surface {
 					BackHandler(
 						enabled = destination == Destination.SETTINGS ||
-							destination == Destination.ABOUT
+							destination == Destination.ABOUT ||
+							destination == Destination.CAMERA ||
+							destination == Destination.REMINDERS
 					) {
 						back()
 					}
@@ -114,13 +123,17 @@ class SettingsActivity : ComponentActivity() {
 							onOpenSystemSpeechSettings = {
 								SystemSpeechSettings.open(this@SettingsActivity)
 							},
-							onAbout = { destination = Destination.ABOUT }
+							onAbout = { destination = Destination.ABOUT },
+							onOpenCamera = { destination = Destination.CAMERA },
+							onOpenReminders = { destination = Destination.REMINDERS }
 						)
 						Destination.SETTINGS -> SettingsScreen(
 							state = remember { settingsModel() },
 							onBack = ::back
 						)
 						Destination.ABOUT -> AboutScreen(onBack = ::back)
+						Destination.CAMERA -> CameraActivityScreen(onBack = ::back)
+						Destination.REMINDERS -> ReminderScreen(onBack = ::back)
 					}
 					// Not over the welcome screen, which has a job of its own
 					// to finish first, and one at a time: two dialogs up at
@@ -177,6 +190,8 @@ class SettingsActivity : ComponentActivity() {
 				if (enteredAt == Destination.SETTINGS) finish() else destination = Destination.MAIN
 			}
 			Destination.ABOUT -> destination = Destination.MAIN
+			Destination.CAMERA -> destination = Destination.MAIN
+			Destination.REMINDERS -> destination = Destination.MAIN
 			Destination.MAIN, Destination.WELCOME -> finish()
 		}
 	}
@@ -333,4 +348,58 @@ private fun DefaultEngineDialog(onOpen: () -> Unit, onRefuse: () -> Unit) {
 			}
 		}
 	)
+}
+
+/**
+ * Camera activity screen wrapper for navigation.
+ */
+@Composable
+private fun CameraActivityScreen(onBack: () -> Unit) {
+	// Launch actual CameraActivity
+	val context = LocalContext.current
+	DisposableEffect(Unit) {
+		val intent = Intent(context, CameraActivity::class.java)
+		context.startActivity(intent)
+		onDispose { }
+	}
+	// This screen will be replaced by the actual CameraActivity
+	Column(
+		modifier = Modifier.fillMaxSize()
+	) {
+		ScreenTopBar(
+			title = stringResource(R.string.camera_title),
+			onBack = onBack
+		)
+		Text(
+			text = stringResource(R.string.camera_description),
+			modifier = Modifier.padding(16.dp)
+		)
+	}
+}
+
+/**
+ * Reminder screen for managing reminders.
+ */
+@Composable
+private fun ReminderScreen(onBack: () -> Unit) {
+	// Launch actual ReminderActivity
+	val context = LocalContext.current
+	DisposableEffect(Unit) {
+		val intent = Intent(context, ReminderActivity::class.java)
+		context.startActivity(intent)
+		onDispose { }
+	}
+	// This screen will be replaced by the actual ReminderActivity
+	Column(
+		modifier = Modifier.fillMaxSize()
+	) {
+		ScreenTopBar(
+			title = stringResource(R.string.reminder_title),
+			onBack = onBack
+		)
+		Text(
+			text = stringResource(R.string.reminder_description),
+			modifier = Modifier.padding(16.dp)
+		)
+	}
 }

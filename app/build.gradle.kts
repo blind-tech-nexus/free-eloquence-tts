@@ -5,6 +5,7 @@ plugins {
 	alias(libs.plugins.android.application)
 	alias(libs.plugins.kotlin.android)
 	alias(libs.plugins.kotlin.compose)
+	id("org.jetbrains.kotlin.kapt")
 }
 
 val abis = (findProperty("evvdroid.abis") as String? ?: "arm64-v8a,armeabi-v7a,x86_64")
@@ -149,6 +150,31 @@ dependencies {
 	implementation(platform(libs.compose.bom))
 	implementation(libs.compose.ui)
 	implementation(libs.compose.material3)
+	
+	// Camera and ML Kit for face detection
+	implementation(libs.androidx.camera.core)
+	implementation(libs.androidx.camera.camera2)
+	implementation(libs.androidx.camera.lifecycle)
+	implementation(libs.androidx.camera.view)
+	implementation(libs.mlkit.face.detection)
+	
+	// WorkManager for background reminder tasks
+	implementation(libs.androidx.work.runtime)
+	
+	// Room for local database (reminders storage)
+	implementation(libs.androidx.room.runtime)
+	implementation(libs.androidx.room.ktx)
+	kapt(libs.androidx.room.compiler)
+	
+	// Preferences
+	implementation(libs.androidx.preference.ktx)
+	
+	// Navigation
+	implementation(libs.androidx.navigation.compose)
+	
+	// Lifecycle
+	implementation(libs.androidx.lifecycle.runtime.ktx)
+	implementation(libs.androidx.lifecycle.viewmodel.compose)
 
 	androidTestImplementation(libs.junit)
 	androidTestImplementation(libs.androidx.test.junit)

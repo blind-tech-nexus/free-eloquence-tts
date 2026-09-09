@@ -44,7 +44,9 @@ import androidx.compose.ui.unit.dp
 fun MainScreen(
 	onConfigure: () -> Unit,
 	onOpenSystemSpeechSettings: () -> Boolean,
-	onAbout: () -> Unit
+	onAbout: () -> Unit,
+	onOpenCamera: () -> Unit,
+	onOpenReminders: () -> Unit
 ) {
 	// Resolved here rather than where it is used: the click that needs it is
 	// not a composition, and a stringResource there would not compile.
@@ -85,6 +87,16 @@ fun MainScreen(
 				description = stringResource(R.string.main_about_description),
 				action = stringResource(R.string.main_about_action),
 				onClick = onAbout
+			)
+			Step(
+				description = stringResource(R.string.camera_description),
+				action = stringResource(R.string.camera_tab),
+				onClick = onOpenCamera
+			)
+			Step(
+				description = stringResource(R.string.reminder_description),
+				action = stringResource(R.string.reminder_title),
+				onClick = onOpenReminders
 			)
 		}
 	}

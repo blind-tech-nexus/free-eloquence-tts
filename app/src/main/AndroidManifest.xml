@@ -4,6 +4,14 @@
 	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 	<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
+	<uses-permission android:name="android.permission.CAMERA" />
+	<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+	<uses-permission android:name="android.permission.VIBRATE" />
+	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+	<uses-feature android:name="android.hardware.camera" />
+	<uses-feature android:name="android.hardware.camera.autofocus" />
 
 	<application
 		android:allowBackup="true"
@@ -63,6 +71,28 @@
 				<category android:name="android.intent.category.DEFAULT" />
 			</intent-filter>
 		</activity>
+
+		<!-- Camera Activity -->
+		<activity
+			android:name=".CameraActivity"
+			android:exported="false"
+			android:label="@string/camera_title" />
+
+		<!-- Reminder Service -->
+		<service
+			android:name=".ReminderService"
+			android:exported="false"
+			android:foregroundServiceType="dataSync|location|camera|microphone" />
+
+		<!-- Productivity Companion Service -->
+		<service
+			android:name=".ProductivityCompanionService"
+			android:exported="false" />
+
+		<!-- Overlay Service for screen pop-up reminders -->
+		<service
+			android:name=".OverlayService"
+			android:exported="false" />
 
 	</application>
 </manifest>
