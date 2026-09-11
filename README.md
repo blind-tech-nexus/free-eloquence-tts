@@ -24,7 +24,7 @@ No warranty. See LICENSE, and read the part about language data before redistrib
 * An update channel, checked in the background on every launch, that ends at Android's own installer: see [Updates](#updates).
 * Android 6 and later. arm64-v8a, armeabi-v7a, x86_64.
 
-`app/src/androidTest` runs on a device: 151 test methods, of which the ones that matter most are the ones that never start a sound.
+`app/src/androidTest` runs on a device: the tests that matter most are the ones that never start a sound.
 
 ## Turning it on
 
@@ -100,7 +100,7 @@ Below the number, one paragraph says what is in force now -- whether the app's o
 
 ## Settings
 
-Launcher icon, or the gear beside the engine in the text-to-speech settings. The six sections above, top to bottom: the voice and its gender, the seven numeric parameters each behind a button that opens it in a dialog of its own, the sample rate, the three dictionaries and the abbreviation switch that belongs with them, pauses, symbol pronunciation, phrase prediction and putting a voice back as it shipped, and a sample to hear the lot of them on. Nothing speaks on its own: a setting takes effect when you set it, and "Speak a sample" is how you hear it. "Stop the sample" is there as well, because the preview plays into an AudioTrack of its own and nothing else stops it.
+Launcher icon, or the gear beside the engine in the text-to-speech settings. The six sections above, top to bottom: the voice and its gender, the seven numeric parameters each behind a button that opens it in a dialog of its own, the sample rate, the dictionary manager and the abbreviation switch that belongs with it, pauses, symbol pronunciation, phrase prediction and putting a voice back as it shipped, and a sample to hear the lot of them on. Nothing speaks on its own: a setting takes effect when you set it, and "Speak a sample" is how you hear it. "Stop the sample" is there as well, because the preview plays into an AudioTrack of its own and nothing else stops it.
 
 A setting that is a choice is a button that carries its own value -- "Voice (Reed) selected" -- and the state description says "Click to change", so a screen reader hears the setting, its value and the action in one stop. The seven numeric parameters are buttons too ("Set voice rate" and its like) that open a dialog with the setting's name for a title, the bar, and Save and Cancel. Nothing is changed until Save, so a look inside a setting costs nothing.
 
@@ -158,13 +158,11 @@ Expand abbreviations is `eciDictionary`, which is inverted in the engine: zero t
 
 ## Dictionaries
 
-Three rows pick a file each for the main, root and abbreviation volumes. "Remove dictionaries" clears all three.
+The dictionary manager is a list of the user's own words and what to say instead. Add, edit, remove, import and export; a word added is heard the next time anything is spoken, including on "Speak a sample". Matching does not care about capital letters: `doj` and `DOJ` are the same word, because IBM's own dictionary is case-sensitive and a screen reader hands over whatever case the control had, which is why a word added in the manager used to vanish in speech.
 
-The files people share are text: a word, a tab, then either a respelling (`dee oe jeigh`) or a pronunciation in the engine's own alphabet (`` `[Ekspoz1e] ``). [mohamed00/altibmttsdictionaries](https://github.com/mohamed00/altibmttsdictionaries) has the English pair.
+The files people share are text: a word, a tab, then either a respelling (`dee oe jeigh`) or a pronunciation in the engine's own alphabet (`` `[Ekspoz1e] ``). [mohamed00/altibmttsdictionaries](https://github.com/mohamed00/altibmttsdictionaries) has the English pair. An import is the same reading.
 
-The engine's own loader will not read them. `eciLoadDict` answers `eciDictAccessError` for every one because it expects IBM's saved binary form, so the text is parsed here and the engine is taught a word at a time through `eciUpdateDict`. 3000 entries take about 450 ms, once, when the service starts. They reload only when the files change.
-
-A picked file is copied into app storage. A content URI belongs to whichever app supplied it, may not be readable later, and the speech service reads it from another process.
+The replacements run over the text on the way in, as whole words and as phrases, rather than being taught to the engine a word at a time. Teaching three thousand entries cost about 450 ms and still missed `DOJ` when the file said `doj`. A rewrite is one walk of the utterance, answers the original string when nothing in it is a dictionary word, and the phonetic alphabet still works because the engine's annotations are on.
 
 No dictionary is shipped here. See LICENSE.
 
@@ -175,6 +173,8 @@ A screen reader wants each string to cut off the one before it. Two things make 
 The engine cannot abandon an utterance, so long text is handed over in sentence-sized pieces and asking for silence waits out a piece rather than a whole paragraph. The rule for where a piece may end is openevv's, ported from its NVDA driver: a sentence end is free because the engine already pauses there, anywhere else costs about 0.4s, so a full stop has to prove itself. A word with a dot inside it is an abbreviation, and a short capitalised word is an initial.
 
 Synthesis is paced to real time. The engine produces 1.3s of audio in 12 ms and Android queues every byte of it, so a reader swiping quickly would leave five or six items queued while the first is still playing and lose all of them when it asks for silence. Output runs no more than 300 ms ahead. Measured on the same text: 2229 ms of audio handed over in 700 ms of speaking without that limit, about 1000 ms with it.
+
+A request for silence wakes the wait rather than sitting out the rest of a sleep. Every utterance runs on the framework's one synthesis thread, so whatever the current utterance waits on delays the next element's first syllable; a swipe that landed mid-slice used to wait out the rest of it, and now it does not.
 
 ## Updates
 
@@ -194,11 +194,11 @@ The engine is not slow. A host build of the same C the app ships, on the same si
 
 **The engine's own log was on.** `g_iTTSLogLevel` in openevv's port layer starts at 9, and at 4 and above the engine's internals write a line to stderr for a mutex that did not answer the way they expected. That path is not taken on the shipping arrangement, where one thread drives the engine and one reads it, so nothing was changed here -- but it is why a harness that runs the engine differently looks twenty per cent slower than the app is, and it is worth knowing before the next measurement of this kind is believed.
 
-**Everything before the first syllable was done on every utterance.** The text used to be copied through a chain of five passes that each built new strings, the pronunciation dictionary was re-taught per utterance, and the settings were compared field by field. Now the emoji, symbol, fix-up and code-set passes each make one scan of the characters and each answer with the original string when they have nothing to change; `WesternText` keeps a table that says whether a character needs work at all, so ordinary English is a copy rather than a lookup per character; a dictionary is re-taught when the file's last-modified time has moved and not otherwise; and the settings carry a revision that goes up on any write, so an unchanged configuration is one integer comparison. What the reader waits for is the first frame of audio, which is 12 ms of this engine's time on a desktop build and is the only number in the whole utterance that cannot be shared out over the rest of it.
+**Everything before the first syllable was done on every utterance.** The text used to be copied through a chain of five passes that each built new strings, the pronunciation dictionary was re-taught per utterance, and the settings were compared field by field. Now the emoji, symbol, fix-up, dictionary and code-set passes each make one scan of the characters and each answer with the original string when they have nothing to change; `WesternText` keeps a table that says whether a character needs work at all, so ordinary English is a copy rather than a lookup per character; a dictionary is reread when its revision has moved and not otherwise; and the settings carry a revision that goes up on any write, so an unchanged configuration is one integer comparison. What the reader waits for is the first frame of audio, which is 12 ms of this engine's time on a desktop build and is the only number in the whole utterance that cannot be shared out over the rest of it.
 
 The engine is also kept between utterances rather than made and thrown away each time -- it is never given back, because making a fresh one costs a second or so before the next first syllable; and one read takes everything the engine has written rather than everything a caller happened to ask for, so a 4096-sample frame crosses the boundary between the two threads in one go whatever the size of the buffer the framework offered.
 
-Two more that were found while the "while speaking" section was taken out, because slowness between elements is interruption latency rather than synthesis speed and every utterance runs on the framework's one synthesis thread. **The waits a stop has to land in were twenty-five milliseconds.** A swipe that arrives mid-slice waits out the rest of it before the next element can start, so the pacing slice and the wait for room in the framework's buffer are five milliseconds now: unheard either way, and what makes an interruption feel instant rather than merely quick. **Long text ran four seconds ahead of the speech.** That queued seconds of audio nobody had heard yet and the next swipe threw all of it away, which is the failure the lead exists to prevent -- so every message is paced to the same three hundred milliseconds now, long or short.
+Two more that were found while the "while speaking" section was taken out, because slowness between elements is interruption latency rather than synthesis speed and every utterance runs on the framework's one synthesis thread. **The waits a stop has to land in were slept out.** A swipe that arrived mid-slice waited out the rest of it before the next element could start. The wait is woken the moment silence is asked for, so the next first syllable is delayed only by however long the engine takes to drop what it was making. **Long text ran four seconds ahead of the speech.** That queued seconds of audio nobody had heard yet and the next swipe threw all of it away, which is the failure the lead exists to prevent -- so every message is paced to the same three hundred milliseconds now, long or short.
 
 ## Wear OS
 

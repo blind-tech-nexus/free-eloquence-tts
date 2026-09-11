@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -31,9 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
 /**
@@ -46,8 +49,10 @@ import androidx.compose.ui.unit.dp
  * brought in or written out beside it.
  *
  * Every change is written to the dictionary file at once, and the speech
- * service reads that file's own stamp on the next utterance, so a word added
- * here is heard the next time anything is spoken -- no restart, no save.
+ * service reads that file's own revision on the next utterance, so a word added
+ * here is heard the next time anything is spoken -- no restart, no save. A word
+ * matches whatever capital letters it is written in: "DOJ" and "doj" are the
+ * same entry, and both are heard.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -175,7 +180,7 @@ fun DictionaryScreen(onBack: () -> Unit) {
 					WordRow(
 						word = word,
 						say = say,
-						onClick = { editing = word to say }
+						onPress = { editing = word to say }
 					)
 				}
 			}
@@ -230,8 +235,12 @@ fun DictionaryScreen(onBack: () -> Unit) {
 						Toast.makeText(context, notice, Toast.LENGTH_SHORT).show()
 					}
 					editing = null
+					editingForEdit = false
 				},
-				onDismiss = { editing = null }
+				onDismiss = {
+					editing = null
+					editingForEdit = false
+				}
 			)
 		}
 	}
@@ -239,16 +248,16 @@ fun DictionaryScreen(onBack: () -> Unit) {
 
 /** One word of the dictionary: what is written, and what is said. */
 @Composable
-private fun WordRow(word: String, say: String, onClick: () -> Unit) {
+private fun WordRow(word: String, say: String, onPress: () -> Unit) {
 	Column(
 		modifier = Modifier
 			.fillMaxWidth()
-			.clickable(role = Role.Button, onClick = onClick)
-			.padding(horizontal = 16.dp, vertical = 12.dp)
-			.clearAndSetSemantics {
+			.clickable(role = Role.Button, onClick = onPress)
+			.semantics(mergeDescendants = true) {
 				contentDescription = "$word, said as $say"
 				role = Role.Button
 			}
+			.padding(horizontal = 16.dp, vertical = 12.dp)
 	) {
 		Text(text = word, style = MaterialTheme.typography.bodyLarge)
 		Text(
@@ -271,6 +280,11 @@ private fun WordDialog(
 ) {
 	var current by remember { mutableStateOf(word) }
 	var replacement by remember { mutableStateOf(say) }
+	val keys = KeyboardOptions(
+		capitalization = KeyboardCapitalization.None,
+		autoCorrect = false,
+		keyboardType = KeyboardType.Text
+	)
 	AlertDialog(
 		onDismissRequest = onDismiss,
 		title = { Text(text = title) },
@@ -281,6 +295,7 @@ private fun WordDialog(
 					onValueChange = { current = it },
 					singleLine = true,
 					label = { Text(text = stringResource(R.string.dictionary_word_hint)) },
+					keyboardOptions = keys,
 					modifier = Modifier.fillMaxWidth()
 				)
 				OutlinedTextField(
@@ -288,6 +303,7 @@ private fun WordDialog(
 					onValueChange = { replacement = it },
 					singleLine = true,
 					label = { Text(text = stringResource(R.string.dictionary_say_hint)) },
+					keyboardOptions = keys,
 					modifier = Modifier
 						.fillMaxWidth()
 						.padding(top = 8.dp)

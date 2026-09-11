@@ -84,10 +84,10 @@
 	<string name="sample_rate_description">The rate the speech is made at. A higher one is clearer and costs more power.</string>
 
 	<string name="section_dictionaries">Dictionary</string>
-	<string name="dictionaries_description">Teach the engine the words it would otherwise spell out, letter by letter.</string>
+	<string name="dictionaries_description">Teach the voice the words it would otherwise spell out, letter by letter. A word matches whatever capital letters it is written in.</string>
 	<string name="dictionary_manager">Dictionary manager</string>
 	<string name="dictionary_manager_description">A list of your own words and what to say instead. Add words one at a time, or bring a whole file in.</string>
-	<string name="dictionary_screen_description">Each word is read as you wrote it, and then as the engine will say it. Tap a word to edit it or take it away, and use Add word to teach a new one.</string>
+	<string name="dictionary_screen_description">Each word is read as you wrote it, and then as the engine will say it. Capital letters do not matter: doj and DOJ are the same word. Tap a word to edit it or take it away, and use Add word to teach a new one.</string>
 	<string name="dictionary_add">Add word</string>
 	<string name="dictionary_import">Import dictionary file</string>
 	<string name="dictionary_export">Export dictionary file</string>

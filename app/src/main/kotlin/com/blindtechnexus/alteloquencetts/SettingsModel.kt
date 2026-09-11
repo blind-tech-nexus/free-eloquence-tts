@@ -188,7 +188,11 @@ class SettingsModel(context: Context) {
 	 *  the same text road as a caller's speech, so what is heard is what the
 	 *  setting really does. */
 	fun say() {
-		val text = TextPipeline.apply(app.getString(R.string.preview_text), settings)
+		val text = TextPipeline.apply(
+			app.getString(R.string.preview_text),
+			settings,
+			UserDictionary.words(app)
+		)
 		val said = Prosody.prefix(settings.phrasePrediction) +
 			Pauses.apply(text, settings.pauses, true)
 		preview?.say(said, voice, settings.shape(voice), sampleRateHz, settings.abbreviations)

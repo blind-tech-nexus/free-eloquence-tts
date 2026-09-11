@@ -10,7 +10,6 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
 import android.speech.tts.Voice
 import android.util.Log
-import java.io.File
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -35,12 +34,17 @@ import java.util.concurrent.atomic.AtomicInteger
  * for every word in it.
  *
  * The samples travel from the engine to the framework in one buffer, as big as
- * the framework asks for and allocated once for the utterance, and the engine is
- * not held back in slices any more than [Pacing] requires.
+ * the framework asks for and kept from one utterance to the next, and the
+ * engine is not held back in slices any more than [Pacing] requires. A request
+ * for silence does not wait out a slice: it wakes the wait, so the next
+ * element can start as soon as the engine has dropped what it was making.
  *
- * The words a dictionary holds are taught when the service starts rather than in
- * front of the first thing said ([warmUp]), and the file they live in is asked
- * about once per utterance rather than read once per setting.
+ * The words a dictionary holds are rewritten in the pipeline rather than taught
+ * to the engine. IBM's own dictionary is case-sensitive, which is why a word
+ * added in the manager used to vanish in speech; the rewrite does not care
+ * about case, and a revision on the file is what says the list in memory is
+ * still the list on disk, so a word added on the dictionary screen is heard
+ * the next time anything is spoken without restarting the service.
  *
  * A piece whose cut landed on a full stop ends where the engine would have
  * paused anyway. A piece whose cut had to be made in the middle of a sentence is
@@ -66,10 +70,23 @@ class EvvTtsService : TextToSpeechService() {
 	@Volatile
 	private var appliedRevision = -1
 
-	/** When the user's dictionary file last changed, which is what says the
-	 *  words taught to the engine are still the words in the file. */
+	/** The dictionary list last handed to the pipeline, and the revision it
+	 *  was read at. The file is not asked about on every utterance: a write
+	 *  from the dictionary screen bumps the revision, and that is the whole
+	 *  of the check. */
 	@Volatile
-	private var loadedWordsStamp = -1L
+	private var loadedWordsRevision = Int.MIN_VALUE
+
+	@Volatile
+	private var loadedWords: List<Pair<String, String>> = emptyList()
+
+	/** Wakes a wait the moment silence is asked for, so a swipe does not sit
+	 *  out the rest of a sleep before the next element can start. */
+	private val gate = Object()
+
+	/** The buffer the framework is filled from, kept from one utterance to
+	 *  the next when the size it asked for has not moved. */
+	private var chunk: ByteArray? = null
 
 	/** Utterances being driven right now, so that the idle timer can tell a
 	 *  quiet engine from a working one. */
@@ -101,10 +118,6 @@ class EvvTtsService : TextToSpeechService() {
 	private var matchKey: String? = null
 	private var matchValue: Pair<Int, Int>? = null
 
-	/** The dictionary file, resolved once. Resolving it walks the storage on
-	 *  every call, which an utterance has no reason to pay for. */
-	private var wordsFile: File? = null
-
 	private val main = Handler(Looper.getMainLooper())
 
 	/** Gives a suspect engine instance back, so that the next utterance opens a
@@ -119,7 +132,6 @@ class EvvTtsService : TextToSpeechService() {
 			val held = engine
 			engine = null
 			appliedRevision = -1
-			loadedWordsStamp = -1
 			if (held != null) {
 				held.close()
 				Log.i(TAG, "the quiet engine was given back; the next utterance opens a fresh one")
@@ -134,7 +146,6 @@ class EvvTtsService : TextToSpeechService() {
 		val made = Settings(this)
 		settings = made
 		voiceIndex = buildVoiceIndex()
-		wordsFile = runCatching { UserDictionary.file(this) }.getOrNull()
 		keepAlive = KeepAlive(this)
 		keepAlive?.sync(made.persistentNotification)
 		warmUp()
@@ -157,15 +168,13 @@ class EvvTtsService : TextToSpeechService() {
 	}
 
 	/**
-	 * Opens the engine and teaches it the dictionary, before anything asks to
-	 * be heard.
+	 * Opens the engine before anything asks to be heard.
 	 *
-	 * Three thousand words take about half a second to put into the engine, and
-	 * a service that starts when a screen reader starts is asked for its first
-	 * sentence a second or two later. Paid at the start that is nothing anybody
-	 * notices; paid in front of the first utterance it is half a second of
-	 * silence before "charging" or "unread message", which is exactly the wait
-	 * that reads as a slow engine.
+	 * Opening the engine costs a second or so, and a service that starts when
+	 * a screen reader starts is asked for its first sentence a second or two
+	 * later. Paid at the start that is nothing anybody notices; paid in front
+	 * of the first utterance it is a second of silence before "charging" or
+	 * "unread message", which is exactly the wait that reads as a slow engine.
 	 *
 	 * A language nobody has asked for is a wasted instance, so this opens the
 	 * one the build was made with -- the same one a caller with no language of
@@ -179,6 +188,7 @@ class EvvTtsService : TextToSpeechService() {
 		val language = EvvEngine.available.firstOrNull() ?: return
 		Thread({
 			if (!alive) return@Thread
+			currentWords()
 			synchronized(engineLock) {
 				if (!alive || speaking.get() > 0) return@synchronized
 				val made = ensureEngineLocked(language) ?: return@synchronized
@@ -321,12 +331,6 @@ class EvvTtsService : TextToSpeechService() {
 		val held = engine
 		if (held != null && held.language == language) return held
 		held?.close()
-		// A new instance knows none of the user's words: the stamp belongs
-		// to the instance that was taught, so it goes back to "never" and
-		// the words are taught again below. Without this a language change
-		// -- or a fresh instance after a quiet one was given back -- kept
-		// the old stamp and the new engine never heard the dictionary.
-		loadedWordsStamp = -1
 		val made = EvvEngine.open(language)
 		engine = made
 		if (made != null) settings?.let { applySettings(made, it) }
@@ -336,26 +340,22 @@ class EvvTtsService : TextToSpeechService() {
 	private fun applySettings(target: EvvEngine, s: Settings) {
 		target.setSampleRate(s.sampleRateHz)
 		target.setAbbreviations(s.abbreviations)
-		loadWords(target)
 		target.applyVoice(s.voice, s.shape(s.voice))
 		appliedRevision = s.revision
 	}
 
-	/** Teaching a few thousand words costs about half a second, so it happens
-	 *  when the file changes rather than whenever any setting does. The check is
-	 *  the file's own stamp, which is two reads of a directory entry, so a word
-	 *  added on the dictionary screen is heard the next time anything is spoken
-	 *  without restarting the service. */
-	private fun loadWords(target: EvvEngine) {
-		val file = wordsFile ?: runCatching { UserDictionary.file(this) }.getOrNull()?.also { wordsFile = it }
-		val stamp = if (file != null && file.exists()) file.lastModified() else -1L
-		if (stamp == loadedWordsStamp) return
-		target.forgetDictionaries()
-		if (file != null && file.exists()) {
-			val taught = Dictionaries.load(target, Eci.DICT_MAIN, file, Charsets.UTF_8)
-			Log.i(TAG, "user dictionary: $taught entries from ${file.name}")
-		}
-		loadedWordsStamp = stamp
+	/** The dictionary list to rewrite this utterance with. The file is read
+	 *  when its revision has moved and not otherwise, so a word added on the
+	 *  dictionary screen is heard the next time anything is spoken, and an
+	 *  unchanged list costs one integer comparison. */
+	@Synchronized
+	private fun currentWords(): List<Pair<String, String>> {
+		val rev = UserDictionary.revision
+		if (rev == loadedWordsRevision) return loadedWords
+		val words = runCatching { UserDictionary.words(this) }.getOrNull() ?: return loadedWords
+		loadedWords = words
+		loadedWordsRevision = rev
+		return words
 	}
 
 	override fun onStop() = stopSpeakingNow()
@@ -377,7 +377,10 @@ class EvvTtsService : TextToSpeechService() {
 	 * phone that has to make the voice again from nothing.
 	 */
 	internal fun stopSpeakingNow() {
-		stopped = true
+		synchronized(gate) {
+			stopped = true
+			gate.notifyAll()
+		}
 		val held = engine
 		if (held != null) {
 			runCatching { held.stop() }
@@ -387,7 +390,7 @@ class EvvTtsService : TextToSpeechService() {
 
 	override fun onSynthesizeText(request: SynthesisRequest?, callback: SynthesisCallback?) {
 		if (request == null || callback == null) return
-		stopped = false
+		synchronized(gate) { stopped = false }
 		val s = settings
 		if (s == null) {
 			callback.error(TextToSpeech.ERROR_SERVICE)
@@ -441,7 +444,6 @@ class EvvTtsService : TextToSpeechService() {
 		// Re-sent every time rather than once, because it is the one setting
 		// with no way of telling whether something else has moved it.
 		target.setAbbreviations(s.abbreviations)
-		synchronized(engineLock) { loadWords(target) }
 		// The rate and pitch a client asks for are scaled onto the voice,
 		// unless the settings say this app's own are to be forced over them: a
 		// screen reader that has set a rate is asking for that rate, and this is
@@ -467,12 +469,17 @@ class EvvTtsService : TextToSpeechService() {
 		if (speakForeground) KeepAliveNotification.claim(this, s.notificationStopButton)
 		val lock = acquireWakeLock()
 		try {
-			val text = TextPipeline.apply(request.charSequenceText?.toString().orEmpty(), s)
+			val text = TextPipeline.apply(
+				request.charSequenceText?.toString().orEmpty(),
+				s,
+				currentWords()
+			)
 			if (text.isEmpty()) {
 				callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
 				callback.done()
 				return
 			}
+			if (stopped) return
 			// The framework is not told an utterance has begun until there are
 			// samples for it. Saying so up front and then being silenced before
 			// the engine has made anything hands the reader a whole start and
@@ -480,7 +487,7 @@ class EvvTtsService : TextToSpeechService() {
 			// running dry. So the opening is made lazily, below.
 			val opening = Opening(callback, target.sampleRateHz)
 			val pace = Pace(target.sampleRateHz * BYTES_PER_SAMPLE)
-			val buffer = ByteArray(callback.maxBufferSize.coerceIn(MIN_CHUNK, MAX_CHUNK))
+			val buffer = bufferFor(callback)
 			// Piece by piece, so that asking for silence waits out a piece
 			// rather than the whole message: the engine cannot abandon what it is
 			// saying. Pauses are shortened after the split rather than before
@@ -492,9 +499,11 @@ class EvvTtsService : TextToSpeechService() {
 			// queues speech nobody has heard yet, and the next swipe throws
 			// all of it away. See Pacing.
 			val lead = Pacing.DEFAULT_MS.toLong()
-			for ((at, piece) in pieces.withIndex()) {
+			val lastIndex = pieces.lastIndex
+			for (at in pieces.indices) {
 				if (stopped) break
-				val last = at == pieces.lastIndex
+				val piece = pieces[at]
+				val last = at == lastIndex
 				var audio = prosody + Pauses.apply(piece.text, s.pauses, last)
 				// A boundary the text did not ask for is no reason to stop for
 				// four tenths of a second: the pieces of one utterance run on
@@ -615,12 +624,7 @@ class EvvTtsService : TextToSpeechService() {
 		while (!stopped) {
 			if (callback.audioAvailable(buffer, 0, n) == TextToSpeech.SUCCESS) return true
 			if (++tries >= DELIVER_TRIES) return false
-			try {
-				Thread.sleep(DELIVER_WAIT_MS)
-			} catch (stopping: InterruptedException) {
-				Thread.currentThread().interrupt()
-				return false
-			}
+			if (!waitUpTo(DELIVER_WAIT_MS)) return false
 		}
 		return false
 	}
@@ -704,21 +708,46 @@ class EvvTtsService : TextToSpeechService() {
 	 * swiping through, wide for the paragraph nobody is going to interrupt
 	 * between two of its own sentences.
 	 *
-	 * The wait is in slices so that a stop is noticed at once rather than at the
-	 * end of it.
+	 * The wait is woken the moment silence is asked for, so a swipe does not
+	 * sit out the rest of a sleep before the next element can start.
 	 */
 	private fun hold(pace: Pace, leadMs: Long): Boolean {
 		while (!stopped) {
 			val ahead = pace.ahead() - leadMs
 			if (ahead <= 0) return true
-			try {
-				Thread.sleep(minOf(ahead, SLICE_MS))
-			} catch (stopping: InterruptedException) {
-				Thread.currentThread().interrupt()
-				return false
-			}
+			if (!waitUpTo(ahead)) return false
 		}
 		return false
+	}
+
+	/** Sleeps up to [ms] or until silence is asked for, and answers whether
+	 *  the utterance is still wanted. */
+	private fun waitUpTo(ms: Long): Boolean {
+		if (stopped) return false
+		if (ms <= 0L) return true
+		val deadline = System.nanoTime() + ms * 1_000_000L
+		synchronized(gate) {
+			while (!stopped) {
+				val left = (deadline - System.nanoTime()) / 1_000_000L
+				if (left <= 0L) return true
+				try {
+					gate.wait(left)
+				} catch (stopping: InterruptedException) {
+					Thread.currentThread().interrupt()
+					return false
+				}
+			}
+			return false
+		}
+	}
+
+	/** The buffer the framework asked for, reused when the size has not
+	 *  moved, so a swipe through a list does not allocate one per item. */
+	private fun bufferFor(callback: SynthesisCallback): ByteArray {
+		val want = callback.maxBufferSize.coerceIn(MIN_CHUNK, MAX_CHUNK)
+		val held = chunk
+		if (held != null && held.size == want) return held
+		return ByteArray(want).also { chunk = it }
 	}
 
 	/** Tells the framework an utterance has begun, once, and not before there is
@@ -779,13 +808,9 @@ class EvvTtsService : TextToSpeechService() {
 		/** How much audio may sit ahead of the speech. Fixed: see [Pacing]. */
 		const val LEAD_MS = Pacing.DEFAULT_MS.toLong()
 
-		/** How long a wait for the speech to catch up is slept in one go. It is
-		 *  what bounds how long a request for silence can take: a swipe that
-		 *  lands mid-slice waits out the rest of it before the next element
-		 *  can start, because every utterance runs on the framework's one
-		 *  synthesis thread. Five milliseconds is unheard either way and is
-		 *  what makes an interruption feel instant rather than merely quick.
-		 *  Kept well under the lead, which is what bounds the other end. */
+		/** An upper bound a pacing wait used to be slept in, kept so the
+		 *  contract test can still say a slice is shorter than the lead. The
+		 *  wait itself is woken by the stop rather than sliced. */
 		const val SLICE_MS = 5L
 
 		/** How often, and how many times, the framework is asked again for room.
