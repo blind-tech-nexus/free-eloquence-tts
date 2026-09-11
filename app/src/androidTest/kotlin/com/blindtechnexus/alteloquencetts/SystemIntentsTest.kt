@@ -95,7 +95,7 @@ class SystemIntentsTest {
 			0
 		)
 		assertEquals(Installer.authority(context), info.authority)
-		assertTrue(info.grantedUriPermissions)
+		assertTrue(info.grantUriPermissions)
 		assertFalse(info.exported)
 		// And the one directory the provider publishes. Anything else is the
 		// IllegalArgumentException that [Installer.install] answers by refusing
