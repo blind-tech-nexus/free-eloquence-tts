@@ -125,6 +125,15 @@ internal object Updater {
 		}
 		if (state !is State.Ready) state = State.Checking
 		notice = Notice.NONE
+		if (force) {
+			// Asking again is the taking back of a "not now": the version that
+			// was refused earlier in this run of the app is offered again,
+			// because a person who has just pressed the row that asks has said
+			// so in the clearest way there is on this screen. There is no
+			// switch to find first, which is the point of "Later" meaning now
+			// rather than never.
+			ignored = null
+		}
 		val thread = Thread({
 			val answer = try {
 				UpdateInfo.fetch(BuildConfig.VERSION_NAME, cancelled)
@@ -137,8 +146,24 @@ internal object Updater {
 			}
 			busy.set(false)
 			state = when (answer) {
-				is UpdateInfo.Result.Found ->
-					State.Available(answer.available.version, answer.available.downloadUrl)
+				is UpdateInfo.Result.Found -> {
+					val cached = ApkDownload.fileFor(appContext, answer.available.version)
+					if (cached.exists() && Installer.isInstallable(appContext, cached) &&
+						(force || state is State.Ready)
+					) {
+						// The file is already here, and somebody has just asked:
+						// offer the install rather than ten more megabytes. This is
+						// the step the permission screen's own sentence promises --
+						// allow the app, press the row again, install what was
+						// fetched before -- and it is done for a press and for a
+						// state that was already holding the file, because a launch
+						// that went straight to the installer without being asked is
+						// not an update check but a nag.
+						State.Ready(cached, cached.length())
+					} else {
+						State.Available(answer.available.version, answer.available.downloadUrl)
+					}
+				}
 				UpdateInfo.Result.UpToDate -> {
 					if (force) notice = Notice.UP_TO_DATE
 					State.UpToDate
@@ -176,6 +201,17 @@ internal object Updater {
 		if (!downloading.compareAndSet(false, true)) return false
 		cancelled.set(false)
 		val file = ApkDownload.fileFor(appContext, available.version)
+		if (file.exists() && Installer.isInstallable(appContext, file)) {
+			// It is already here. Somebody pressed the button once, the bytes
+			// came, and something between then and now -- the permission
+			// Android insists on, a screen that closed, a phone that restarted
+			// the app -- put them back at the question rather than at the
+			// answer. Fetching the same 50 MB again on a phone that is paying
+			// for each of them by the megabyte would be the app's mistake, not
+			// theirs.
+			state = State.Ready(file, file.length())
+			return true
+		}
 		state = State.Downloading(0, -1)
 		val thread = Thread({
 			val outcome = try {
