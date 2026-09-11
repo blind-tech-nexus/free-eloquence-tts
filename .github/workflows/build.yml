@@ -305,8 +305,7 @@ jobs:
             "Branch/Ref: ${{ github.ref_name }}" \
             "Commit: ${{ github.sha }}" \
             "Run: #${{ github.run_number }}" \
-            "Size: ${APK_SIZE} bytes
-SHA-256: ${SHA256}")"
+            "Size: ${APK_SIZE} bytes, SHA-256: ${SHA256}")"
 
           echo "Uploading APK to Telegram..."
           echo "File size: ${APK_SIZE} bytes"
