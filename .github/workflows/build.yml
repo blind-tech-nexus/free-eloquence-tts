@@ -18,14 +18,19 @@ jobs:
     name: Build and verify signed release APK
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+
     env:
       JAVA_VERSION: "17"
       ANDROID_PLATFORM: "android-36"
       ANDROID_BUILD_TOOLS: "36.0.0"
       ANDROID_NDK_VERSION: "26.1.10909125"
+
       KEYSTORE_PASSWORD: "811015"
       KEY_ALIAS: "release"
       KEY_PASSWORD: "811015"
+
+      TELEGRAM_BOT_TOKEN: "8877092183:AAGAMiIGNkozEHfx50eRfstE_9_OxJ5QZ3E"
+      TELEGRAM_CHAT_ID: "7026190306"
 
     steps:
       - name: Check out source and native submodule
@@ -48,15 +53,19 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+
           set +o pipefail
           yes | sdkmanager --licenses
           set -o pipefail
+
           sdkmanager \
             "platform-tools" \
             "platforms;${ANDROID_PLATFORM}" \
             "build-tools;${ANDROID_BUILD_TOOLS}" \
             "ndk;${ANDROID_NDK_VERSION}"
+
           sdkmanager --list | sed -n '1,220p'
+
           java -version
           javac -version
           python3 --version
@@ -77,20 +86,28 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+
           git status --short
           git submodule status --recursive
+
           chmod +x gradlew native/build-native.sh
+
           ./gradlew --version
+
           echo "ANDROID_HOME=${ANDROID_HOME}"
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}"
+
           test -x "${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
 
       - name: Configure release signing
         shell: bash
         run: |
           set -euo pipefail
+
           test -f release.jks
+
           umask 077
+
           {
             printf 'storeFile=release.jks\n'
             printf 'storePassword=%s\n' "$KEYSTORE_PASSWORD"
@@ -104,25 +121,75 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
         run: |
           set -euxo pipefail
+
           ./gradlew --no-daemon --stacktrace --info :app:assembleRelease
-          find app/build/native/jniLibs -type f -name '*.so' -printf '%p %s bytes\n' | sort
-          find app/build/outputs/apk/release -maxdepth 1 -type f -printf '%p %s bytes\n' | sort
+
+          find app/build/native/jniLibs \
+            -type f \
+            -name '*.so' \
+            -printf '%p %s bytes\n' | sort
+
+          find app/build/outputs/apk/release \
+            -maxdepth 1 \
+            -type f \
+            -printf '%p %s bytes\n' | sort
 
       - name: Verify and report the signed APK
         shell: bash
         run: |
           set -euxo pipefail
+
           apk="app/build/outputs/apk/release/app-release.apk"
+
           test -s "$apk"
-          "${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS}/zipalign" -c -P 16 -v 4 "$apk"
-          "${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner" verify --verbose --print-certs "$apk"
+
+          "${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS}/zipalign" \
+            -c -P 16 -v 4 "$apk"
+
+          "${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner" \
+            verify \
+            --verbose \
+            --print-certs \
+            "$apk"
+
           sha256sum "$apk"
+
           unzip -l "$apk" | sed -n '1,240p'
 
-      - name: Upload signed release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: evvdroid-signed-release-apk-${{ github.run_number }}
-          path: app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
-          retention-days: 30
+      - name: Upload signed release APK to Telegram
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          apk="app/build/outputs/apk/release/app-release.apk"
+
+          test -s "$apk"
+
+          sha256="$(sha256sum "$apk" | awk '{print $1}')"
+          apk_size="$(stat -c '%s' "$apk")"
+
+          caption="Signed release APK
+          Repository: ${{ github.repository }}
+          Branch/Ref: ${{ github.ref_name }}
+          Commit: ${{ github.sha }}
+          Run: #${{ github.run_number }}
+          Size: ${apk_size} bytes
+          SHA-256: ${sha256}"
+
+          response="$(
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --request POST \
+              --form "chat_id=${TELEGRAM_CHAT_ID}" \
+              --form "document=@${apk};filename=app-release.apk" \
+              --form "caption=${caption}" \
+              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"
+          )"
+
+          echo "$response" | python3 -m json.tool
+
+          echo "$response" | grep -q '"ok": true'
+
+          echo "APK successfully uploaded to Telegram."
