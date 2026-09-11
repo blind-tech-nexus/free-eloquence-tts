@@ -145,19 +145,20 @@ private fun ExemptionRow(granted: Boolean, onClick: () -> Unit) {
 	val state = stringResource(
 		if (granted) R.string.battery_exemption_granted else R.string.battery_exemption_not_granted
 	)
+	val label = stringResource(R.string.battery_exemption_label)
 	Described(text = stringResource(R.string.battery_exemption_description)) {
 		OutlinedButton(
 			onClick = onClick,
 			modifier = Modifier
 				.fillMaxWidth()
 				.clearAndSetSemantics {
-					contentDescription = stringResource(R.string.battery_exemption_label)
+					contentDescription = label
 					stateDescription = state
 					role = Role.Button
 				}
 		) {
 			Text(
-				text = stringResource(R.string.battery_exemption_label),
+				text = label,
 				style = MaterialTheme.typography.labelLarge
 			)
 			Text(
