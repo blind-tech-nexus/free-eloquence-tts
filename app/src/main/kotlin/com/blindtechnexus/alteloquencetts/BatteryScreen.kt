@@ -33,8 +33,8 @@ import androidx.lifecycle.LifecycleEventObserver
 /**
  * Everything this app can do to keep Android from stopping the voice.
  *
- * The screen is in three parts, because the three things they are for happen at
- * three different times.
+ * The screen is in two parts, because the two things they are for happen at
+ * two different times.
  *
  * While the phone is idle: the exemption from battery optimization, which is the
  * single most important and cannot be granted from inside the app -- the button
@@ -47,14 +47,12 @@ import androidx.lifecycle.LifecycleEventObserver
  * the notification is looked for, where a phone that clears notifications
  * aggressively wants the short end.
  *
- * While speaking: speaking in the foreground, which holds the engine there
- * only while each utterance is being made, for whoever wants the protection
- * without a notification that never goes away; the wake lock, for the devices
- * whose processor sleeps mid sentence and drops the tail of the speech; how far the engine may run ahead of
- * what has been heard, which is the trade between losing words when a reader
- * interrupts and finishing a chapter the moment it was asked for; how long an
- * engine instance is kept after the last thing it said; and how long the engine
- * may go silent in the middle of an utterance before it is given up on.
+ * How the engine behaves while speaking -- the foreground, the wake lock, how
+ * far ahead of the speech the samples may run, how long an instance is kept,
+ * and how long a silence is waited out -- is fixed in [Stability] and
+ * [Pacing] instead. None of those has a second good answer, and a choice
+ * between a fast answer and a slow one on a screen about keeping the voice
+ * alive is a way of choosing the slow one by accident.
  *
  * And for a fault: the switch that writes what is changed here to the system
  * log, so that a voice that stopped can be traced back to what was changed
@@ -78,13 +76,6 @@ fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 	var startOnBoot by remember { mutableStateOf(settings.startOnBoot) }
 	var stopButton by remember { mutableStateOf(settings.notificationStopButton) }
 	var checkInterval by remember { mutableStateOf(settings.keepAliveCheckMs) }
-	var foreground by remember { mutableStateOf(settings.foregroundWhileSpeaking) }
-	var wakeLock by remember { mutableStateOf(settings.wakeLock) }
-	var tail by remember { mutableStateOf(settings.wakeLockTailMs) }
-	var release by remember { mutableStateOf(settings.releaseEngineAfterS) }
-	var lead by remember { mutableStateOf(settings.speechLeadMs) }
-	var runAhead by remember { mutableStateOf(settings.runAheadOnLongText) }
-	var silence by remember { mutableStateOf(settings.engineSilenceMs) }
 	var tracking by remember { mutableStateOf(settings.trackActions) }
 	var notice by remember { mutableStateOf("") }
 	// Resolved here rather than in the click: the click is not a composition,
@@ -217,108 +208,6 @@ fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 				}
 			)
 
-			SectionHeading(text = stringResource(R.string.battery_speaking_heading))
-			SwitchRow(
-				label = stringResource(R.string.foreground_while_speaking_label),
-				checked = foreground,
-				description = stringResource(R.string.foreground_while_speaking_description),
-				onChange = { on ->
-					foreground = on
-					settings.foregroundWhileSpeaking = on
-					Tracker.action(settings, "speak in the foreground ${if (on) "on" else "off"}")
-				}
-			)
-			SwitchRow(
-				label = stringResource(R.string.wake_lock_label),
-				checked = wakeLock,
-				description = stringResource(R.string.wake_lock_description),
-				onChange = { on ->
-					wakeLock = on
-					settings.wakeLock = on
-					Tracker.action(settings, "wake lock ${if (on) "on" else "off"}")
-				}
-			)
-			ChoiceButton(
-				title = stringResource(R.string.wake_lock_tail_label),
-				shown = stringResource(
-					R.string.battery_value_is,
-					stringResource(R.string.wake_lock_tail_label),
-					durationLabel(context.resources, tail)
-				),
-				options = Stability.WAKE_LOCK_TAILS.map { durationLabel(context.resources, it) },
-				chosen = indexOf(tail, Stability.WAKE_LOCK_TAILS),
-				description = stringResource(R.string.wake_lock_tail_description),
-				onChoose = { at ->
-					val value = Stability.WAKE_LOCK_TAILS.getOrElse(at) { tail }
-					tail = value
-					settings.wakeLockTailMs = value
-					Tracker.action(settings, "wake lock held for ${value}ms after speaking")
-				}
-			)
-			ChoiceButton(
-				title = stringResource(R.string.speech_lead_label),
-				shown = stringResource(
-					R.string.battery_value_is,
-					stringResource(R.string.speech_lead_label),
-					durationLabel(context.resources, lead)
-				),
-				options = Pacing.LEADS.map { durationLabel(context.resources, it) },
-				chosen = indexOf(lead, Pacing.LEADS),
-				description = stringResource(R.string.speech_lead_description),
-				onChoose = { at ->
-					val value = Pacing.LEADS.getOrElse(at) { lead }
-					lead = value
-					settings.speechLeadMs = value
-					Tracker.action(settings, "speech lead ${value}ms")
-				}
-			)
-			SwitchRow(
-				label = stringResource(R.string.run_ahead_label),
-				checked = runAhead,
-				description = stringResource(R.string.run_ahead_description),
-				onChange = { on ->
-					runAhead = on
-					settings.runAheadOnLongText = on
-					Tracker.action(settings, "run ahead on long text ${if (on) "on" else "off"}")
-				}
-			)
-			ChoiceButton(
-				title = stringResource(R.string.engine_release_label),
-				shown = stringResource(
-					R.string.battery_value_is,
-					stringResource(R.string.engine_release_label),
-					durationLabel(context.resources, release * MILLIS_PER_SECOND, forever = true)
-				),
-				options = Stability.ENGINE_RELEASES.map {
-					durationLabel(context.resources, it * MILLIS_PER_SECOND, forever = true)
-				},
-				chosen = indexOf(release, Stability.ENGINE_RELEASES),
-				description = stringResource(R.string.engine_release_description),
-				onChoose = { at ->
-					val value = Stability.ENGINE_RELEASES.getOrElse(at) { release }
-					release = value
-					settings.releaseEngineAfterS = value
-					Tracker.action(settings, "engine given back after ${value}s idle")
-				}
-			)
-			ChoiceButton(
-				title = stringResource(R.string.engine_silence_label),
-				shown = stringResource(
-					R.string.battery_value_is,
-					stringResource(R.string.engine_silence_label),
-					durationLabel(context.resources, silence)
-				),
-				options = Stability.SILENCES.map { durationLabel(context.resources, it) },
-				chosen = indexOf(silence, Stability.SILENCES),
-				description = stringResource(R.string.engine_silence_description),
-				onChoose = { at ->
-					val value = Stability.SILENCES.getOrElse(at) { silence }
-					silence = value
-					settings.engineSilenceMs = value
-					Tracker.action(settings, "utterance given up after ${value / MILLIS_PER_SECOND}s of silence")
-				}
-			)
-
 			SectionHeading(text = stringResource(R.string.battery_fault_heading))
 			SwitchRow(
 				label = stringResource(R.string.track_actions_label),
@@ -416,5 +305,3 @@ private fun indexOf(value: Int, options: List<Int>): Int {
 	}
 	return best
 }
-
-private const val MILLIS_PER_SECOND = 1000

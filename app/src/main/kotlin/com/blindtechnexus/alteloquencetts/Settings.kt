@@ -131,59 +131,68 @@ class Settings(context: Context) {
 		).apply()
 
 	/** Whether the engine is held in the foreground while each utterance is
-	 *  being made, even when the persistent notification is off. The
-	 *  notification is shown when speaking starts and taken away when it
-	 *  ends, which is the protection without the standing notice. */
+	 *  being made.
+	 *
+	 *  Retired: the "while speaking" section of the battery screen is gone,
+	 *  and the service reads the fixed [Stability.FOREGROUND_WHILE_SPEAKING]
+	 *  instead. Kept so that preferences written by an earlier build keep
+	 *  parsing, and so that a stored choice is still here if the section
+	 *  ever comes back. */
 	var foregroundWhileSpeaking: Boolean
 		get() = prefs.getBoolean(KEY_FOREGROUND_WHILE_SPEAKING, false)
 		set(value) = prefs.edit().putBoolean(KEY_FOREGROUND_WHILE_SPEAKING, value).apply()
 
-	/** Whether the CPU is kept awake while an utterance is being made. */
+	/** Whether the CPU is kept awake while an utterance is being made.
+	 *
+	 *  Retired: see [Stability.WAKE_LOCK], which is what the service reads.
+	 *  Kept for stored preferences written by an earlier build. */
 	var wakeLock: Boolean
 		get() = prefs.getBoolean(KEY_WAKE_LOCK, false)
 		set(value) = prefs.edit().putBoolean(KEY_WAKE_LOCK, value).apply()
 
 	/** How long the CPU stays awake after the last thing said, in
-	 *  milliseconds. A screen reader speaks in bursts -- a swipe, a line, a
-	 *  swipe -- and on the devices that sleep between one and the next the
-	 *  wake-up is charged to the second line. Holding the processor for a
-	 *  moment after the first costs a little battery and takes the wait out
-	 *  of the burst. Nought is not holding it at all, which is what the
-	 *  switch above has always meant. */
+	 *  milliseconds.
+	 *
+	 *  Retired: see [Stability.WAKE_LOCK_TAIL_MS], which is what the service
+	 *  reads. Kept for stored preferences written by an earlier build. */
 	var wakeLockTailMs: Int
 		get() = prefs.getInt(KEY_WAKE_LOCK_TAIL, 0).coerceAtLeast(0)
 		set(value) = prefs.edit().putInt(KEY_WAKE_LOCK_TAIL, value.coerceAtLeast(0)).apply()
 
 	/** How long an engine instance is kept after the last thing it said, in
-	 *  seconds, before it is closed to give its memory back. The engine holds
-	 *  the language's tables for as long as it lives, which is worth it while
-	 *  a reader is being used and is not worth it an hour after anybody
-	 *  stopped swiping. Nought is never, which is how it has always been. */
+	 *  seconds.
+	 *
+	 *  Retired: see [Stability.RELEASE_ENGINE_AFTER_S], which is what the
+	 *  service reads. Kept for stored preferences written by an earlier
+	 *  build. */
 	var releaseEngineAfterS: Int
 		get() = prefs.getInt(KEY_RELEASE_ENGINE, 0).coerceAtLeast(0)
 		set(value) = prefs.edit().putInt(KEY_RELEASE_ENGINE, value.coerceAtLeast(0)).apply()
 
 	/** How far the samples handed to the framework may run ahead of the
-	 *  speech, in milliseconds. See [Pacing]: it is the one number that
-	 *  decides both how much of a queue a reader has to lose when it asks for
-	 *  silence and how much of a long message the engine is allowed to get on
-	 *  with at once. */
+	 *  speech, in milliseconds.
+	 *
+	 *  Retired: see [Pacing], whose fixed lead is what the service reads.
+	 *  Kept for stored preferences written by an earlier build. */
 	var speechLeadMs: Int
 		get() = prefs.getInt(KEY_SPEECH_LEAD, Pacing.DEFAULT_MS).coerceIn(Pacing.MIN_MS, Pacing.MAX_MS)
 		set(value) = prefs.edit().putInt(KEY_SPEECH_LEAD, value.coerceIn(Pacing.MIN_MS, Pacing.MAX_MS)).apply()
 
 	/** Whether a message long enough to be a paragraph is synthesised as fast
-	 *  as the engine can make it, rather than at the pace it is heard at. */
+	 *  as the engine can make it, rather than at the pace it is heard at.
+	 *
+	 *  Retired: long text is paced like everything else now, because running
+	 *  ahead queued seconds of unheard speech that the next swipe threw
+	 *  away. Kept for stored preferences written by an earlier build. */
 	var runAheadOnLongText: Boolean
 		get() = prefs.getBoolean(KEY_RUN_AHEAD, true)
 		set(value) = prefs.edit().putBoolean(KEY_RUN_AHEAD, value).apply()
 
 	/** How long the engine may go on making no samples at all before the
-	 *  utterance is given up on, in milliseconds. An engine that has hung is
-	 *  worse than an engine that has finished the sentence early: the
-	 *  framework's synthesis thread is the one thing waiting on it, and while
-	 *  it waits every later request for speech is behind it, which is a phone
-	 *  that has gone quiet for the rest of the day. */
+	 *  utterance is given up on, in milliseconds.
+	 *
+	 *  Retired: see [Stability.ENGINE_SILENCE_MS], which is what the service
+	 *  reads. Kept for stored preferences written by an earlier build. */
 	var engineSilenceMs: Int
 		get() = prefs.getInt(KEY_ENGINE_SILENCE, DEFAULT_SILENCE_MS).coerceIn(MIN_SILENCE_MS, MAX_SILENCE_MS)
 		set(value) = prefs.edit()

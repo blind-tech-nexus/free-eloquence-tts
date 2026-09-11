@@ -151,9 +151,15 @@ static void* worker_loop(void* data) {
 		   one it always was -- however long it takes, in milliseconds -- but
 		   the first thing the callback hands over wakes it out of the wait
 		   rather than the next poll finding it there, so the utterance is not
-		   started on up to a millisecond late every single time. */
+		   started on up to a millisecond late every single time. The engine
+		   is asked first and the wait second, because the work is usually
+		   already taken up by the time this runs and the first turn would
+		   otherwise spend its millisecond waiting for an answer it already
+		   had. */
 		for (spins = 0; spins < START_SPINS; spins++) {
 			int begun;
+			if (eciSpeaking(in->eci))
+				break;
 			pthread_mutex_lock(&in->lock);
 			begun = in->started || in->aborted;
 			if (!begun) {
@@ -174,7 +180,7 @@ static void* worker_loop(void* data) {
 				in->waiters--;
 			}
 			pthread_mutex_unlock(&in->lock);
-			if (begun || eciSpeaking(in->eci))
+			if (begun)
 				break;
 		}
 		eciSynchronize(in->eci);

@@ -107,19 +107,22 @@ class EvvTtsService : TextToSpeechService() {
 
 	private val main = Handler(Looper.getMainLooper())
 
-	/** Closes the engine after a stretch of nothing to say, which is the
-	 *  language's tables and the engine's own arena given back to the phone. */
+	/** Gives a suspect engine instance back, so that the next utterance opens a
+	 *  fresh one. The engine is otherwise kept for ever -- making a new one
+	 *  costs a second or so before the next first syllable -- so this only
+	 *  ever runs from [afterAnUtterance] after an utterance the engine went
+	 *  quiet in the middle of. */
 	private val closeIdle = Runnable {
-		val s = settings ?: return@Runnable
 		if (speaking.get() > 0) return@Runnable
 		synchronized(engineLock) {
 			if (speaking.get() > 0) return@synchronized
 			val held = engine
 			engine = null
 			appliedRevision = -1
+			loadedWordsStamp = -1
 			if (held != null) {
 				held.close()
-				Log.i(TAG, "the engine gave back its memory after ${s.releaseEngineAfterS}s of nothing to say")
+				Log.i(TAG, "the quiet engine was given back; the next utterance opens a fresh one")
 			}
 		}
 	}
@@ -318,6 +321,12 @@ class EvvTtsService : TextToSpeechService() {
 		val held = engine
 		if (held != null && held.language == language) return held
 		held?.close()
+		// A new instance knows none of the user's words: the stamp belongs
+		// to the instance that was taught, so it goes back to "never" and
+		// the words are taught again below. Without this a language change
+		// -- or a fresh instance after a quiet one was given back -- kept
+		// the old stamp and the new engine never heard the dictionary.
+		loadedWordsStamp = -1
 		val made = EvvEngine.open(language)
 		engine = made
 		if (made != null) settings?.let { applySettings(made, it) }
@@ -416,7 +425,7 @@ class EvvTtsService : TextToSpeechService() {
 			say(target, request, callback, s)
 		} finally {
 			speaking.decrementAndGet()
-			afterAnUtterance(s)
+			afterAnUtterance()
 		}
 	}
 
@@ -449,12 +458,14 @@ class EvvTtsService : TextToSpeechService() {
 		}
 		// Held in the foreground while this utterance is being made, when that
 		// is asked for and the persistent notification is not already holding
-		// it. Shown when speaking starts and taken away when it ends, with
-		// the stop button the setting asks for: it stops the speech, which
-		// is what there is to stop while this is up.
-		val speakForeground = s.foregroundWhileSpeaking && !s.persistentNotification
+		// it. It is fixed off: claiming and releasing the foreground around
+		// every utterance is binder traffic on this thread in front of every
+		// first syllable, and a service the system has bound speaks under
+		// that binding's own standing anyway. The persistent notification is
+		// the protection that is held once rather than per utterance.
+		val speakForeground = Stability.FOREGROUND_WHILE_SPEAKING && !s.persistentNotification
 		if (speakForeground) KeepAliveNotification.claim(this, s.notificationStopButton)
-		val lock = acquireWakeLock(s)
+		val lock = acquireWakeLock()
 		try {
 			val text = TextPipeline.apply(request.charSequenceText?.toString().orEmpty(), s)
 			if (text.isEmpty()) {
@@ -477,7 +488,10 @@ class EvvTtsService : TextToSpeechService() {
 			// boundary is found by looking at the end of a word.
 			val prosody = Prosody.prefix(s.phrasePrediction)
 			val pieces = TextPieces.pieces(text)
-			val lead = Pacing.leadFor(s.speechLeadMs, s.runAheadOnLongText, text.length, pieces.size)
+			// Fixed, for every message long or short: running further ahead
+			// queues speech nobody has heard yet, and the next swipe throws
+			// all of it away. See Pacing.
+			val lead = Pacing.DEFAULT_MS.toLong()
 			for ((at, piece) in pieces.withIndex()) {
 				if (stopped) break
 				val last = at == pieces.lastIndex
@@ -495,7 +509,7 @@ class EvvTtsService : TextToSpeechService() {
 					if (opening.began) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
 					return
 				}
-				when (pump(target, callback, pace, opening, buffer, s.engineSilenceMs, lead)) {
+				when (pump(target, callback, pace, opening, buffer, Stability.ENGINE_SILENCE_MS, lead)) {
 					Pump.Next -> Unit
 					Pump.Over -> {
 						remember(pace)
@@ -615,16 +629,20 @@ class EvvTtsService : TextToSpeechService() {
 		if (pace.handedMs() > mostAudioHandedMs) mostAudioHandedMs = pace.handedMs()
 	}
 
-	/** What happens in the pause after an utterance: the CPU held a little
-	 *  longer when that was asked for, and the engine given back when it has
-	 *  been quiet long enough. */
-	private fun afterAnUtterance(s: Settings) {
+	/** What happens in the pause after an utterance: a suspect engine given
+	 *  back at once so that the next one opens fresh, the CPU held a little
+	 *  longer when that is asked for, and the engine given back after long
+	 *  enough idle. The last two are fixed off -- see [Stability] -- and
+	 *  their machinery stays for what it says rather than for what it does.
+	 *  This runs before the synthesis thread is free for the next request,
+	 *  so whatever it does delays the next first syllable by that much. */
+	private fun afterAnUtterance() {
 		if (engineIsSuspect) {
 			engineIsSuspect = false
 			main.removeCallbacks(closeIdle)
 			main.post(closeIdle)
 		}
-		if (s.wakeLock && s.wakeLockTailMs > 0) {
+		if (Stability.WAKE_LOCK && Stability.WAKE_LOCK_TAIL_MS > 0) {
 			val held = tailLock
 			if (held == null) {
 				val made = wakeLockManager?.newWakeLock(
@@ -634,15 +652,15 @@ class EvvTtsService : TextToSpeechService() {
 					// The timeout is the release. A lock the system takes back
 					// at the end of the wait is a lock that cannot be forgotten
 					// because the next utterance never came.
-					runCatching { acquire(s.wakeLockTailMs.toLong()) }
+					runCatching { acquire(Stability.WAKE_LOCK_TAIL_MS.toLong()) }
 				}
 				tailLock = made
 			} else {
 				runCatching { if (held.isHeld) held.release() }
-				runCatching { held.acquire(s.wakeLockTailMs.toLong()) }
+				runCatching { held.acquire(Stability.WAKE_LOCK_TAIL_MS.toLong()) }
 			}
 		}
-		val after = s.releaseEngineAfterS
+		val after = Stability.RELEASE_ENGINE_AFTER_S
 		if (after > 0) {
 			main.removeCallbacks(closeIdle)
 			main.postDelayed(closeIdle, after * 1000L)
@@ -651,11 +669,11 @@ class EvvTtsService : TextToSpeechService() {
 
 	// ---- keeping the CPU awake ------------------------------------------
 
-	/** A partial wake lock, held across the utterance when the user asked for
-	 *  it. On some devices the CPU sleeps mid-sentence and the tail of the
-	 *  speech is lost, which is what this is for. */
-	private fun acquireWakeLock(s: Settings): PowerManager.WakeLock? {
-		if (!s.wakeLock) return null
+	/** A partial wake lock, held across the utterance when that is asked for.
+	 *  Fixed off: asking for one per utterance is binder traffic on this
+	 *  thread in front of every first syllable. See [Stability]. */
+	private fun acquireWakeLock(): PowerManager.WakeLock? {
+		if (!Stability.WAKE_LOCK) return null
 		val held = wakeLock
 		if (held != null && held.isHeld) return held
 		val made = wakeLockManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG:wake")?.apply {
@@ -758,22 +776,29 @@ class EvvTtsService : TextToSpeechService() {
 		 *  a message that has to be given up on. */
 		const val TIMED_OUT = -2
 
-		/** How much audio may sit ahead of the speech by default. The setting on
-		 *  the battery screen says so, and this is the answer when nobody has
-		 *  changed it: see [Pacing]. */
+		/** How much audio may sit ahead of the speech. Fixed: see [Pacing]. */
 		const val LEAD_MS = Pacing.DEFAULT_MS.toLong()
 
 		/** How long a wait for the speech to catch up is slept in one go. It is
-		 *  what bounds how long a request for silence can take, so it is kept
-		 *  well under the lead. */
-		const val SLICE_MS = 25L
+		 *  what bounds how long a request for silence can take: a swipe that
+		 *  lands mid-slice waits out the rest of it before the next element
+		 *  can start, because every utterance runs on the framework's one
+		 *  synthesis thread. Five milliseconds is unheard either way and is
+		 *  what makes an interruption feel instant rather than merely quick.
+		 *  Kept well under the lead, which is what bounds the other end. */
+		const val SLICE_MS = 5L
 
 		/** How often, and how many times, the framework is asked again for room.
 		 *  A buffer that will not take another run of samples is nearly always
 		 *  one that is full, and the next moment it is not is the next one to
-		 *  ask in. */
-		const val DELIVER_TRIES = 200
-		const val DELIVER_WAIT_MS = 25L
+		 *  ask in -- so the asking is five milliseconds apart, and a stop
+		 *  landing in the middle of the wait is noticed that much sooner.
+		 *  Four hundred tries is about two seconds of patience, past which
+		 *  the framework is not momentarily full but wedged, and giving the
+		 *  utterance up is righter than holding the synthesis thread -- and
+		 *  every later request for speech -- behind it. */
+		const val DELIVER_TRIES = 400
+		const val DELIVER_WAIT_MS = 5L
 
 		/** The longest an utterance may hold the wake lock before the system
 		 *  takes it back, as a ceiling rather than a course. */

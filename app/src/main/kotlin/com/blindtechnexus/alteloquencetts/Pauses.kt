@@ -78,11 +78,22 @@ object Pauses {
 	fun apply(text: String, mode: Int, last: Boolean): String {
 		if (mode == KEEP || text.isEmpty()) return text
 		var out = text
-		if (mode == ALL) out = AT_A_MARK.replace(out, "$1 $BRIEF$2$3$4")
+		if (mode == ALL && hasAMark(out)) out = AT_A_MARK.replace(out, "$1 $BRIEF$2$3$4")
 		// The engine pauses at the end of an utterance whether or not anything
 		// there asked it to. A mark at the end has already been dealt with.
 		if (last && !endsWithMark(out)) out = "$out $AT_THE_END"
 		return out
+	}
+
+	/** Whether [text] holds any mark the rule below could match, so that text
+	 *  without one -- most labels a reader hands over -- never pays for the
+	 *  regular expression at all. One scan of the characters, on the way to
+	 *  every utterance, against a whole expression run for nothing. */
+	private fun hasAMark(text: String): Boolean {
+		for (at in text.indices) {
+			if (text[at] in MARK_SET) return true
+		}
+		return false
 	}
 
 	/** Whether [text] already ends in one of the marks the engine pauses at,

@@ -13,88 +13,93 @@ package com.blindtechnexus.alteloquencetts
  * whenever the samples it has handed over are more than a lead's worth of
  * audio ahead of the wall clock.
  *
- * The size of that lead is a trade of one thing against the other, and it is
- * the only one: a short lead means less to lose when speech is cut off, and a
- * long one means the engine is left alone to get on with its work. The trade
- * is not the same at both ends of the range of things a caller asks to be
- * read, though. A line of a list is spoken once and interrupted a moment
- * later, which is the case a short lead is for. A paragraph is one message,
- * takes as long to hear as it takes to say whoever is listening, and gains
- * nothing from being fed at the pace it is heard at -- only the framework's
- * synthesis thread is held, and every later request for speech is behind that
- * thread. So a message long enough to be a paragraph is given [LONG_LEAD_MS]
- * instead, which is far more than any caller's buffer wants but is a rounding
- * error next to the minutes a long one runs to.
- *
- * Both numbers are the user's to move, on the battery and stability screen:
- * whoever finds that a reader is losing the item after the one they stopped
- * wants the short one, and whoever wants the engine to finish a chapter the
- * moment it is asked for wants the long one.
+ * The lead is fixed at [DEFAULT_MS] and is no longer a setting, for every
+ * message long or short. It used to be a choice on the battery screen, with
+ * an option to run four seconds ahead on long text -- and that option
+ * reintroduced the exact failure the lead exists to prevent: measured on the
+ * same text, an unpaced paragraph hands 2229 ms of audio over in 700 ms of
+ * speaking, which is a queue of speech nobody has heard yet, every byte of
+ * which is thrown away by the next swipe. A paragraph a reader interrupts
+ * halfway through is the common case, not the exception, so long text gets
+ * the same tight lead as a line of a list: at most one utterance in flight,
+ * and silence arrives where the reader actually is.
  */
 object Pacing {
 
 	/** The shortest lead worth offering. Below this a reader's queue is empty
 	 *  more often than it is full, and the framework is left asking for
-	 *  samples that the engine has not been allowed to make yet. */
+	 *  samples that the engine has not been allowed to make yet. Kept as the
+	 *  lower bound the retired setting is still coerced into. */
 	const val MIN_MS = 150
 
 	/** The longest. Above it the framework's own buffer is what decides how
-	 *  far ahead the engine gets, so the number stops meaning anything. */
+	 *  far ahead the engine gets, so the number stops meaning anything. Kept
+	 *  as the upper bound the retired setting is still coerced into. */
 	const val MAX_MS = 4000
 
-	/** What it has always been, and what a screen reader wants. */
+	/** The lead, for every message. What a screen reader wants, and what
+	 *  the service paces every utterance to: measured on the same text, a
+	 *  long paragraph hands about 1000 ms of audio over in 700 ms of
+	 *  speaking with this lead, against 2229 ms without it. */
 	const val DEFAULT_MS = 300
-
-	/** The lead a message long enough to be a paragraph is given. */
-	const val LONG_LEAD_MS = 4000L
-
-	/** How much text makes a message a paragraph rather than a line: this many
-	 *  characters, which is about [TextPieces.PIECE_CAP] cut into more than
-	 *  one piece and so more than one pause the framework would otherwise sit
-	 *  through with the engine idle. */
-	const val LONG_UTTERANCE_CHARS = 600
-
-	/** The leads the screen offers, smallest first. */
-	val LEADS = listOf(MIN_MS, DEFAULT_MS, 700, 2000, MAX_MS)
-
-	/** Whether [chars] of text in [pieces] pieces is long enough to be worth
-	 *  running ahead on. Two pieces is the least that can pay: with one there
-	 *  is nothing after it to get ahead of. */
-	fun isLong(chars: Int, pieces: Int): Boolean =
-		pieces > 1 && chars >= LONG_UTTERANCE_CHARS
-
-	/** How far ahead of the speech the samples may run, for one message. */
-	fun leadFor(leadMs: Int, runAhead: Boolean, chars: Int, pieces: Int): Long {
-		val set = leadMs.coerceIn(MIN_MS, MAX_MS).toLong()
-		return if (runAhead && isLong(chars, pieces)) maxOf(set, LONG_LEAD_MS) else set
-	}
 }
 
 /**
- * The choices the battery and stability screen offers for the numbers that
- * keep the engine alive, so that the screen, the settings and the service all
- * read the same list rather than three copies of it.
+ * The numbers that keep the engine alive, and the fixed answers for the ones
+ * that are no longer a choice.
+ *
+ * The "while speaking" section of the battery screen used to offer every one
+ * of these. None of them has a second good answer -- a per-utterance
+ * foreground claim is binder traffic on the synthesis thread in front of
+ * every first syllable, a wake lock held per utterance is the same, a lead
+ * above a few hundred milliseconds is a queue of unheard speech the next
+ * swipe throws away, an engine given back has to be made again before the
+ * next thing is said, and a stuck engine should be noticed in seconds rather
+ * than in a quarter of a minute -- so the section is gone and the best
+ * answers are fixed here, where the service reads them. [Settings] still
+ * carries the old properties so that preferences written by an earlier build
+ * keep parsing, but nothing reads them.
  */
 object Stability {
 
-	/** How long the CPU is held after the last thing said, in milliseconds.
-	 *  Nought is the switch above it on its own. */
-	val WAKE_LOCK_TAILS = listOf(0, 1000, 5000, 15000, 60000)
+	/** Whether the engine is held in the foreground while each utterance is
+	 *  being made. Fixed off: claiming and releasing the foreground around
+	 *  every utterance is two binder calls on the synthesis thread in front
+	 *  of every first syllable, and a service the system has bound speaks
+	 *  under that binding's own standing anyway. Whoever wants the
+	 *  protection has the persistent notification, which is held once rather
+	 *  than per utterance. */
+	const val FOREGROUND_WHILE_SPEAKING = false
+
+	/** Whether the CPU is kept awake while an utterance is being made. Fixed
+	 *  off: acquiring a lock per utterance is binder traffic in front of
+	 *  every first syllable, and the audio already handed over is played
+	 *  under the playback's own holding. */
+	const val WAKE_LOCK = false
+
+	/** How long the CPU stays awake after the last thing said, in
+	 *  milliseconds. Fixed at nought, with the lock above it. */
+	const val WAKE_LOCK_TAIL_MS = 0
 
 	/** How long an engine instance is kept after the last thing it said, in
-	 *  seconds. Nought is for ever, which is what it has always been. */
-	val ENGINE_RELEASES = listOf(0, 60, 300, 900, 3600)
+	 *  seconds. Fixed at nought, which is for ever: making a fresh instance
+	 *  costs a second or so before the first syllable of the next request
+	 *  for speech, which is the one wait a screen reader never forgives. */
+	const val RELEASE_ENGINE_AFTER_S = 0
 
-	/** How long the engine may go silent before an utterance is given up on, in
-	 *  milliseconds, because that is the unit the setting is kept in and the two
-	 *  must be the same number rather than the same number times a thousand. The
-	 *  last is a ceiling nobody is meant to reach, for a device where waiting for
-	 *  the speech is the lesser of two troubles. */
-	val SILENCES = listOf(5000, 15000, 60000, 300000)
+	/** How long the engine may go on making no samples at all before the
+	 *  utterance is given up on, in milliseconds. Five seconds is still a
+	 *  thousand times the gap this engine ever legitimately leaves between
+	 *  two frames, so reaching it means something has gone wrong rather
+	 *  than that the text is long -- and noticing in five seconds rather
+	 *  than fifteen is ten seconds less silence before the voice comes
+	 *  back. */
+	const val ENGINE_SILENCE_MS = 5000
 
 	/** How often the notification is looked for and put back, in
 	 *  milliseconds. Two seconds is the short end for a phone that clears
 	 *  notifications aggressively, ten seconds the long end for one that
-	 *  leaves them alone, and three is what the screen has always promised. */
+	 *  leaves them alone, and three is what the screen has always promised.
+	 *  The one number on this screen that is still a choice. */
 	val NOTIFICATION_CHECKS = listOf(2000, 3000, 5000, 10000)
 }
