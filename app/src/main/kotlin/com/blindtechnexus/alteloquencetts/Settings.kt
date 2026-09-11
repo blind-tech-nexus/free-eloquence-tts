@@ -119,6 +119,25 @@ class Settings(context: Context) {
 		get() = prefs.getBoolean(KEY_NOTIFICATION_STOP, true)
 		set(value) = prefs.edit().putBoolean(KEY_NOTIFICATION_STOP, value).apply()
 
+	/** How often the notification is looked for and put back, in
+	 *  milliseconds. One of [Stability.NOTIFICATION_CHECKS]; anything else
+	 *  is answered with the default, which is the promise the screen makes. */
+	var keepAliveCheckMs: Int
+		get() = prefs.getInt(KEY_KEEP_ALIVE_CHECK_MS, KeepAlive.CHECK_MS.toInt())
+			.let { if (Stability.NOTIFICATION_CHECKS.contains(it)) it else KeepAlive.CHECK_MS.toInt() }
+		set(value) = prefs.edit().putInt(
+			KEY_KEEP_ALIVE_CHECK_MS,
+			if (Stability.NOTIFICATION_CHECKS.contains(value)) value else KeepAlive.CHECK_MS.toInt()
+		).apply()
+
+	/** Whether the engine is held in the foreground while each utterance is
+	 *  being made, even when the persistent notification is off. The
+	 *  notification is shown when speaking starts and taken away when it
+	 *  ends, which is the protection without the standing notice. */
+	var foregroundWhileSpeaking: Boolean
+		get() = prefs.getBoolean(KEY_FOREGROUND_WHILE_SPEAKING, false)
+		set(value) = prefs.edit().putBoolean(KEY_FOREGROUND_WHILE_SPEAKING, value).apply()
+
 	/** Whether the CPU is kept awake while an utterance is being made. */
 	var wakeLock: Boolean
 		get() = prefs.getBoolean(KEY_WAKE_LOCK, false)
@@ -316,6 +335,8 @@ class Settings(context: Context) {
 		const val KEY_TRACK_ACTIONS = "track_actions"
 		const val KEY_START_ON_BOOT = "start_on_boot"
 		const val KEY_NOTIFICATION_STOP = "notification_stop"
+		const val KEY_KEEP_ALIVE_CHECK_MS = "keep_alive_check_ms"
+		const val KEY_FOREGROUND_WHILE_SPEAKING = "foreground_while_speaking"
 		const val KEY_WAKE_LOCK_TAIL = "wake_lock_tail_ms"
 		const val KEY_RELEASE_ENGINE = "release_engine_after_s"
 		const val KEY_SPEECH_LEAD = "speech_lead_ms"

@@ -10,6 +10,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
 import android.speech.tts.Voice
 import android.util.Log
+import java.io.File
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -90,6 +91,20 @@ class EvvTtsService : TextToSpeechService() {
 
 	private var keepAlive: KeepAlive? = null
 
+	/** Every voice name this build offers, to the language and preset behind
+	 *  it. A caller names a voice on every utterance, and rebuilding the
+	 *  names to answer would be string building for a question whose answer
+	 *  never changes. */
+	private var voiceIndex: Map<String, Pair<Int, Int>> = emptyMap()
+
+	private val matchLock = Any()
+	private var matchKey: String? = null
+	private var matchValue: Pair<Int, Int>? = null
+
+	/** The dictionary file, resolved once. Resolving it walks the storage on
+	 *  every call, which an utterance has no reason to pay for. */
+	private var wordsFile: File? = null
+
 	private val main = Handler(Looper.getMainLooper())
 
 	/** Closes the engine after a stretch of nothing to say, which is the
@@ -115,6 +130,8 @@ class EvvTtsService : TextToSpeechService() {
 		instance = this
 		val made = Settings(this)
 		settings = made
+		voiceIndex = buildVoiceIndex()
+		wordsFile = runCatching { UserDictionary.file(this) }.getOrNull()
 		keepAlive = KeepAlive(this)
 		keepAlive?.sync(made.persistentNotification)
 		warmUp()
@@ -170,6 +187,17 @@ class EvvTtsService : TextToSpeechService() {
 	// ---- languages -------------------------------------------------------
 
 	private fun matchLanguage(lang: String?, country: String?): Pair<Int, Int>? {
+		val key = "${lang.orEmpty()}|${country.orEmpty()}"
+		synchronized(matchLock) {
+			if (key == matchKey) return matchValue
+			val found = matchLanguageNow(lang, country)
+			matchKey = key
+			matchValue = found
+			return found
+		}
+	}
+
+	private fun matchLanguageNow(lang: String?, country: String?): Pair<Int, Int>? {
 		if (lang.isNullOrEmpty()) return null
 		val wantLang = normalise(lang)
 		val wantCountry = country?.takeIf { it.isNotEmpty() }?.let { normaliseCountry(it) }
@@ -239,12 +267,26 @@ class EvvTtsService : TextToSpeechService() {
 
 	private fun findVoice(name: String?): Pair<Int, Int>? {
 		if (name.isNullOrEmpty()) return null
+		voiceIndex[name]?.let { return it }
+		// The index is built in onCreate; a service created before the native
+		// library finished loading answers from the loop instead, rather than
+		// refusing a voice it has.
 		for (language in EvvEngine.available) {
 			for (preset in Eci.PRESET_NAMES.indices) {
 				if (voiceName(language, preset) == name) return language to preset
 			}
 		}
 		return null
+	}
+
+	private fun buildVoiceIndex(): Map<String, Pair<Int, Int>> {
+		val index = LinkedHashMap<String, Pair<Int, Int>>()
+		for (language in EvvEngine.available) {
+			for (preset in Eci.PRESET_NAMES.indices) {
+				index[voiceName(language, preset)] = language to preset
+			}
+		}
+		return index
 	}
 
 	override fun onIsValidVoiceName(name: String?): Int =
@@ -296,11 +338,11 @@ class EvvTtsService : TextToSpeechService() {
 	 *  added on the dictionary screen is heard the next time anything is spoken
 	 *  without restarting the service. */
 	private fun loadWords(target: EvvEngine) {
-		val file = UserDictionary.file(this)
-		val stamp = if (file.exists()) file.lastModified() else -1L
+		val file = wordsFile ?: runCatching { UserDictionary.file(this) }.getOrNull()?.also { wordsFile = it }
+		val stamp = if (file != null && file.exists()) file.lastModified() else -1L
 		if (stamp == loadedWordsStamp) return
 		target.forgetDictionaries()
-		if (file.exists()) {
+		if (file != null && file.exists()) {
 			val taught = Dictionaries.load(target, Eci.DICT_MAIN, file, Charsets.UTF_8)
 			Log.i(TAG, "user dictionary: $taught entries from ${file.name}")
 		}
@@ -405,6 +447,13 @@ class EvvTtsService : TextToSpeechService() {
 		if (s.forceVolume) {
 			s.shape(s.voice)[Eci.VOICE_VOLUME]?.let { volume -> target.setVolume(volume) }
 		}
+		// Held in the foreground while this utterance is being made, when that
+		// is asked for and the persistent notification is not already holding
+		// it. Shown when speaking starts and taken away when it ends, with
+		// the stop button the setting asks for: it stops the speech, which
+		// is what there is to stop while this is up.
+		val speakForeground = s.foregroundWhileSpeaking && !s.persistentNotification
+		if (speakForeground) KeepAliveNotification.claim(this, s.notificationStopButton)
 		val lock = acquireWakeLock(s)
 		try {
 			val text = TextPipeline.apply(request.charSequenceText?.toString().orEmpty(), s)
@@ -462,6 +511,7 @@ class EvvTtsService : TextToSpeechService() {
 			remember(pace)
 			finish(callback, opening)
 		} finally {
+			if (speakForeground) KeepAliveNotification.release(this, detach = false)
 			releaseWakeLock(lock)
 		}
 	}

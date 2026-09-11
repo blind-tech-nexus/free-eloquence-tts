@@ -85,6 +85,25 @@ class SystemIntentsTest {
 	}
 
 	@Test
+	fun makersAreMatchedByNameWhateverCaseTheyComeIn() {
+		// A maker of "HTC" is an HTC however it capitalizes itself, and a
+		// brand nobody has heard of still gets Android's own list at the
+		// end, which is the answer for every device.
+		val htc = ManufacturerScreens.candidatesFor("HTC", "htc")
+		assertTrue(htc.any { it.intent.component?.packageName == "com.htc.pitroad" })
+		val lenovo = ManufacturerScreens.candidatesFor("LENOVO", "ZUK")
+		assertTrue(lenovo.any { it.intent.component?.packageName == "com.lenovo.security" })
+		val leeco = ManufacturerScreens.candidatesFor("LeEco", "LeEco")
+		assertTrue(leeco.any { it.intent.component?.packageName == "com.letv.android.letvsafe" })
+		val unknown = ManufacturerScreens.candidatesFor("SomePhone", "SomePhone")
+		assertEquals(1, unknown.size)
+		assertEquals(
+			Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
+			unknown.last().intent.action
+		)
+	}
+
+	@Test
 	fun thisAppIsWhereTheInstallerIsToldToLook() {
 		// The provider the update hands its file to, read out of the installed
 		// manifest rather than out of this file. The authority, the path and the

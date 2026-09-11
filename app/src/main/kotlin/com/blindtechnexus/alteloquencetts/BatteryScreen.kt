@@ -42,11 +42,15 @@ import androidx.lifecycle.LifecycleEventObserver
  * on every resume, because the answer can change while that screen is up; the
  * notification that holds the app in the foreground, which now stands whether or
  * not anything is bound to the engine, since a service that keeps it up of its
- * own has been added for the purpose; and the same notification coming back
- * after a restart, which is the one thing a reboot takes away.
+ * own has been added for the purpose; the same notification coming back
+ * after a restart, which is the one thing a reboot takes away; and how often
+ * the notification is looked for, where a phone that clears notifications
+ * aggressively wants the short end.
  *
- * While speaking: the wake lock, for the devices whose processor sleeps mid
- * sentence and drops the tail of the speech; how far the engine may run ahead of
+ * While speaking: speaking in the foreground, which holds the engine there
+ * only while each utterance is being made, for whoever wants the protection
+ * without a notification that never goes away; the wake lock, for the devices
+ * whose processor sleeps mid sentence and drops the tail of the speech; how far the engine may run ahead of
  * what has been heard, which is the trade between losing words when a reader
  * interrupts and finishing a chapter the moment it was asked for; how long an
  * engine instance is kept after the last thing it said; and how long the engine
@@ -73,6 +77,8 @@ fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 	var persistent by remember { mutableStateOf(settings.persistentNotification) }
 	var startOnBoot by remember { mutableStateOf(settings.startOnBoot) }
 	var stopButton by remember { mutableStateOf(settings.notificationStopButton) }
+	var checkInterval by remember { mutableStateOf(settings.keepAliveCheckMs) }
+	var foreground by remember { mutableStateOf(settings.foregroundWhileSpeaking) }
 	var wakeLock by remember { mutableStateOf(settings.wakeLock) }
 	var tail by remember { mutableStateOf(settings.wakeLockTailMs) }
 	var release by remember { mutableStateOf(settings.releaseEngineAfterS) }
@@ -180,6 +186,23 @@ fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 					Tracker.action(settings, "start on boot ${if (on) "on" else "off"}")
 				}
 			)
+			ChoiceButton(
+				title = stringResource(R.string.notification_check_label),
+				shown = stringResource(
+					R.string.battery_value_is,
+					stringResource(R.string.notification_check_label),
+					durationLabel(context.resources, checkInterval)
+				),
+				options = Stability.NOTIFICATION_CHECKS.map { durationLabel(context.resources, it) },
+				chosen = indexOf(checkInterval, Stability.NOTIFICATION_CHECKS),
+				description = stringResource(R.string.notification_check_description),
+				onChoose = { at ->
+					val value = Stability.NOTIFICATION_CHECKS.getOrElse(at) { checkInterval }
+					checkInterval = value
+					settings.keepAliveCheckMs = value
+					Tracker.action(settings, "notification check every ${value}ms")
+				}
+			)
 			ActionRow(
 				label = stringResource(
 					if (ManufacturerScreens.hasOwnScreen()) R.string.battery_manufacturer_open
@@ -195,6 +218,16 @@ fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 			)
 
 			SectionHeading(text = stringResource(R.string.battery_speaking_heading))
+			SwitchRow(
+				label = stringResource(R.string.foreground_while_speaking_label),
+				checked = foreground,
+				description = stringResource(R.string.foreground_while_speaking_description),
+				onChange = { on ->
+					foreground = on
+					settings.foregroundWhileSpeaking = on
+					Tracker.action(settings, "speak in the foreground ${if (on) "on" else "off"}")
+				}
+			)
 			SwitchRow(
 				label = stringResource(R.string.wake_lock_label),
 				checked = wakeLock,

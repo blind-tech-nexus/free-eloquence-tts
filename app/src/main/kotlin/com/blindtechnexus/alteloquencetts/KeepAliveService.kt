@@ -48,7 +48,7 @@ class KeepAliveService : Service() {
 			) {
 				claim()
 			}
-			handler.postDelayed(this, KeepAlive.CHECK_MS)
+			handler.postDelayed(this, KeepAlive.checkMs(this@KeepAliveService))
 		}
 	}
 
@@ -74,7 +74,7 @@ class KeepAliveService : Service() {
 			return START_NOT_STICKY
 		}
 		handler.removeCallbacks(check)
-		handler.postDelayed(check, KeepAlive.CHECK_MS)
+		handler.postDelayed(check, KeepAlive.checkMs(this))
 		return START_STICKY
 	}
 

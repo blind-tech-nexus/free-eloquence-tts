@@ -91,4 +91,10 @@ object Stability {
 	 *  last is a ceiling nobody is meant to reach, for a device where waiting for
 	 *  the speech is the lesser of two troubles. */
 	val SILENCES = listOf(5000, 15000, 60000, 300000)
+
+	/** How often the notification is looked for and put back, in
+	 *  milliseconds. Two seconds is the short end for a phone that clears
+	 *  notifications aggressively, ten seconds the long end for one that
+	 *  leaves them alone, and three is what the screen has always promised. */
+	val NOTIFICATION_CHECKS = listOf(2000, 3000, 5000, 10000)
 }
