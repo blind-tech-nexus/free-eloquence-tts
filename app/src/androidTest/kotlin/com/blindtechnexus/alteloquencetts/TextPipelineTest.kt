@@ -49,6 +49,14 @@ class TextPipelineTest {
 		assertEquals("Hello from Eloquence.", apply("Hello from Eloquence."))
 	}
 
+	@Test
+	fun aDictionaryWordIsReplacedBeforeTheFixes() {
+		assertEquals(
+			"dee oe jeigh",
+			apply("doj", words = listOf("DOJ" to "dee oe jeigh"))
+		)
+	}
+
 	private fun apply(
 		text: String,
 		ssml: Boolean = true,
@@ -56,7 +64,8 @@ class TextPipelineTest {
 		numbers: Int = Numbers.AS_IS,
 		capitals: Int = CapitalLetters.NONE,
 		symbols: Int = Symbols.SOME,
-		custom: String = ""
+		custom: String = "",
+		words: List<Pair<String, String>> = emptyList()
 	): String {
 		val context = InstrumentationRegistry.getInstrumentation().targetContext
 		val settings = Settings(context)
@@ -66,6 +75,6 @@ class TextPipelineTest {
 		settings.capitalMode = capitals
 		settings.symbolMode = symbols
 		settings.customSymbols = custom
-		return TextPipeline.apply(text, settings)
+		return TextPipeline.apply(text, settings, words)
 	}
 }

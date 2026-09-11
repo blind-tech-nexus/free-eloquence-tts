@@ -86,4 +86,51 @@ class UserDictionaryTest {
 			UserDictionary.parse("DOJ\tdee oe jeigh\r\nDOS\t`[das]\r\nno tab here\r\n   \r\n")
 		)
 	}
+
+	@Test
+	fun removingIgnoresCase() {
+		UserDictionary.add(context, "DOJ", "dee oe jeigh")
+		assertTrue(UserDictionary.remove(context, "doj"))
+		assertEquals(emptyList<Pair<String, String>>(), UserDictionary.words(context))
+	}
+
+	@Test
+	fun aWordIsReplacedWithoutRegardToCase() {
+		val entries = listOf("DOJ" to "dee oe jeigh")
+		assertEquals("dee oe jeigh", UserDictionary.apply("DOJ", entries))
+		assertEquals("dee oe jeigh", UserDictionary.apply("doj", entries))
+		assertEquals("dee oe jeigh", UserDictionary.apply("Doj", entries))
+		assertEquals(
+			"See dee oe jeigh next.",
+			UserDictionary.apply("See DOJ next.", entries)
+		)
+	}
+
+	@Test
+	fun aWordDoesNotMatchInsideAnother() {
+		val entries = listOf("cat" to "feline")
+		assertEquals("category", UserDictionary.apply("category", entries))
+		assertEquals("bobcat", UserDictionary.apply("bobcat", entries))
+		assertEquals("a feline sat", UserDictionary.apply("a cat sat", entries))
+	}
+
+	@Test
+	fun aPhraseIsReplaced() {
+		val entries = listOf("new york" to "the city")
+		assertEquals("the city", UserDictionary.apply("New York", entries))
+		assertEquals("new yorker", UserDictionary.apply("new yorker", entries))
+	}
+
+	@Test
+	fun aPhoneticReplacementIsLeftForTheEngine() {
+		val entries = listOf("DOS" to "`[das]")
+		assertEquals("`[das]", UserDictionary.apply("dos", entries))
+	}
+
+	@Test
+	fun ordinaryTextIsUntouched() {
+		val entries = listOf("DOJ" to "dee oe jeigh")
+		val text = "Hello from Eloquence."
+		assertTrue("the original string should come back", UserDictionary.apply(text, entries) === text)
+	}
 }
