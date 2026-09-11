@@ -246,39 +246,39 @@
 	<string name="about_version">App version %1$s.</string>
 	<string name="about_unavailable">Nothing on this device can open %1$s.</string>
 
-		<!-- The update channel, and what it is worth to a person who cannot see a
-		     progress bar. The asking is done by itself on every start; the row here
-		     is for wanting to know now, and it answers whatever the answer is. -->
-			<string name="about_updates_heading">Updates</string>
-			<string name="about_updates">The app asks the release channel which version to be on when it starts, and says something only when this build is not it. The asking is one small file on a git host: no account, no address of yours, and nothing about this phone in it. Nothing is ever installed by the app itself -- the download ends at the system's own installer, which is where the decision is made.</string>
-			<string name="about_update_check">Check for updates</string>
-			<string name="about_update_check_description">Asks the release channel again now, and says what it found. It is asked by itself every time the app starts, so this is only for when you want to know now.</string>
-			<string name="about_update_never_asked">Nothing has been asked about updates yet.</string>
-			<string name="about_update_checking">Asking which the newest version is.</string>
-			<string name="about_update_current">This is the newest version (%1$s).</string>
-			<string name="about_update_found">A new version (%1$s) is available. The dialog that offers it is where the download starts; saying Later to it does not refuse it for ever, only for now.</string>
-			<string name="about_update_unreachable">Nothing could be reached, so nothing is known about whether there is a newer version.</string>
-			<string name="about_update_dismissed">Nothing is being downloaded.</string>
-			<string name="about_update_answer_current">You asked, and %1$s is the version the release channel stands behind.</string>
-			<string name="about_update_answer_unreachable">You asked, and nothing could be reached. The phone may be offline, or the release channel may not be answering.</string>
+	<!-- The update channel, and what it is worth to a person who cannot see a
+	     progress bar. The asking is done by itself on every start; the row here
+	     is for wanting to know now, and it answers whatever the answer is. -->
+	<string name="about_updates_heading">Updates</string>
+	<string name="about_updates">The app asks the release channel which version to be on when it starts, and says something only when this build is not it. The asking is one small file on a git host: no account, no address of yours, and nothing about this phone in it. Nothing is ever installed by the app itself -- the download ends at the system\'s own installer, which is where the decision is made.</string>
+	<string name="about_update_check">Check for updates</string>
+	<string name="about_update_check_description">Asks the release channel again now, and says what it found. It is asked by itself every time the app starts, so this is only for when you want to know now.</string>
+	<string name="about_update_never_asked">Nothing has been asked about updates yet.</string>
+	<string name="about_update_checking">Asking which the newest version is.</string>
+	<string name="about_update_current">This is the newest version (%1$s).</string>
+	<string name="about_update_found">A new version (%1$s) is available. The dialog that offers it is where the download starts; saying Later to it does not refuse it for ever, only for now.</string>
+	<string name="about_update_unreachable">Nothing could be reached, so nothing is known about whether there is a newer version.</string>
+	<string name="about_update_dismissed">Nothing is being downloaded.</string>
+	<string name="about_update_answer_current">You asked, and %1$s is the version the release channel stands behind.</string>
+	<string name="about_update_answer_unreachable">You asked, and nothing could be reached. The phone may be offline, or the release channel may not be answering.</string>
 
-		<!-- The dialogs an update turns into. -->
-			<string name="update_available_title">Update available</string>
-			<string name="update_available_message">A new version (%1$s) is available to download.</string>
-			<string name="update_download_question">Would you like to download it now?</string>
-			<string name="update_download">Download update</string>
-			<string name="update_later">Later</string>
-			<string name="update_downloading_title">Downloading the update</string>
-			<string name="update_progress_of">%1$s of %2$s downloaded</string>
-			<string name="update_progress_so_far">%1$s downloaded so far</string>
-			<string name="update_cancel">Cancel the download</string>
-			<string name="update_ready_title">The update is downloaded and ready to install</string>
-			<string name="update_nothing_to_install">The download did not leave anything that could be installed.</string>
-			<string name="update_refused">Nothing on this device will take the update for installation.</string>
-			<string name="update_failed">The download could not be finished. Nothing was installed.</string>
-			<string name="update_permission_title">Permission to install apps</string>
-			<string name="update_permission_message">Alt eloquence TTS is not allowed to install apps yet. Allow it on the system screen that has just been opened, then press Check for updates here and the download that is already finished will be offered for installation again.</string>
-			<string name="update_ok">Understood</string>
+	<!-- The dialogs an update turns into. -->
+	<string name="update_available_title">Update available</string>
+	<string name="update_available_message">A new version (%1$s) is available to download.</string>
+	<string name="update_download_question">Would you like to download it now?</string>
+	<string name="update_download">Download update</string>
+	<string name="update_later">Later</string>
+	<string name="update_downloading_title">Downloading the update</string>
+	<string name="update_progress_of">%1$s of %2$s downloaded</string>
+	<string name="update_progress_so_far">%1$s downloaded so far</string>
+	<string name="update_cancel">Cancel the download</string>
+	<string name="update_ready_title">The update is downloaded and ready to install</string>
+	<string name="update_nothing_to_install">The download did not leave anything that could be installed.</string>
+	<string name="update_refused">Nothing on this device will take the update for installation.</string>
+	<string name="update_failed">The download could not be finished. Nothing was installed.</string>
+	<string name="update_permission_title">Permission to install apps</string>
+	<string name="update_permission_message">Alt eloquence TTS is not allowed to install apps yet. Allow it on the system screen that has just been opened, then press Check for updates here and the download that is already finished will be offered for installation again.</string>
+	<string name="update_ok">Understood</string>
 
 	<!-- How a row speaks. A label and a value are one control and one stop, so
 	     both of these end up in the same node. -->
