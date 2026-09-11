@@ -86,7 +86,7 @@ class KeepAlive(private val service: Service) {
 			} else if (!isShown()) {
 				hold()
 			}
-			handler.postDelayed(this, CHECK_MS)
+			handler.postDelayed(this, checkMs(service))
 		}
 	}
 
@@ -99,7 +99,7 @@ class KeepAlive(private val service: Service) {
 		if (enabled) {
 			KeepAlive.ensureChannel(service)
 			if (!KeepAliveService.start(service)) hold()
-			handler.postDelayed(check, CHECK_MS)
+			handler.postDelayed(check, checkMs(service))
 		} else {
 			KeepAliveService.stop(service)
 			if (holding) {
@@ -149,6 +149,17 @@ class KeepAlive(private val service: Service) {
 		/** How often the notification is looked for, in milliseconds. */
 		const val CHECK_MS = 3000L
 
+		/** How often the notification is looked for now, in milliseconds:
+		 *  the setting's, or [CHECK_MS] for anything the screen never
+		 *  offered. Read fresh on every check, so a choice made on the
+		 *  battery screen is in force seconds later without restarting
+		 *  anything. Asked through [Settings.number] rather than an
+		 *  instance, which is what a check that runs for ever does. */
+		fun checkMs(context: Context): Long {
+			val at = Settings.number(context, Settings.KEY_KEEP_ALIVE_CHECK_MS, CHECK_MS.toInt())
+			return if (Stability.NOTIFICATION_CHECKS.contains(at)) at.toLong() else CHECK_MS
+		}
+
 		private val handler = Handler(Looper.getMainLooper())
 
 		/** What the app itself does with the notification, with no speech
@@ -168,7 +179,7 @@ class KeepAlive(private val service: Service) {
 					if (!KeepAliveService.isRunning) {
 						Log.w(TAG, "the keep-alive service would not start; the voice is unprotected until the engine speaks")
 					}
-				}, CHECK_MS)
+				}, checkMs(context))
 			}
 		}
 

@@ -13,8 +13,9 @@ import android.util.Log
  * The phone maker's own screen for letting an app keep running.
  *
  * Android's battery optimization exemption is not the whole of the question on
- * a fifth of the phones sold. Xiaomi, Huawei, Honor, Oppo, Realme, Vivo, Lenovo,
- * Meizu, Asus, Samsung and Sony each add a screen of their own in front of it:
+ * a fifth of the phones sold. Xiaomi, Huawei, Honor, Oppo, Realme, OnePlus,
+ * Vivo, Samsung, Meizu, Asus, Sony, Lenovo, Zuk, Motorola, LeEco, HTC, Tecno,
+ * Itel and Infinix each add a screen of their own in front of it:
  * one that closes an app's background activity, or one that refuses to let it
  * start at all until it is named as an exception. The exemption asked for on
  * Android's own screen does nothing against those, which is why a voice that
@@ -51,9 +52,17 @@ internal object ManufacturerScreens {
 
 	/** What to try for this device, best first, the maker's own screens before
 	 *  Android's. */
-	fun candidates(): List<Candidate> {
-		val maker = Build.MANUFACTURER.orEmpty().lowercase()
-		val brand = Build.BRAND.orEmpty().lowercase()
+	fun candidates(): List<Candidate> =
+		candidatesFor(Build.MANUFACTURER.orEmpty(), Build.BRAND.orEmpty())
+
+	/** What to try for a maker and a brand named outright, rather than this
+	 *  phone's own. The matching answers in lowercase, and rooted on purpose:
+	 *  in a Turkish locale a plain lowercase turns the I in XIAOMI into a
+	 *  dotless one, and the maker is not matched. A test asks through here
+	 *  for makers this phone is not. */
+	fun candidatesFor(manufacturer: String, brandName: String): List<Candidate> {
+		val maker = manufacturer.lowercase(java.util.Locale.ROOT)
+		val brand = brandName.lowercase(java.util.Locale.ROOT)
 		val out = ArrayList<Candidate>()
 		when {
 			maker.contains("xiaomi") || maker.contains("redmi") || brand.contains("poco") ->
@@ -107,11 +116,24 @@ internal object ManufacturerScreens {
 					"Sony",
 					"com.sonyericans.autostartmgr" to "com.sonyericans.autostartmgr.LoadingScreen"
 				)
-			maker.contains("letv") || maker.contains("lenovo") ->
+			maker.contains("letv") || maker.contains("leeco") || maker.contains("lenovo") ->
 				out += named(
 					"Lenovo",
 					"com.letv.android.letvsafe" to "com.letv.android.letvsafe.AutobootManageActivity",
 					"com.lenovo.security" to "com.lenovo.security.purebackground.PureBackgroundActivity"
+				)
+			maker.contains("zuk") || maker.contains("motorola") ->
+				// Zuk's own phones, and the Motorola ones Lenovo's security
+				// center followed to: the background manager is the same
+				// pure-background screen under both names.
+				out += named(
+					"Lenovo",
+					"com.lenovo.security" to "com.lenovo.security.purebackground.PureBackgroundActivity"
+				)
+			maker.contains("htc") ->
+				out += named(
+					"HTC",
+					"com.htc.pitroad" to "com.htc.pitroad.landingpage.activity.LandingPageActivity"
 				)
 			maker.contains("tecno") || maker.contains("itel") || maker.contains("infinix") ->
 				out += named(

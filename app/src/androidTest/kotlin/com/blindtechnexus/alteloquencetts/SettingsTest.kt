@@ -81,21 +81,40 @@ class SettingsTest {
 		assertEquals(Eci.DEFAULT_SPEED, settings.shape(REED)[Eci.VOICE_SPEED])
 	}
 
-	/** The three switches on the battery and stability screen are remembered,
-	 *  and each is off until somebody turns it on: a notification or a wake
-	 *  lock nobody asked for would be a surprise, and so would a log of what
-	 *  they never did. */
+	/** The switches on the battery and stability screen are remembered, and
+	 *  each is off until somebody turns it on: a notification or a wake lock
+	 *  nobody asked for would be a surprise, and so would a log of what they
+	 *  never did. The notification check starts at three seconds -- the
+	 *  promise the screen makes -- and a value nobody offered falls back to
+	 *  it rather than running wild. */
 	@Test
 	fun theBatteryAndStabilitySwitchesRememberTheirState() {
 		assertFalse("the persistent notification starts on", settings.persistentNotification)
+		assertFalse("speaking in the foreground starts on", settings.foregroundWhileSpeaking)
 		assertFalse("the wake lock starts on", settings.wakeLock)
 		assertFalse("action tracking starts on", settings.trackActions)
+		assertEquals(KeepAlive.CHECK_MS.toInt(), settings.keepAliveCheckMs)
+		assertEquals(
+			"the offered intervals moved",
+			listOf(2000, 3000, 5000, 10000),
+			Stability.NOTIFICATION_CHECKS
+		)
 		settings.persistentNotification = true
+		settings.foregroundWhileSpeaking = true
 		settings.wakeLock = true
 		settings.trackActions = true
+		settings.keepAliveCheckMs = 5000
 		assertTrue(settings.persistentNotification)
+		assertTrue(settings.foregroundWhileSpeaking)
 		assertTrue(settings.wakeLock)
 		assertTrue(settings.trackActions)
+		assertEquals(5000, settings.keepAliveCheckMs)
+		settings.keepAliveCheckMs = 12345
+		assertEquals(
+			"a foreign interval did not fall back to three seconds",
+			KeepAlive.CHECK_MS.toInt(),
+			settings.keepAliveCheckMs
+		)
 	}
 
 	private fun wipe() {
@@ -103,6 +122,8 @@ class SettingsTest {
 		settings.speed = Eci.DEFAULT_SPEED
 		settings.voice = REED
 		settings.persistentNotification = false
+		settings.foregroundWhileSpeaking = false
+		settings.keepAliveCheckMs = KeepAlive.CHECK_MS.toInt()
 		settings.wakeLock = false
 		settings.trackActions = false
 	}

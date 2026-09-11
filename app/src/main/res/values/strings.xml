@@ -145,6 +145,10 @@
 	<string name="notification_stop_description">Puts a button on the notification that stops whatever is being said. It is the only control that works while the engine is speaking and the screen is off. The notification is put up again a few seconds after this is changed, which is when the button appears or goes.</string>
 	<string name="start_on_boot_label">Start again after a restart</string>
 	<string name="start_on_boot_description">Puts the notification back when the phone has been restarted, so that the voice is ready before the app has been opened. The notification is what there is to bring back, so turning this on turns that on too.</string>
+	<string name="notification_check_label">How often the notification is looked for</string>
+	<string name="notification_check_description">How often the app checks that the notification is still there and puts it back if anything has taken it away. More often is safer on phones that clear notifications aggressively, and costs a little more battery.</string>
+	<string name="foreground_while_speaking_label">Speak in the foreground</string>
+	<string name="foreground_while_speaking_description">Holds the engine in the foreground while each utterance is being made, even when the persistent notification is off. The notification is shown when speaking starts and taken away when it ends.</string>
 	<string name="battery_idle_heading">While the phone is idle</string>
 	<string name="battery_speaking_heading">While speaking</string>
 	<string name="battery_fault_heading">For finding a fault</string>
