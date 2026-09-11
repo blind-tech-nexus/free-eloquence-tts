@@ -43,7 +43,13 @@ git submodule update --init --recursive
 export ANDROID_NDK_HOME=/path/to/ndk
 ./gradlew installDebug
 ./gradlew connectedDebugAndroidTest
+./gradlew assembleDebugAndroidTest
 ```
+
+The middle line needs a phone. The last one does not: it compiles the instrumented
+tests against the app and stops there, which is the half of the check that can be
+done where no device is plugged in -- and it is worth doing, because a test that
+has never been compiled is a test that has never been read.
 
 First build is about four minutes per ABI. Most of that is the engine writing the language rules out of text with Python and decompiling them into roughly 13 MB of C, which is per language rather than per ABI, so only the first ABI pays for it.
 
