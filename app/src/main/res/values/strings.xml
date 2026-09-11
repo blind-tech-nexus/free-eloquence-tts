@@ -83,19 +83,67 @@
 	<string name="sample_rate_label">Sample rate</string>
 	<string name="sample_rate_description">The rate the speech is made at. A higher one is clearer and costs more power.</string>
 
-	<string name="section_dictionaries">Voice dictionary settings</string>
-	<string name="dictionaries_description">Choose a pronunciation dictionary for each of the three volumes. A dictionary teaches the engine the words it would otherwise spell out, letter by letter.</string>
-	<string name="dictionary_main">Main dictionary</string>
-	<string name="dictionary_root">Root dictionary</string>
-	<string name="dictionary_abbreviation">Abbreviation dictionary</string>
-	<string name="dictionary_none">None</string>
-	<string name="dictionary_entries">%1$s, %2$d words</string>
-	<string name="dictionary_refused">Nothing was taken from that file. It could not be read, or it has no entries the engine can use.</string>
-	<string name="dictionary_removed">All dictionaries removed.</string>
-	<string name="dictionary_remove">Remove all dictionaries</string>
-	<string name="dictionary_remove_description">Forgets the three files above and deletes the copies this app took of them.</string>
+	<string name="section_dictionaries">Dictionary</string>
+	<string name="dictionaries_description">Teach the engine the words it would otherwise spell out, letter by letter.</string>
+	<string name="dictionary_manager">Dictionary manager</string>
+	<string name="dictionary_manager_description">A list of your own words and what to say instead. Add words one at a time, or bring a whole file in.</string>
+	<string name="dictionary_screen_description">Each word is read as you wrote it, and then as the engine will say it. Tap a word to edit it or take it away, and use Add word to teach a new one.</string>
+	<string name="dictionary_add">Add word</string>
+	<string name="dictionary_import">Import dictionary file</string>
+	<string name="dictionary_export">Export dictionary file</string>
+	<string name="dictionary_export_name">alt-eloquence-dictionary.txt</string>
+	<string name="dictionary_empty">No words yet. Add one, or import a dictionary file.</string>
+	<string name="dictionary_added">Added %1$s.</string>
+	<string name="dictionary_deleted">Deleted %1$s.</string>
+	<string name="dictionary_updated">Updated %1$s.</string>
+	<string name="dictionary_word_hint">Word</string>
+	<string name="dictionary_say_hint">What to say instead</string>
+	<string name="dictionary_word_choice">What to do with this word?</string>
+	<string name="dictionary_edit">Edit</string>
+	<string name="dictionary_delete">Delete</string>
+	<string name="dictionary_imported">Imported %1$d words.</string>
+	<string name="dictionary_import_nothing">Nothing in that file could be read as dictionary words.</string>
+	<string name="dictionary_exported">Exported %1$d words.</string>
+	<string name="dictionary_export_failed">The dictionary could not be written to that file.</string>
 	<string name="abbreviations_label">Expand abbreviations</string>
 	<string name="abbreviations_description">Reads an abbreviation as the words it stands for. Off by default, because it expands whatever it takes for an abbreviation whether that was wanted or not.</string>
+
+	<string name="section_text">Text reading</string>
+	<string name="number_mode_label">Number processing</string>
+	<string name="number_mode_description">How a run of digits is read. Choose digits for one at a time, pairs for two at a time, triplets for three, or leave the numbers to the engine.</string>
+	<string name="number_as_is">Do not process numbers</string>
+	<string name="number_digits">Digits</string>
+	<string name="number_pairs">Pairs</string>
+	<string name="number_triplets">Triplets</string>
+	<string name="emoji_label">Read emoji and emoticons</string>
+	<string name="emoji_description">Says an emoji by its name, such as smiling face for a smile, and turns a typed emoticon into its name too. Off, an emoji is a gap, the way the engine has always left it.</string>
+	<string name="capital_label">Single capital letters</string>
+	<string name="capital_description">What a capital letter standing on its own is said as. It only touches a letter with nothing beside it, so words and lines of capitals are left alone.</string>
+	<string name="capital_none">Do not pronounce</string>
+	<string name="capital_cap">Say cap</string>
+	<string name="capital_pitch">Higher pitch</string>
+	<string name="ssml_label">Ignore SSML tags</string>
+	<string name="ssml_description">Takes SSML and other tags out of the text before it is read, so a tag is never spoken. The words between tags are kept.</string>
+	<string name="intonation_pauses_label">Intonation pauses</string>
+	<string name="intonation_pauses_description">Lets the engine shape the intonation of a phrase and pause where the phrase ends. Off, it pauses only at punctuation, which suits a screen reader that reads a fragment at a time.</string>
+
+	<string name="section_battery">Battery and stability</string>
+	<string name="battery_section_description">Everything this app can do to keep Android from stopping the voice in the background.</string>
+	<string name="battery_open">Battery and stability settings</string>
+	<string name="battery_open_description">The exemption from battery optimization, a persistent notification, a wake lock while speaking, and a log of your actions.</string>
+	<string name="battery_screen_description">A screen reader is the last thing that can be allowed to sleep. Each of these makes Android a little more likely to leave the engine running, at a small cost in battery or in noise.</string>
+	<string name="battery_exemption_label">Battery optimization exemption</string>
+	<string name="battery_exemption_granted">Granted</string>
+	<string name="battery_exemption_not_granted">Not granted. Tap to allow it.</string>
+	<string name="battery_exemption_description">The one setting that matters most. Without the exemption Android puts the engine to sleep when the phone is idle, and the voice stops. Tap to open the system screen that grants it.</string>
+	<string name="persistent_notification_label">Persistent notification</string>
+	<string name="persistent_notification_description">Keeps a notification showing while the engine is in use, which holds it in the foreground where Android does not kill it. The app checks every few seconds that the notification is still there and restores it if it is not.</string>
+	<string name="wake_lock_label">Keep the CPU awake while speaking</string>
+	<string name="wake_lock_description">Holds the processor awake while an utterance is being made. On some devices the CPU sleeps mid sentence and the tail of the speech is lost.</string>
+	<string name="track_actions_label">Track your actions</string>
+	<string name="track_actions_description">Writes what you do on this screen to the system log, so a problem with the engine stopping can be traced back to what was changed.</string>
+	<string name="keep_alive_title">Alt eloquence TTS is running</string>
+	<string name="keep_alive_text">The engine stays in the foreground so the voice keeps working in the background.</string>
 
 	<string name="section_other">Other settings</string>
 	<string name="pauses_label">Pauses</string>
@@ -103,8 +151,6 @@
 	<string name="pauses_keep">Do not shorten</string>
 	<string name="pauses_end">Shorten at end of text</string>
 	<string name="pauses_all">Shorten all pauses</string>
-	<string name="phrase_prediction_label">Phrase prediction</string>
-	<string name="phrase_prediction_description">Lets the engine guess where the phrases in a sentence are and shape the intonation to match. Off by default, because a screen reader reads a fragment at a time and the guess is usually wrong.</string>
 	<string name="symbol_label">Symbol pronunciation</string>
 	<string name="symbol_description">How much of the punctuation and the other symbols in the text is spoken by name.</string>
 	<string name="symbol_mode_label">Symbol pronunciation mode</string>
@@ -151,12 +197,9 @@
 
 	<!-- How a row speaks. A label and a value are one control and one stop, so
 	     both of these end up in the same node. -->
-	<string name="labelled_value">%1$s: %2$s</string>
 	<string name="value_selected">%1$s (%2$s) selected</string>
 	<string name="mode_value">%1$s (%2$s)</string>
 	<string name="action_click_to_change">Click to change</string>
-	<string name="file_value">Currently %1$s. Click to choose a file.</string>
-	<string name="action_choose_file">Choose a file</string>
 	<string name="switch_on">On</string>
 	<string name="switch_off">Off</string>
 	<string name="cancel">Cancel</string>

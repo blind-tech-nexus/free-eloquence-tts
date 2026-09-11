@@ -1,7 +1,5 @@
 package com.blindtechnexus.alteloquencetts
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Column
@@ -53,7 +51,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
 /**
- * Every setting the engine has, in the six sections they belong to, and a way
+ * Every setting the engine has, in the sections they belong to, and a way
  * to hear the lot of them.
  *
  * Four things about it are deliberate and easy to undo by accident.
@@ -75,38 +73,20 @@ import kotlin.math.roundToInt
  * be unable to skip it.
  *
  * The sections are headings, which is what makes a screen this long navigable
- * rather than merely long: TalkBack moves from heading to heading, so the six
- * sections are six jumps and the controls under them are reached from the
- * section that was asked for.
+ * rather than merely long: TalkBack moves from heading to heading, so the
+ * sections are jumps and the controls under them are reached from the section
+ * that was asked for.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(state: SettingsModel, onBack: () -> Unit) {
+fun SettingsScreen(
+	state: SettingsModel,
+	onBack: () -> Unit,
+	onOpenDictionary: () -> Unit,
+	onOpenBattery: () -> Unit
+) {
 	val context = LocalContext.current
-	var wanted by remember { mutableStateOf(Eci.DICT_MAIN) }
 	var notice by remember { mutableStateOf("") }
-	val refused = stringResource(R.string.dictionary_refused)
-	val removed = stringResource(R.string.dictionary_removed)
-	val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-		if (uri != null) {
-			// Said out loud, and said whether it worked. The row's own value
-			// changes, but a change to a node nobody is focused on is a change
-			// nobody hears, and a file the engine could not read leaves the row
-			// exactly as it was: to a finger, a pick that did nothing and a
-			// pick that taught the engine three thousand words are the same
-			// event unless one of them is announced.
-			val taken = state.chooseDictionary(wanted, uri)
-			notice = if (taken) {
-				context.getString(
-					R.string.labelled_value,
-					context.getString(dictionaryLabelOf(wanted)),
-					state.dictionaryName(wanted)
-				)
-			} else {
-				refused
-			}
-		}
-	}
 	Scaffold(
 		topBar = {
 			ScreenTopBar(
@@ -126,17 +106,8 @@ fun SettingsScreen(state: SettingsModel, onBack: () -> Unit) {
 			VoiceCustomization(state)
 			VoiceBehaviours(state)
 			VoiceQuality(state)
-			VoiceDictionaries(
-				state = state,
-				onPick = { volume ->
-					wanted = volume
-					pick.launch(arrayOf("*/*"))
-				},
-				onRemove = {
-					state.removeDictionaries()
-					notice = removed
-				}
-			)
+			DictionarySection(onOpen = onOpenDictionary, state = state)
+			TextReading(state)
 			OtherSettings(
 				state = state,
 				onReset = {
@@ -147,12 +118,13 @@ fun SettingsScreen(state: SettingsModel, onBack: () -> Unit) {
 					)
 				}
 			)
+			BatterySection(onOpen = onOpenBattery)
 			TestVoice(state)
 		}
 	}
 }
 
-// ---- the six sections -----------------------------------------------------
+// ---- the sections ---------------------------------------------------------
 
 /** Which voice speaks, and whether it is a man or a woman. */
 @Composable
@@ -249,31 +221,16 @@ private fun VoiceQuality(state: SettingsModel) {
 	)
 }
 
-/** The three pronunciation dictionaries, and the abbreviation switch that
- *  belongs with them rather than with the voice.
- *
- *  [onRemove] belongs to the screen above this one, because clearing all three
- *  is something that has to be said out loud: three rows change to "None" and
- *  nobody is focused on any of them when the button is pressed. */
+/** The user's own dictionary, which has a screen of its own, and the
+ *  abbreviation switch that belongs with it rather than with the voice. */
 @Composable
-private fun VoiceDictionaries(
-	state: SettingsModel,
-	onPick: (Int) -> Unit,
-	onRemove: () -> Unit
-) {
+private fun DictionarySection(state: SettingsModel, onOpen: () -> Unit) {
 	SectionHeading(text = stringResource(R.string.section_dictionaries))
 	SectionText(text = stringResource(R.string.dictionaries_description))
-	for (volume in Eci.DICT_VOLUMES) {
-		FileRow(
-			label = stringResource(dictionaryLabelOf(volume)),
-			value = state.dictionaryName(volume),
-			onClick = { onPick(volume) }
-		)
-	}
 	ActionRow(
-		label = stringResource(R.string.dictionary_remove),
-		description = stringResource(R.string.dictionary_remove_description),
-		onClick = onRemove
+		label = stringResource(R.string.dictionary_manager),
+		description = stringResource(R.string.dictionary_manager_description),
+		onClick = onOpen
 	)
 	SwitchRow(
 		label = stringResource(R.string.abbreviations_label),
@@ -283,10 +240,68 @@ private fun VoiceDictionaries(
 	)
 }
 
+/** How the words between the words are read: the numbers, the emoji, the
+ *  capital letters and the tags nobody asked to hear. */
+@Composable
+private fun TextReading(state: SettingsModel) {
+	SectionHeading(text = stringResource(R.string.section_text))
+	val numberModes = Numbers.MODES.map { stringResource(numberModeNameOf(it)) }
+	ChoiceButton(
+		title = stringResource(R.string.number_mode_label),
+		shown = stringResource(
+			R.string.value_selected,
+			stringResource(R.string.number_mode_label),
+			stringResource(numberModeNameOf(state.numberMode))
+		),
+		options = numberModes,
+		chosen = Numbers.MODES.indexOf(state.numberMode).coerceAtLeast(0),
+		onChoose = { state.chooseNumberMode(Numbers.MODES[it]) },
+		description = stringResource(R.string.number_mode_description)
+	)
+	SwitchRow(
+		label = stringResource(R.string.emoji_label),
+		description = stringResource(R.string.emoji_description),
+		checked = state.readEmoji,
+		onChange = state::chooseReadEmoji
+	)
+	val capitalModes = CapitalLetters.MODES.map { stringResource(capitalNameOf(it)) }
+	ChoiceButton(
+		title = stringResource(R.string.capital_label),
+		shown = stringResource(
+			R.string.value_selected,
+			stringResource(R.string.capital_label),
+			stringResource(capitalNameOf(state.capitalMode))
+		),
+		options = capitalModes,
+		chosen = CapitalLetters.MODES.indexOf(state.capitalMode).coerceAtLeast(0),
+		onChoose = { state.chooseCapitalMode(CapitalLetters.MODES[it]) },
+		description = stringResource(R.string.capital_description)
+	)
+	SwitchRow(
+		label = stringResource(R.string.ssml_label),
+		description = stringResource(R.string.ssml_description),
+		checked = state.stripSsml,
+		onChange = state::chooseStripSsml
+	)
+}
+
+/** Where the keep-alive lives, behind a button because it is a screen of its
+ *  own. */
+@Composable
+private fun BatterySection(onOpen: () -> Unit) {
+	SectionHeading(text = stringResource(R.string.section_battery))
+	SectionText(text = stringResource(R.string.battery_section_description))
+	ActionRow(
+		label = stringResource(R.string.battery_open),
+		description = stringResource(R.string.battery_open_description),
+		onClick = onOpen
+	)
+}
+
 /** How the engine handles what it is given: the gaps it leaves, the symbols
- *  it names, the guesses it makes, and putting a voice back as it shipped.
- *  [onReset] is the screen above this one's for the same reason
- *  [VoiceDictionaries] takes one. */
+ *  it names, the intonation it shapes, and putting a voice back as it shipped.
+ *  [onReset] is the screen above this one's, so that a reset is said out
+ *  loud. */
 @Composable
 private fun OtherSettings(state: SettingsModel, onReset: () -> Unit) {
 	SectionHeading(text = stringResource(R.string.section_other))
@@ -322,8 +337,8 @@ private fun OtherSettings(state: SettingsModel, onReset: () -> Unit) {
 		SymbolDialog(state = state, onDismiss = { symbolsOpen = false })
 	}
 	SwitchRow(
-		label = stringResource(R.string.phrase_prediction_label),
-		description = stringResource(R.string.phrase_prediction_description),
+		label = stringResource(R.string.intonation_pauses_label),
+		description = stringResource(R.string.intonation_pauses_description),
 		checked = state.phrasePrediction,
 		onChange = state::choosePhrasePrediction
 	)
@@ -396,10 +411,17 @@ private fun descriptionOf(param: Int): Int = when (param) {
 	else -> R.string.volume_description
 }
 
-private fun dictionaryLabelOf(volume: Int): Int = when (volume) {
-	Eci.DICT_MAIN -> R.string.dictionary_main
-	Eci.DICT_ROOT -> R.string.dictionary_root
-	else -> R.string.dictionary_abbreviation
+private fun numberModeNameOf(mode: Int): Int = when (mode) {
+	Numbers.DIGITS -> R.string.number_digits
+	Numbers.PAIRS -> R.string.number_pairs
+	Numbers.TRIPLETS -> R.string.number_triplets
+	else -> R.string.number_as_is
+}
+
+private fun capitalNameOf(mode: Int): Int = when (mode) {
+	CapitalLetters.CAP -> R.string.capital_cap
+	CapitalLetters.PITCH -> R.string.capital_pitch
+	else -> R.string.capital_none
 }
 
 private fun nameOf(mode: Int): Int = when (mode) {
@@ -784,37 +806,6 @@ private fun SwitchRow(
 			)
 			Switch(checked = checked, onCheckedChange = null)
 		}
-	}
-}
-
-/**
- * A label, the file that has been chosen for it, and a way to choose another.
- *
- * The value is what the row is called when it speaks: a file's own name and
- * how many words are in it, or "None". Both are worth more than a tick, which
- * is what a picker usually shows and which says nothing at all out loud.
- */
-@Composable
-private fun FileRow(label: String, value: String, onClick: () -> Unit) {
-	val choose = stringResource(R.string.action_choose_file)
-	Column(
-		modifier = Modifier
-			.fillMaxWidth()
-			// Clickable before the padding, so that the padding is part of what
-			// a finger can hit rather than a margin around it.
-			.clickable(onClickLabel = choose, role = Role.Button, onClick = onClick)
-			.padding(horizontal = 16.dp, vertical = 12.dp)
-			.clearAndSetSemantics {
-				contentDescription = label
-				stateDescription = value
-				role = Role.Button
-			}
-	) {
-		Text(text = label, style = MaterialTheme.typography.bodyLarge)
-		Text(
-			text = stringResource(R.string.file_value, value),
-			style = MaterialTheme.typography.bodyMedium
-		)
 	}
 }
 

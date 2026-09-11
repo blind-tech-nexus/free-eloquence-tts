@@ -81,10 +81,30 @@ class SettingsTest {
 		assertEquals(Eci.DEFAULT_SPEED, settings.shape(REED)[Eci.VOICE_SPEED])
 	}
 
+	/** The three switches on the battery and stability screen are remembered,
+	 *  and each is off until somebody turns it on: a notification or a wake
+	 *  lock nobody asked for would be a surprise, and so would a log of what
+	 *  they never did. */
+	@Test
+	fun theBatteryAndStabilitySwitchesRememberTheirState() {
+		assertFalse("the persistent notification starts on", settings.persistentNotification)
+		assertFalse("the wake lock starts on", settings.wakeLock)
+		assertFalse("action tracking starts on", settings.trackActions)
+		settings.persistentNotification = true
+		settings.wakeLock = true
+		settings.trackActions = true
+		assertTrue(settings.persistentNotification)
+		assertTrue(settings.wakeLock)
+		assertTrue(settings.trackActions)
+	}
+
 	private fun wipe() {
 		for (voice in Eci.PRESET_NAMES.indices) settings.clearShape(voice)
 		settings.speed = Eci.DEFAULT_SPEED
 		settings.voice = REED
+		settings.persistentNotification = false
+		settings.wakeLock = false
+		settings.trackActions = false
 	}
 
 	private companion object {

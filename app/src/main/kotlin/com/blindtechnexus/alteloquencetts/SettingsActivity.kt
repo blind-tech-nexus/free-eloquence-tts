@@ -21,13 +21,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 
-/** Which of the four screens is up. */
-internal enum class Destination { WELCOME, MAIN, SETTINGS, ABOUT }
+/** Which of the screens is up. */
+internal enum class Destination { WELCOME, MAIN, SETTINGS, ABOUT, DICTIONARY, BATTERY }
 
 /**
- * The app's one activity, and the four screens it shows.
+ * The app's one activity, and the screens it shows.
  *
- * One activity rather than four, because there is nothing here that needs an
+ * One activity rather than several, because there is nothing here that needs an
  * activity of its own and a lot that suffers from having one: a screen reader
  * announces the departure and the arrival of every activity, an engine preview
  * opened for the settings screen would be closed and reopened by a trip to the
@@ -102,8 +102,8 @@ class SettingsActivity : ComponentActivity() {
 			MaterialTheme {
 				Surface {
 					BackHandler(
-						enabled = destination == Destination.SETTINGS ||
-							destination == Destination.ABOUT
+						enabled = destination != Destination.WELCOME &&
+							destination != Destination.MAIN
 					) {
 						back()
 					}
@@ -118,7 +118,14 @@ class SettingsActivity : ComponentActivity() {
 						)
 						Destination.SETTINGS -> SettingsScreen(
 							state = remember { settingsModel() },
-							onBack = ::back
+							onBack = ::back,
+							onOpenDictionary = { destination = Destination.DICTIONARY },
+							onOpenBattery = { destination = Destination.BATTERY }
+						)
+						Destination.DICTIONARY -> DictionaryScreen(onBack = ::back)
+						Destination.BATTERY -> BatteryScreen(
+							onBack = ::back,
+							onRequestExemption = ::requestTheExemption
 						)
 						Destination.ABOUT -> AboutScreen(onBack = ::back)
 					}
@@ -176,6 +183,7 @@ class SettingsActivity : ComponentActivity() {
 				model?.stopSpeaking()
 				if (enteredAt == Destination.SETTINGS) finish() else destination = Destination.MAIN
 			}
+			Destination.DICTIONARY, Destination.BATTERY -> destination = Destination.SETTINGS
 			Destination.ABOUT -> destination = Destination.MAIN
 			Destination.MAIN, Destination.WELCOME -> finish()
 		}
@@ -254,7 +262,7 @@ class SettingsActivity : ComponentActivity() {
 
 	/** Hands the exemption over to the system to grant or refuse, and leaves
 	 *  the answer to [refresh]. Nothing in this app can grant it. */
-	private fun requestTheExemption() {
+	internal fun requestTheExemption() {
 		if (!BatteryExemption.request(this)) {
 			// No screen at all would take the question, which is rare and is
 			// worth a line in the log rather than a silence.

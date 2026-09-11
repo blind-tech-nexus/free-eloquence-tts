@@ -250,8 +250,15 @@ JNIEXPORT void JNICALL Java_com_blindtechnexus_alteloquencetts_EvvNative_destroy
 		pthread_join(in->worker, NULL);
 		in->running = 0;
 	}
-	if (in->dict != NULL_DICT_HAND)
+	/* A dictionary that is still in force when the instance goes is what
+	   crashed eciDelete: it walks the dictionaries it thinks are attached and
+	   walks off the one that has already gone. So the set is taken out of
+	   force before it is deleted, the same order forgetDictionaries uses. */
+	if (in->dict != NULL_DICT_HAND) {
+		eciSetDict(in->eci, NULL_DICT_HAND);
 		eciDeleteDict(in->eci, in->dict);
+		in->dict = NULL_DICT_HAND;
+	}
 	eciDelete(in->eci);
 	pthread_cond_destroy(&in->room);
 	pthread_cond_destroy(&in->filled);

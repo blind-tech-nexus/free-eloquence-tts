@@ -55,6 +55,47 @@ class Settings(context: Context) {
 		get() = prefs.getBoolean(KEY_ABBREVIATIONS, false)
 		set(value) = prefs.edit().putBoolean(KEY_ABBREVIATIONS, value).apply()
 
+	/** Whether emoji and emoticons are read by name. On by default: a reader
+	 *  who cannot see a message still hears what it was about. */
+	var readEmoji: Boolean
+		get() = prefs.getBoolean(KEY_EMOJI, true)
+		set(value) = prefs.edit().putBoolean(KEY_EMOJI, value).apply()
+
+	/** How runs of digits are read. One of the [Numbers] levels. */
+	var numberMode: Int
+		get() = prefs.getInt(KEY_NUMBER_MODE, Numbers.AS_IS).coerceIn(Numbers.AS_IS, Numbers.TRIPLETS)
+		set(value) = prefs.edit().putInt(KEY_NUMBER_MODE, value.coerceIn(Numbers.AS_IS, Numbers.TRIPLETS)).apply()
+
+	/** Whether SSML and other XML-like tags are stripped before the text is
+	 *  read. On by default, since the engine's own SSML reader is not turned
+	 *  on and a tag would otherwise be spoken. */
+	var stripSsml: Boolean
+		get() = prefs.getBoolean(KEY_STRIP_SSML, true)
+		set(value) = prefs.edit().putBoolean(KEY_STRIP_SSML, value).apply()
+
+	/** How a single capital letter is said. One of the [CapitalLetters]
+	 *  levels, and not a voice's business. */
+	var capitalMode: Int
+		get() = prefs.getInt(KEY_CAPITAL_MODE, CapitalLetters.NONE).coerceIn(CapitalLetters.NONE, CapitalLetters.PITCH)
+		set(value) = prefs.edit().putInt(KEY_CAPITAL_MODE, value.coerceIn(CapitalLetters.NONE, CapitalLetters.PITCH)).apply()
+
+	/** Whether the keep-alive notification holds the engine in the foreground,
+	 *  so Android leaves it running in the background. */
+	var persistentNotification: Boolean
+		get() = prefs.getBoolean(KEY_PERSISTENT_NOTIFICATION, false)
+		set(value) = prefs.edit().putBoolean(KEY_PERSISTENT_NOTIFICATION, value).apply()
+
+	/** Whether the CPU is kept awake while an utterance is being made. */
+	var wakeLock: Boolean
+		get() = prefs.getBoolean(KEY_WAKE_LOCK, false)
+		set(value) = prefs.edit().putBoolean(KEY_WAKE_LOCK, value).apply()
+
+	/** Whether what the user does on the battery screen is written to the
+	 *  system log, so a stopped engine can be traced back to what changed. */
+	var trackActions: Boolean
+		get() = prefs.getBoolean(KEY_TRACK_ACTIONS, false)
+		set(value) = prefs.edit().putBoolean(KEY_TRACK_ACTIONS, value).apply()
+
 	/** How much of the engine's own pausing to keep. One of the Pauses
 	 *  constants, and not a voice's business. */
 	var pauses: Int
@@ -174,28 +215,6 @@ class Settings(context: Context) {
 		edit.apply()
 	}
 
-	// ---- dictionaries ----------------------------------------------------
-
-	fun dictionaryPath(volume: Int): String? = prefs.getString(dictionaryPathKey(volume), null)
-
-	fun dictionaryName(volume: Int): String? = prefs.getString("dict_name_$volume", null)
-
-	fun setDictionary(volume: Int, path: String?, name: String?) {
-		val edit = prefs.edit()
-		if (path == null) {
-			edit.remove(dictionaryPathKey(volume)).remove("dict_name_$volume")
-		} else {
-			edit.putString(dictionaryPathKey(volume), path).putString("dict_name_$volume", name)
-		}
-		edit.apply()
-	}
-
-	fun dictionaryPaths(): Map<Int, String> {
-		val out = LinkedHashMap<Int, String>()
-		for (volume in Eci.DICT_VOLUMES) dictionaryPath(volume)?.let { out[volume] = it }
-		return out
-	}
-
 	companion object {
 		const val KEY_VOICE = "voice_preset"
 		const val KEY_SAMPLE_RATE = "sample_rate_hz"
@@ -208,11 +227,14 @@ class Settings(context: Context) {
 		const val KEY_FORCE_RATE = "force_rate"
 		const val KEY_FORCE_PITCH = "force_pitch"
 		const val KEY_FORCE_VOLUME = "force_volume"
+		const val KEY_EMOJI = "emoji"
+		const val KEY_NUMBER_MODE = "number_mode"
+		const val KEY_STRIP_SSML = "strip_ssml"
+		const val KEY_CAPITAL_MODE = "capital_mode"
+		const val KEY_PERSISTENT_NOTIFICATION = "persistent_notification"
+		const val KEY_WAKE_LOCK = "wake_lock"
+		const val KEY_TRACK_ACTIONS = "track_actions"
 		const val DEFAULT_SAMPLE_RATE = 11025
-
-		/** Where the copy taken of a picked dictionary is recorded. DirectBoot
-		 *  rewrites these when it moves the files, so it needs the name too. */
-		fun dictionaryPathKey(volume: Int) = "dict_path_$volume"
 
 		/** The eight. The order they have always been written and read in,
 		 *  which is not the order the screen shows them in: [BEHAVIOURS] is

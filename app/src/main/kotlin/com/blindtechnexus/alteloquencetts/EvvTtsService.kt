@@ -1,6 +1,7 @@
 package com.blindtechnexus.alteloquencetts
 
 import android.media.AudioFormat
+import android.os.PowerManager
 import android.speech.tts.SynthesisCallback
 import android.speech.tts.SynthesisRequest
 import android.speech.tts.TextToSpeech
@@ -27,17 +28,30 @@ class EvvTtsService : TextToSpeechService() {
 
 	private var appliedRevision = -1
 
-	private var loadedDictionaries: Map<Int, String> = emptyMap()
+	/** When the user's dictionary file last changed, which is what says the
+	 *  words taught to the engine are still the words in the file. */
+	private var loadedWordsStamp = -1L
+
+	private val wakeLockManager: PowerManager? by lazy { getSystemService(PowerManager::class.java) }
+	private var wakeLock: PowerManager.WakeLock? = null
+
+	private var keepAlive: KeepAlive? = null
 
 	override fun onCreate() {
-		settings = Settings(this)
 		super.onCreate()
+		settings = Settings(this)
+		keepAlive = KeepAlive(this)
+		settings?.let { keepAlive?.sync(it.persistentNotification) }
 	}
 
 	override fun onDestroy() {
 		super.onDestroy()
+		keepAlive?.sync(false)
+		keepAlive = null
 		engine?.close()
 		engine = null
+		wakeLock?.takeIf { it.isHeld }?.release()
+		wakeLock = null
 	}
 
 	// ---- languages -------------------------------------------------------
@@ -141,35 +155,33 @@ class EvvTtsService : TextToSpeechService() {
 		held?.close()
 		val made = EvvEngine.open(language)
 		engine = made
-		if (made != null) applySettings(made)
+		if (made != null) settings?.let { applySettings(made, it) }
 		return made
 	}
 
-	private fun applySettings(target: EvvEngine) {
-		val s = settings ?: return
+	private fun applySettings(target: EvvEngine, s: Settings) {
 		target.setSampleRate(s.sampleRateHz)
 		target.setAbbreviations(s.abbreviations)
-		loadDictionaries(target, s)
+		loadWords(target)
 		target.applyVoice(s.voice, s.shape(s.voice))
 		appliedRevision = s.revision
 	}
 
-	/** Teaching three thousand words costs about half a second, so it happens
-	 *  when the files change rather than whenever any setting does. */
-	private fun loadDictionaries(target: EvvEngine, s: Settings) {
-		// What is there rather than what was asked for. A dictionary picked
-		// before this build is not where the settings say until the phone has
-		// been unlocked once, and remembering only what was read means it is
-		// picked up when it arrives instead of being written off as loaded.
-		val want = s.dictionaryPaths().filterValues { java.io.File(it).exists() }
-		if (want == loadedDictionaries) return
+	/** Teaching a few thousand words costs about half a second, so it happens
+	 *  when the file changes rather than whenever any setting does. The check
+	 *  is the file's own stamp, which is cheap enough to make on every
+	 *  utterance, so a word added on the dictionary screen is heard the next
+	 *  time anything is spoken without restarting the service. */
+	private fun loadWords(target: EvvEngine) {
+		val file = UserDictionary.file(this)
+		val stamp = if (file.exists()) file.lastModified() else -1L
+		if (stamp == loadedWordsStamp) return
 		target.forgetDictionaries()
-		for ((volume, path) in want) {
-			val file = java.io.File(path)
-			val taught = Dictionaries.load(target, volume, file)
-			Log.i(TAG, "volume $volume: $taught entries from ${file.name}")
+		if (file.exists()) {
+			val taught = Dictionaries.load(target, Eci.DICT_MAIN, file, Charsets.UTF_8)
+			Log.i(TAG, "user dictionary: $taught entries from ${file.name}")
 		}
-		loadedDictionaries = want
+		loadedWordsStamp = stamp
 	}
 
 	override fun onStop() {
@@ -180,87 +192,101 @@ class EvvTtsService : TextToSpeechService() {
 	override fun onSynthesizeText(request: SynthesisRequest?, callback: SynthesisCallback?) {
 		if (request == null || callback == null) return
 		stopped = false
+		val s = settings
+		if (s == null) {
+			callback.error(TextToSpeech.ERROR_SERVICE)
+			return
+		}
+		// The keep-alive follows the setting, so a switch moved on the battery
+		// screen is in force the next time anything is spoken.
+		keepAlive?.sync(s.persistentNotification)
+		// The voice is whichever the settings screen says, not whichever the
+		// caller named, so the name only decides the language. It is asked
+		// first: a caller that set a voice and then speaks with an empty or
+		// foreign locale -- automation apps and TTS routers do -- has still
+		// named the language. Failing that, the locale decides it; failing
+		// both, the first language the engine has is better than silence,
+		// which is what refusing a router's nameless request used to give.
+		val wanted = findVoice(request.voiceName)
 		val found = matchLanguage(request.language, request.country)
-		if (found == null) {
+		val language = wanted?.first ?: found?.first ?: EvvEngine.available.firstOrNull()
+		if (language == null) {
 			callback.error(TextToSpeech.ERROR_NOT_INSTALLED_YET)
 			return
 		}
-		// The voice is whichever the settings screen says, not whichever the
-		// caller named. A caller holds on to the Voice it was given, so a
-		// screen reader that connected while Reed was chosen goes on asking
-		// for Reed however many times the setting is changed underneath it.
-		// The name still decides the language, since that is what it is for.
-		val wanted = findVoice(request.voiceName)
-		val language = wanted?.first ?: found.first
 		val target = ensureEngine(language)
 		if (target == null) {
 			callback.error(TextToSpeech.ERROR_SERVICE)
 			return
 		}
-		val s = settings
-		if (s != null && s.revision != appliedRevision) applySettings(target)
+		if (s.revision != appliedRevision) applySettings(target, s)
 		// Re-sent every time rather than once, because it is the one setting
 		// with no way of telling whether something else has moved it.
-		s?.let { target.setAbbreviations(it.abbreviations) }
+		target.setAbbreviations(s.abbreviations)
+		loadWords(target)
 		// The rate and pitch a client asks for are scaled onto the voice,
 		// unless the settings say this app's own are to be forced over them:
 		// a screen reader that has set a rate is asking for that rate, and
 		// this is the one place its asking is listened to or not.
-		if (s?.forceRate != true) target.setRatePercent(request.speechRate)
-		if (s?.forcePitch != true) target.setPitchPercent(request.pitch)
+		if (!s.forceRate) target.setRatePercent(request.speechRate)
+		if (!s.forcePitch) target.setPitchPercent(request.pitch)
 		// Volume is the engine's own parameter and no client's number ever
 		// reaches it -- Android applies a client's volume to the stream, after
 		// the speech has left here -- so forcing it is re-asserting this app's
 		// own number on every utterance, the way the abbreviation switch is
 		// re-sent above.
-		s?.let { held ->
-			if (held.forceVolume) {
-				held.shape(held.voice)[Eci.VOICE_VOLUME]?.let { volume -> target.setVolume(volume) }
-			}
+		if (s.forceVolume) {
+			s.shape(s.voice)[Eci.VOICE_VOLUME]?.let { volume -> target.setVolume(volume) }
 		}
-		val text = Symbols.apply(
-			TextFixes.apply(request.charSequenceText?.toString().orEmpty()),
-			s?.symbolMode ?: Symbols.SOME,
-			s?.customSymbols.orEmpty()
-		)
-		if (text.isEmpty()) {
-			callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
-			callback.done()
-			return
-		}
-		// The framework is not told an utterance has begun until there are
-		// samples for it. Saying so up front and then being silenced before the
-		// engine has made anything hands the reader a whole start and finish
-		// with no speech in it, and TalkBack reads that as its queue running
-		// dry: it answers "Completed speech while already completed", stops the
-		// queue, and the item the finger is actually on dies with it. That is
-		// what made dragging across a launcher go quiet. RHVoice opens the same
-		// way, from inside its player rather than ahead of it.
-		val opening = Opening(callback, target.sampleRateHz)
-		val pace = Pace(target.sampleRateHz * BYTES_PER_SAMPLE)
-		// Piece by piece, so that asking for silence waits out a piece rather
-		// than the whole message: the engine cannot abandon what it is saying.
-		// Pauses are shortened after the split rather than before it: the
-		// annotation sits in front of the full stop, and a piece boundary is
-		// found by looking at the end of a word.
-		val pauses = settings?.pauses ?: Pauses.ALL
-		val prosody = Prosody.prefix(settings?.phrasePrediction ?: false)
-		val pieces = TextPieces.split(text)
-		for ((at, raw) in pieces.withIndex()) {
-			if (stopped) break
-			val piece = prosody + Pauses.apply(raw, pauses, at == pieces.lastIndex)
-			if (!target.speak(piece)) {
-				Log.e(TAG, "the engine refused ${piece.length} characters")
-				callback.error(TextToSpeech.ERROR_SYNTHESIS)
+		val lock = acquireWakeLock(s)
+		try {
+			val text = TextPipeline.apply(request.charSequenceText?.toString().orEmpty(), s)
+			if (text.isEmpty()) {
+				callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
+				callback.done()
 				return
 			}
-			if (!pump(target, callback, pace, opening)) {
-				remember(pace)
-				return
+			// The framework is not told an utterance has begun until there are
+			// samples for it. Saying so up front and then being silenced before
+			// the engine has made anything hands the reader a whole start and
+			// finish with no speech in it, and TalkBack reads that as its queue
+			// running dry. So the opening is made lazily, below.
+			val opening = Opening(callback, target.sampleRateHz)
+			val pace = Pace(target.sampleRateHz * BYTES_PER_SAMPLE)
+			// Piece by piece, so that asking for silence waits out a piece
+			// rather than the whole message: the engine cannot abandon what it
+			// is saying. Pauses are shortened after the split rather than
+			// before it: the annotation sits in front of the full stop, and a
+			// piece boundary is found by looking at the end of a word.
+			val prosody = Prosody.prefix(s.phrasePrediction)
+			val pieces = TextPieces.split(text)
+			for ((at, raw) in pieces.withIndex()) {
+				if (stopped) break
+				val piece = prosody + Pauses.apply(raw, s.pauses, at == pieces.lastIndex)
+				if (!target.speak(piece)) {
+					Log.e(TAG, "the engine refused ${piece.length} characters")
+					callback.error(TextToSpeech.ERROR_SYNTHESIS)
+					return
+				}
+				if (!pump(target, callback, pace, opening)) {
+					remember(pace)
+					return
+				}
 			}
+			remember(pace)
+			// Every utterance owes the framework a start and a finish, even one
+			// the engine answered with no samples at all -- text that the
+			// settings reduced to nothing. A callback left with neither is a
+			// client that waits for ever and goes quiet, and the quiet is what
+			// was reported when another engine such as AutoTTS asked here.
+			if (opening.began) {
+				callback.done()
+			} else if (!stopped) {
+				if (opening.open()) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
+			}
+		} finally {
+			releaseWakeLock(lock)
 		}
-		remember(pace)
-		if (opening.began) callback.done()
 	}
 
 	/** Hands one piece's samples on as they arrive, and answers whether the
@@ -289,6 +315,27 @@ class EvvTtsService : TextToSpeechService() {
 
 	private fun remember(pace: Pace) {
 		if (pace.handedMs() > mostAudioHandedMs) mostAudioHandedMs = pace.handedMs()
+	}
+
+	// ---- keeping the CPU awake ------------------------------------------
+
+	/** A partial wake lock, held across the utterance when the user asked for
+	 *  it. On some devices the CPU sleeps mid-sentence and the tail of the
+	 *  speech is lost, which is what this is for. */
+	private fun acquireWakeLock(s: Settings): PowerManager.WakeLock? {
+		if (!s.wakeLock) return null
+		val held = wakeLock
+		if (held != null && held.isHeld) return held
+		val made = wakeLockManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG:wake")?.apply {
+			setReferenceCounted(false)
+			acquire(WAKELOCK_TIMEOUT_MS)
+		}
+		wakeLock = made
+		return made
+	}
+
+	private fun releaseWakeLock(lock: PowerManager.WakeLock?) {
+		lock?.takeIf { it.isHeld }?.release()
 	}
 
 	/**
@@ -366,5 +413,8 @@ class EvvTtsService : TextToSpeechService() {
 		 *  runs dry while the engine is held back. */
 		const val LEAD_MS = 300L
 		const val SLICE_MS = 50L
+		/** The longest an utterance may hold the wake lock before the system
+		 *  takes it back, as a ceiling rather than a course. */
+		const val WAKELOCK_TIMEOUT_MS = 10 * 60 * 1000L
 	}
 }

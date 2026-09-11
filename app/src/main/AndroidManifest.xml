@@ -4,6 +4,8 @@
 	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 	<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
 	<application
 		android:allowBackup="true"
@@ -13,12 +15,18 @@
 		android:theme="@style/Theme.AltEloquenceTts">
 
 		<!-- Startable on the lock screen, which is where a screen reader is
-		     wanted first. What it reads there is in DirectBoot.kt. -->
+		     wanted first. What it reads there is in DirectBoot.kt. The
+		     special-use type is what the keep-alive notification promotes it
+		     to on Android 14 and later. -->
 		<service
 			android:name=".EvvTtsService"
 			android:label="@string/engine_name"
 			android:directBootAware="true"
-			android:exported="true">
+			android:exported="true"
+			android:foregroundServiceType="specialUse">
+			<property
+				android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+				android:value="Persistent notification that keeps the speech engine running in the background." />
 			<intent-filter>
 				<action android:name="android.intent.action.TTS_SERVICE" />
 				<category android:name="android.intent.category.DEFAULT" />
