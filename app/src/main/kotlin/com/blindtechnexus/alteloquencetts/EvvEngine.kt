@@ -34,6 +34,26 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 	companion object {
 		private const val TAG = "alteloquencetts"
 
+		/** How long a [read] waits for samples when the caller has not named a
+		 *  wait of its own. The service passes the user's own figure; this is
+		 *  the number for anybody else, and it is the same length of silence
+		 *  because there is no second sensible answer. */
+		const val READ_TIMEOUT_MS = 15000
+
+		/** How long [close] waits for a thread that is inside [read] to get
+		 *  out before it leaves the handle to that thread and takes the rest
+		 *  of its own business. Two seconds is a long time for a read that is
+		 *  coming back, and a short one for a UI thread to be held. */
+		const val CLOSE_WAIT_MS = 2000L
+
+		/** How long the orphaned handle is then waited for, on a thread of its
+		 *  own, before it is destroyed regardless: past this the instance is
+		 *  presumed wedged and the memory matters more than the risk. */
+		const val CLOSE_HARD_WAIT_MS = 30000L
+
+		/** What the two waits look between one glance and the next. */
+		const val CLOSE_POLL_MS = 20L
+
 		val available: IntArray by lazy {
 			if (!EvvNative.loaded) IntArray(0) else runCatching { EvvNative.languages() }
 				.onFailure { Log.e(TAG, "cannot ask for languages", it) }

@@ -307,17 +307,31 @@ class EvvTtsService : TextToSpeechService() {
 		loadedWordsStamp = stamp
 	}
 
-	override fun onStop() {
-		stopped = true
-		engine?.stop()
-	}
+	override fun onStop() = stopSpeakingNow()
 
-	/** What the notification's button asks for. Nothing outside a speech
-	 *  service can reach the audio it has already handed to Android, so the
-	 *  answer is this service's own [stop], which brings [onStop] with it and
-	 *  takes the reader's queue quiet at once. */
+	/** Brings the utterance being spoken to an end.
+	 *
+	 * Two doors lead here: the framework's own stop, which arrives as
+	 * [onStop], and the button on the keep-alive notification, which is the
+	 * only way to be heard again quickly on a phone whose reader is halfway
+	 * through a paragraph and whose app is on the other side of a lock screen.
+	 * Nothing outside a speech service can reach the samples already handed to
+	 * Android, so what is reachable is the wait: the flag takes the next turn
+	 * of the pump away, which is the last thing that owes the framework a
+	 * finish, and the abort is what makes a read that is sitting on the engine
+	 * answer now rather than at the end of its own patience.
+	 *
+	 * It is deliberately not [stopSelf]: that would take the process's engine
+	 * away with it, and the next request for speech would be answered by a
+	 * phone that has to make the voice again from nothing.
+	 */
 	internal fun stopSpeakingNow() {
-		runCatching { stop() }
+		stopped = true
+		val held = engine
+		if (held != null) {
+			runCatching { held.stop() }
+				.onFailure { Log.e(TAG, "the abort did not reach the engine", it) }
+		}
 	}
 
 	override fun onSynthesizeText(request: SynthesisRequest?, callback: SynthesisCallback?) {

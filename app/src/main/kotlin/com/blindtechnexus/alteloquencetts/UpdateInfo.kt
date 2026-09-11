@@ -79,18 +79,20 @@ internal object UpdateInfo {
 
 	/** Asks, parses and answers. Called on a thread of its own: nothing here is
 	 *  to be done on the one the screen is drawn on. */
-	fun fetch(current: String, cancelled: AtomicBoolean): Result = try {
+	fun fetch(current: String, cancelled: AtomicBoolean): Result {
 		// Asked before the request rather than only after it, because a check
 		// that has been called off has nothing to gain from a socket: the app is
 		// on its way out, and the answer will not be read.
 		if (cancelled.get()) return Result.Cancelled
-		val body = get(CHANNEL) ?: return Result.Unreachable
-		if (cancelled.get()) return Result.Cancelled
-		val found = parse(body, current)
-		if (found == null) Result.UpToDate else Result.Found(found)
-	} catch (failed: Exception) {
-		Log.i(TAG, "nothing could be learned about updates", failed)
-		Result.Unreachable
+		return try {
+			val body = get(CHANNEL) ?: return Result.Unreachable
+			if (cancelled.get()) return Result.Cancelled
+			val found = parse(body, current)
+			if (found == null) Result.UpToDate else Result.Found(found)
+		} catch (failed: Exception) {
+			Log.i(TAG, "nothing could be learned about updates", failed)
+			Result.Unreachable
+		}
 	}
 
 	/** The four answers a check can have. A test names them; only [Unreachable]
