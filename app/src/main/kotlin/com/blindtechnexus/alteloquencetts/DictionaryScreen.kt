@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -31,10 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -180,7 +180,7 @@ fun DictionaryScreen(onBack: () -> Unit) {
 					WordRow(
 						word = word,
 						say = say,
-						onClick = { editing = word to say }
+						onPress = { editing = word to say }
 					)
 				}
 			}
@@ -253,15 +253,11 @@ private fun WordRow(word: String, say: String, onPress: () -> Unit) {
 		modifier = Modifier
 			.fillMaxWidth()
 			.clickable(role = Role.Button, onClick = onPress)
-			.padding(horizontal = 16.dp, vertical = 12.dp)
-			.clearAndSetSemantics {
+			.semantics(mergeDescendants = true) {
 				contentDescription = "$word, said as $say"
 				role = Role.Button
-				onClick {
-					onPress()
-					true
-				}
 			}
+			.padding(horizontal = 16.dp, vertical = 12.dp)
 	) {
 		Text(text = word, style = MaterialTheme.typography.bodyLarge)
 		Text(
@@ -284,6 +280,11 @@ private fun WordDialog(
 ) {
 	var current by remember { mutableStateOf(word) }
 	var replacement by remember { mutableStateOf(say) }
+	val keys = KeyboardOptions(
+		capitalization = KeyboardCapitalization.None,
+		autoCorrect = false,
+		keyboardType = KeyboardType.Text
+	)
 	AlertDialog(
 		onDismissRequest = onDismiss,
 		title = { Text(text = title) },
@@ -294,11 +295,7 @@ private fun WordDialog(
 					onValueChange = { current = it },
 					singleLine = true,
 					label = { Text(text = stringResource(R.string.dictionary_word_hint)) },
-					keyboardOptions = KeyboardOptions(
-						capitalization = KeyboardCapitalization.None,
-						autoCorrectEnabled = false,
-						keyboardType = KeyboardType.Text
-					),
+					keyboardOptions = keys,
 					modifier = Modifier.fillMaxWidth()
 				)
 				OutlinedTextField(
@@ -306,11 +303,7 @@ private fun WordDialog(
 					onValueChange = { replacement = it },
 					singleLine = true,
 					label = { Text(text = stringResource(R.string.dictionary_say_hint)) },
-					keyboardOptions = KeyboardOptions(
-						capitalization = KeyboardCapitalization.None,
-						autoCorrectEnabled = false,
-						keyboardType = KeyboardType.Text
-					),
+					keyboardOptions = keys,
 					modifier = Modifier
 						.fillMaxWidth()
 						.padding(top = 8.dp)
