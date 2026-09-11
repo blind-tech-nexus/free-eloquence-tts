@@ -1,4 +1,4 @@
-name: Build signed APK
+Name: Build signed APK
 
 on:
   push:
@@ -168,13 +168,13 @@ jobs:
           sha256="$(sha256sum "$apk" | awk '{print $1}')"
           apk_size="$(stat -c '%s' "$apk")"
 
-          caption="Signed release APK
-          Repository: ${{ github.repository }}
-          Branch/Ref: ${{ github.ref_name }}
-          Commit: ${{ github.sha }}
-          Run: #${{ github.run_number }}
-          Size: ${apk_size} bytes
-          SHA-256: ${sha256}"
+          caption="$(printf 'Signed release APK\nRepository: %s\nBranch/Ref: %s\nCommit: %s\nRun: #%s\nSize: %s bytes\nSHA-256: %s' \
+            "${{ github.repository }}" \
+            "${{ github.ref_name }}" \
+            "${{ github.sha }}" \
+            "${{ github.run_number }}" \
+            "$apk_size" \
+            "$sha256")"
 
           response="$(
             curl \
@@ -188,8 +188,6 @@ jobs:
               "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"
           )"
 
-          echo "$response" | python3 -m json.tool
-
-          echo "$response" | grep -q '"ok": true'
+          echo "$response" | python3 -c "import sys, json; data=json.load(sys.stdin); print(json.dumps(data, indent=2)); sys.exit(0 if data.get('ok') is True else 1)"
 
           echo "APK successfully uploaded to Telegram."
