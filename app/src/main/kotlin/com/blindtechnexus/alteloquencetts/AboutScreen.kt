@@ -99,6 +99,20 @@ fun AboutScreen(onBack: () -> Unit) {
 				onRefused = { notice = noEmail }
 			)
 
+			SectionHeading(text = stringResource(R.string.about_updates_heading), horizontal = 0.dp)
+			Paragraph(text = stringResource(R.string.about_updates))
+			// What the last answer was, said as a sentence rather than as a bar:
+			// the state of the check is a fact about the app, and the only way
+			// anybody without sight can be told it is in words. It is put above
+			// the button that asks so that the answer is read first, which is the
+			// order a person wants it in when they have just asked.
+			Paragraph(text = updateState())
+			ActionRow(
+				label = stringResource(R.string.about_update_check),
+				description = stringResource(R.string.about_update_check_description),
+				onClick = { Updater.check(force = true) }
+			)
+
 			SectionHeading(text = stringResource(R.string.about_build_heading), horizontal = 0.dp)
 			Paragraph(text = stringResource(R.string.about_version, BuildConfig.VERSION_NAME))
 		}
@@ -131,4 +145,48 @@ private fun Contact(
 		Text(text = action, style = MaterialTheme.typography.labelLarge)
 	}
 	Gap(24.dp)
+}
+
+/**
+ * What is known about the newest version, in one sentence.
+ *
+ * The dialog is where an update is offered, and it is not up by the time a
+ * person reaches this screen: so the row that asks again has to answer in its
+ * own words, and those words have to be the same facts the dialog was built on
+ * rather than a second reading of them. Everything here comes from
+ * [Updater.state] and [Updater.notice], which are the one place either of them
+ * is kept.
+ */
+@Composable
+private fun updateState(): String {
+	// Asked for by hand, answered by word of mouth: a button that leaves the
+	// sentence above it exactly as it was is a button that was not pressed, as
+	// far as anybody who cannot see the screen can tell. So the words the last
+	// manual ask found take precedence over the standing state, which would
+	// otherwise say "up to date" in the same breath it said it before.
+	return when (Updater.notice) {
+		Updater.Notice.UP_TO_DATE ->
+			stringResource(R.string.about_update_answer_current, BuildConfig.VERSION_NAME)
+		Updater.Notice.UNREACHABLE ->
+			stringResource(R.string.about_update_answer_unreachable)
+		Updater.Notice.NONE -> standingState()
+	}
+}
+
+/** What the last check found, in a sentence, when nobody has just asked. */
+@Composable
+private fun standingState(): String = when (val now = Updater.state) {
+	Updater.State.Idle -> stringResource(R.string.about_update_never_asked)
+	Updater.State.Checking -> stringResource(R.string.about_update_checking)
+	Updater.State.UpToDate -> stringResource(R.string.about_update_current, BuildConfig.VERSION_NAME)
+	Updater.State.Unreachable -> stringResource(R.string.about_update_unreachable)
+	Updater.State.Failed -> stringResource(R.string.update_failed)
+	is Updater.State.Available -> stringResource(R.string.about_update_found, now.version)
+	is Updater.State.Downloading -> if (now.total > 0) {
+		stringResource(R.string.update_progress_of, megabytes(now.done), megabytes(now.total))
+	} else {
+		stringResource(R.string.update_progress_so_far, megabytes(now.done))
+	}
+	is Updater.State.Ready -> stringResource(R.string.update_ready_title)
+	Updater.State.Dismissed -> stringResource(R.string.about_update_dismissed)
 }

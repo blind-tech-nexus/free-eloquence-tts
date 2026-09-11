@@ -1,6 +1,8 @@
 package com.blindtechnexus.alteloquencetts
 
 import android.media.AudioFormat
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.speech.tts.SynthesisCallback
 import android.speech.tts.SynthesisRequest
@@ -9,49 +11,160 @@ import android.speech.tts.TextToSpeechService
 import android.speech.tts.Voice
 import android.util.Log
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The engine Android talks to.
  *
- * onSynthesizeText runs on the framework's own synthesis thread and is the
- * only place an utterance is driven; onStop arrives from another thread and
- * does nothing but set the engine's abort flag, which is what unblocks the
- * read below.
+ * onSynthesizeText runs on the framework's own synthesis thread and is the only
+ * place an utterance is driven; onStop arrives from another thread and does
+ * nothing but set the engine's abort flag, which is what unblocks the read
+ * below.
+ *
+ * Everything about the middle of it is about one thing: a person who has asked
+ * for speech should not have to wait for it. The engine makes audio a hundred
+ * times faster than it can be heard, so every millisecond between the request
+ * and the first sample is this app's own doing -- text rewritten twice over,
+ * memory copied from one buffer into the next, a whole file's worth of
+ * dictionary taught while somebody waits to hear one word. What is done here is
+ * done once per utterance at most, and once is the plan:
+ *
+ * The text goes through the pipeline once and through [TextPieces] once, which
+ * is one pass over it, and the pieces name the text without cutting a string out
+ * for every word in it.
+ *
+ * The samples travel from the engine to the framework in one buffer, as big as
+ * the framework asks for and allocated once for the utterance, and the engine is
+ * not held back in slices any more than [Pacing] requires.
+ *
+ * The words a dictionary holds are taught when the service starts rather than in
+ * front of the first thing said ([warmUp]), and the file they live in is asked
+ * about once per utterance rather than read once per setting.
+ *
+ * A piece whose cut landed on a full stop ends where the engine would have
+ * paused anyway. A piece whose cut had to be made in the middle of a sentence is
+ * answered with the engine's own short-pause annotation, because four tenths of
+ * a second of silence every five hundred characters is what reading a chapter
+ * used to sound like, and none of it was in the text.
  */
 class EvvTtsService : TextToSpeechService() {
 
+	/** The engine instance, and the lock that says who may open, re-configure or
+	 *  close it. The samples are read without the lock, which is what lets a
+	 *  request for silence reach the thread waiting for them. */
+	@Volatile
 	private var engine: EvvEngine? = null
+
+	private val engineLock = Any()
+
 	private var settings: Settings? = null
 
 	@Volatile
 	private var stopped = false
 
+	@Volatile
 	private var appliedRevision = -1
 
 	/** When the user's dictionary file last changed, which is what says the
 	 *  words taught to the engine are still the words in the file. */
+	@Volatile
 	private var loadedWordsStamp = -1L
+
+	/** Utterances being driven right now, so that the idle timer can tell a
+	 *  quiet engine from a working one. */
+	private val speaking = AtomicInteger()
+
+	/** Whether the engine has just done something no setting explains, which is
+	 *  answered by giving the instance back rather than by guessing at a fix.
+	 *  Written on the synthesis thread and read when the utterance ends, so
+	 *  there is nothing to race about: see [afterAnUtterance]. */
+	@Volatile
+	private var engineIsSuspect = false
+
+	@Volatile
+	private var alive = false
 
 	private val wakeLockManager: PowerManager? by lazy { getSystemService(PowerManager::class.java) }
 	private var wakeLock: PowerManager.WakeLock? = null
+	private var tailLock: PowerManager.WakeLock? = null
 
 	private var keepAlive: KeepAlive? = null
 
+	private val main = Handler(Looper.getMainLooper())
+
+	/** Closes the engine after a stretch of nothing to say, which is the
+	 *  language's tables and the engine's own arena given back to the phone. */
+	private val closeIdle = Runnable {
+		val s = settings ?: return@Runnable
+		if (speaking.get() > 0) return@Runnable
+		synchronized(engineLock) {
+			if (speaking.get() > 0) return@synchronized
+			val held = engine
+			engine = null
+			appliedRevision = -1
+			if (held != null) {
+				held.close()
+				Log.i(TAG, "the engine gave back its memory after ${s.releaseEngineAfterS}s of nothing to say")
+			}
+		}
+	}
+
 	override fun onCreate() {
 		super.onCreate()
-		settings = Settings(this)
+		alive = true
+		instance = this
+		val made = Settings(this)
+		settings = made
 		keepAlive = KeepAlive(this)
-		settings?.let { keepAlive?.sync(it.persistentNotification) }
+		keepAlive?.sync(made.persistentNotification)
+		warmUp()
 	}
 
 	override fun onDestroy() {
 		super.onDestroy()
-		keepAlive?.sync(false)
+		alive = false
+		if (instance === this) instance = null
+		main.removeCallbacks(closeIdle)
+		keepAlive?.release()
 		keepAlive = null
-		engine?.close()
+		val held = engine
 		engine = null
-		wakeLock?.takeIf { it.isHeld }?.release()
+		held?.close()
+		releaseWakeLock(wakeLock)
 		wakeLock = null
+		releaseWakeLock(tailLock)
+		tailLock = null
+	}
+
+	/**
+	 * Opens the engine and teaches it the dictionary, before anything asks to
+	 * be heard.
+	 *
+	 * Three thousand words take about half a second to put into the engine, and
+	 * a service that starts when a screen reader starts is asked for its first
+	 * sentence a second or two later. Paid at the start that is nothing anybody
+	 * notices; paid in front of the first utterance it is half a second of
+	 * silence before "charging" or "unread message", which is exactly the wait
+	 * that reads as a slow engine.
+	 *
+	 * A language nobody has asked for is a wasted instance, so this opens the
+	 * one the build was made with -- the same one a caller with no language of
+	 * its own would be given -- and the service replaces it if a caller asks for
+	 * another. It runs on a thread of its own for the same reason it is worth
+	 * doing at all: the system is waiting to bind this service, and every tenth
+	 * of a second spent here is a tenth of a second before the phone will speak
+	 * at all.
+	 */
+	private fun warmUp() {
+		val language = EvvEngine.available.firstOrNull() ?: return
+		Thread({
+			if (!alive) return@Thread
+			synchronized(engineLock) {
+				if (!alive || speaking.get() > 0) return@synchronized
+				val made = ensureEngineLocked(language) ?: return@synchronized
+				settings?.let { applySettings(made, it) }
+			}
+		}, "evv-warm").also { it.isDaemon = true }.start()
 	}
 
 	// ---- languages -------------------------------------------------------
@@ -85,7 +198,8 @@ class EvvTtsService : TextToSpeechService() {
 
 	override fun onLoadLanguage(lang: String?, country: String?, variant: String?): Int {
 		val found = matchLanguage(lang, country) ?: return TextToSpeech.LANG_NOT_SUPPORTED
-		ensureEngine(found.first) ?: return TextToSpeech.LANG_NOT_SUPPORTED
+		val made = synchronized(engineLock) { ensureEngineLocked(found.first) }
+		if (made == null) return TextToSpeech.LANG_NOT_SUPPORTED
 		return found.second
 	}
 
@@ -138,7 +252,8 @@ class EvvTtsService : TextToSpeechService() {
 
 	override fun onLoadVoice(name: String?): Int {
 		val found = findVoice(name) ?: return TextToSpeech.ERROR
-		ensureEngine(found.first) ?: return TextToSpeech.ERROR
+		val made = synchronized(engineLock) { ensureEngineLocked(found.first) }
+		if (made == null) return TextToSpeech.ERROR
 		return TextToSpeech.SUCCESS
 	}
 
@@ -149,7 +264,15 @@ class EvvTtsService : TextToSpeechService() {
 
 	// ---- speaking --------------------------------------------------------
 
-	private fun ensureEngine(language: Int): EvvEngine? {
+	/**
+	 * The instance to speak in, made if it is not there.
+	 *
+	 * The caller holds [engineLock]. A caller that has been asked for a second
+	 * language has the first one closed first, which is the one moment the
+	 * engine's memory is worth more than the next few milliseconds of waiting
+	 * for it.
+	 */
+	private fun ensureEngineLocked(language: Int): EvvEngine? {
 		val held = engine
 		if (held != null && held.language == language) return held
 		held?.close()
@@ -168,10 +291,10 @@ class EvvTtsService : TextToSpeechService() {
 	}
 
 	/** Teaching a few thousand words costs about half a second, so it happens
-	 *  when the file changes rather than whenever any setting does. The check
-	 *  is the file's own stamp, which is cheap enough to make on every
-	 *  utterance, so a word added on the dictionary screen is heard the next
-	 *  time anything is spoken without restarting the service. */
+	 *  when the file changes rather than whenever any setting does. The check is
+	 *  the file's own stamp, which is two reads of a directory entry, so a word
+	 *  added on the dictionary screen is heard the next time anything is spoken
+	 *  without restarting the service. */
 	private fun loadWords(target: EvvEngine) {
 		val file = UserDictionary.file(this)
 		val stamp = if (file.exists()) file.lastModified() else -1L
@@ -184,9 +307,31 @@ class EvvTtsService : TextToSpeechService() {
 		loadedWordsStamp = stamp
 	}
 
-	override fun onStop() {
+	override fun onStop() = stopSpeakingNow()
+
+	/** Brings the utterance being spoken to an end.
+	 *
+	 * Two doors lead here: the framework's own stop, which arrives as
+	 * [onStop], and the button on the keep-alive notification, which is the
+	 * only way to be heard again quickly on a phone whose reader is halfway
+	 * through a paragraph and whose app is on the other side of a lock screen.
+	 * Nothing outside a speech service can reach the samples already handed to
+	 * Android, so what is reachable is the wait: the flag takes the next turn
+	 * of the pump away, which is the last thing that owes the framework a
+	 * finish, and the abort is what makes a read that is sitting on the engine
+	 * answer now rather than at the end of its own patience.
+	 *
+	 * It is deliberately not [stopSelf]: that would take the process's engine
+	 * away with it, and the next request for speech would be answered by a
+	 * phone that has to make the voice again from nothing.
+	 */
+	internal fun stopSpeakingNow() {
 		stopped = true
-		engine?.stop()
+		val held = engine
+		if (held != null) {
+			runCatching { held.stop() }
+				.onFailure { Log.e(TAG, "the abort did not reach the engine", it) }
+		}
 	}
 
 	override fun onSynthesizeText(request: SynthesisRequest?, callback: SynthesisCallback?) {
@@ -197,37 +342,59 @@ class EvvTtsService : TextToSpeechService() {
 			callback.error(TextToSpeech.ERROR_SERVICE)
 			return
 		}
-		// The keep-alive follows the setting, so a switch moved on the battery
-		// screen is in force the next time anything is spoken.
-		keepAlive?.sync(s.persistentNotification)
-		// The voice is whichever the settings screen says, not whichever the
-		// caller named, so the name only decides the language. It is asked
-		// first: a caller that set a voice and then speaks with an empty or
-		// foreign locale -- automation apps and TTS routers do -- has still
-		// named the language. Failing that, the locale decides it; failing
-		// both, the first language the engine has is better than silence,
-		// which is what refusing a router's nameless request used to give.
-		val wanted = findVoice(request.voiceName)
-		val found = matchLanguage(request.language, request.country)
-		val language = wanted?.first ?: found?.first ?: EvvEngine.available.firstOrNull()
-		if (language == null) {
-			callback.error(TextToSpeech.ERROR_NOT_INSTALLED_YET)
-			return
+		speaking.incrementAndGet()
+		main.removeCallbacks(closeIdle)
+		try {
+			// The keep-alive follows the setting, so a switch moved on the
+			// battery screen is in force the next time anything is spoken.
+			keepAlive?.sync(s.persistentNotification)
+			// The voice is whichever the settings screen says, not whichever the
+			// caller named, so the name only decides the language. It is asked
+			// first: a caller that set a voice and then speaks with an empty or
+			// foreign locale -- automation apps and TTS routers do -- has still
+			// named the language. Failing that, the locale decides it; failing
+			// both, the first language the engine has is better than silence,
+			// which is what refusing a router's nameless request used to give.
+			val wanted = findVoice(request.voiceName)
+			val found = matchLanguage(request.language, request.country)
+			val language = wanted?.first ?: found?.first ?: EvvEngine.available.firstOrNull()
+			if (language == null) {
+				callback.error(TextToSpeech.ERROR_NOT_INSTALLED_YET)
+				return
+			}
+			val target = synchronized(engineLock) {
+				val made = ensureEngineLocked(language)
+				if (made != null && s.revision != appliedRevision) applySettings(made, s)
+				made
+			}
+			if (target == null) {
+				callback.error(TextToSpeech.ERROR_SERVICE)
+				return
+			}
+			say(target, request, callback, s)
+		} finally {
+			speaking.decrementAndGet()
+			afterAnUtterance(s)
 		}
-		val target = ensureEngine(language)
-		if (target == null) {
-			callback.error(TextToSpeech.ERROR_SERVICE)
-			return
-		}
-		if (s.revision != appliedRevision) applySettings(target, s)
+	}
+
+	/** Everything that happens once the text is in hand: the settings that are
+	 *  re-sent with every utterance, the road the text goes down, and the
+	 *  samples on their way out. */
+	private fun say(
+		target: EvvEngine,
+		request: SynthesisRequest,
+		callback: SynthesisCallback,
+		s: Settings
+	) {
 		// Re-sent every time rather than once, because it is the one setting
 		// with no way of telling whether something else has moved it.
 		target.setAbbreviations(s.abbreviations)
-		loadWords(target)
+		synchronized(engineLock) { loadWords(target) }
 		// The rate and pitch a client asks for are scaled onto the voice,
-		// unless the settings say this app's own are to be forced over them:
-		// a screen reader that has set a rate is asking for that rate, and
-		// this is the one place its asking is listened to or not.
+		// unless the settings say this app's own are to be forced over them: a
+		// screen reader that has set a rate is asking for that rate, and this is
+		// the one place its asking is listened to or not.
 		if (!s.forceRate) target.setRatePercent(request.speechRate)
 		if (!s.forcePitch) target.setPitchPercent(request.pitch)
 		// Volume is the engine's own parameter and no client's number ever
@@ -253,68 +420,183 @@ class EvvTtsService : TextToSpeechService() {
 			// running dry. So the opening is made lazily, below.
 			val opening = Opening(callback, target.sampleRateHz)
 			val pace = Pace(target.sampleRateHz * BYTES_PER_SAMPLE)
+			val buffer = ByteArray(callback.maxBufferSize.coerceIn(MIN_CHUNK, MAX_CHUNK))
 			// Piece by piece, so that asking for silence waits out a piece
-			// rather than the whole message: the engine cannot abandon what it
-			// is saying. Pauses are shortened after the split rather than
-			// before it: the annotation sits in front of the full stop, and a
-			// piece boundary is found by looking at the end of a word.
+			// rather than the whole message: the engine cannot abandon what it is
+			// saying. Pauses are shortened after the split rather than before
+			// it: the annotation sits in front of the full stop, and a piece
+			// boundary is found by looking at the end of a word.
 			val prosody = Prosody.prefix(s.phrasePrediction)
-			val pieces = TextPieces.split(text)
-			for ((at, raw) in pieces.withIndex()) {
+			val pieces = TextPieces.pieces(text)
+			val lead = Pacing.leadFor(s.speechLeadMs, s.runAheadOnLongText, text.length, pieces.size)
+			for ((at, piece) in pieces.withIndex()) {
 				if (stopped) break
-				val piece = prosody + Pauses.apply(raw, s.pauses, at == pieces.lastIndex)
-				if (!target.speak(piece)) {
-					Log.e(TAG, "the engine refused ${piece.length} characters")
-					callback.error(TextToSpeech.ERROR_SYNTHESIS)
+				val last = at == pieces.lastIndex
+				var audio = prosody + Pauses.apply(piece.text, s.pauses, last)
+				// A boundary the text did not ask for is no reason to stop for
+				// four tenths of a second: the pieces of one utterance run on
+				// into each other, so the gap the engine leaves at the end of
+				// one is a pause nobody wrote.
+				if (piece.forced && !last) audio += Pauses.AT_A_BOUNDARY
+				if (!target.speak(audio)) {
+					Log.e(TAG, "the engine refused ${audio.length} characters")
+					// A refusal is the engine saying it will not take this
+					// text, which the framework has to be told rather than
+					// left to wait for.
+					if (opening.began) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
 					return
 				}
-				if (!pump(target, callback, pace, opening)) {
-					remember(pace)
-					return
+				when (pump(target, callback, pace, opening, buffer, s.engineSilenceMs, lead)) {
+					Pump.Next -> Unit
+					Pump.Over -> {
+						remember(pace)
+						finish(callback, opening)
+						return
+					}
+					Pump.Gone -> {
+						remember(pace)
+						return
+					}
 				}
 			}
 			remember(pace)
-			// Every utterance owes the framework a start and a finish, even one
-			// the engine answered with no samples at all -- text that the
-			// settings reduced to nothing. A callback left with neither is a
-			// client that waits for ever and goes quiet, and the quiet is what
-			// was reported when another engine such as AutoTTS asked here.
-			if (opening.began) {
-				callback.done()
-			} else if (!stopped) {
-				if (opening.open()) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
-			}
+			finish(callback, opening)
 		} finally {
 			releaseWakeLock(lock)
 		}
 	}
 
-	/** Hands one piece's samples on as they arrive, and answers whether the
-	 *  caller may go on to the next. */
-	private fun pump(target: EvvEngine, callback: SynthesisCallback, pace: Pace, opening: Opening): Boolean {
-		val size = callback.maxBufferSize.coerceIn(MIN_CHUNK, MAX_CHUNK)
-		val buffer = ByteArray(size)
+	/**
+	 * Every utterance owes the framework a start and a finish, even one the
+	 * engine answered with no samples at all -- text that the settings reduced
+	 * to nothing. A callback left with neither is a client that waits for ever
+	 * and goes quiet, and the quiet is what was reported when another engine
+	 * such as AutoTTS asked here.
+	 */
+	private fun finish(callback: SynthesisCallback, opening: Opening) {
+		if (opening.began) {
+			callback.done()
+		} else if (!stopped) {
+			if (opening.open()) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
+		}
+	}
+
+	/** What one piece ended with: the engine may go on, the utterance is over,
+	 *  or the framework has stopped taking samples and owes nobody a finish. */
+	private enum class Pump { Next, Over, Gone }
+
+	/** Hands one piece's samples on as they arrive, and says what the caller
+	 *  should do next. */
+	private fun pump(
+		target: EvvEngine,
+		callback: SynthesisCallback,
+		pace: Pace,
+		opening: Opening,
+		buffer: ByteArray,
+		silenceMs: Int,
+		leadMs: Long
+	): Pump {
 		while (!stopped) {
-			val n = target.read(buffer)
-			if (n <= 0) break
+			val n = target.read(buffer, silenceMs)
+			if (n == TIMED_OUT) {
+				// The engine has gone quiet in the middle of a piece. Whatever
+				// made it, the rest of this message is not coming either, and
+				// every piece after it would pay the same wait -- so the
+				// utterance ends here, out loud in the log, with what has been
+				// heard already said and the framework told that it is over.
+				Log.e(TAG, "the engine went silent after ${pace.handedMs()}ms of audio")
+				// Stopping it is not politeness towards an engine that has
+				// nothing to say. An utterance the engine is still working on
+				// holds the thread that runs it, and the next piece waits for
+				// that thread to be free -- so an engine left to finish what
+				// nobody is waiting for any more is a phone whose next request
+				// for speech arrives behind the one that was given up on.
+				target.stop()
+				// And whatever made it go silent is not mended by asking it
+				// again: the instance is given back as soon as this utterance is
+				// over, so the next one opens a fresh one. A second of the
+				// reader's patience, against a voice that stays quiet for the
+				// rest of the day.
+				engineIsSuspect = true
+				return Pump.Over
+			}
+			if (n <= 0) return Pump.Next
 			if (!opening.open()) {
 				target.stop()
-				return false
+				return Pump.Gone
 			}
-			if (callback.audioAvailable(buffer, 0, n) != TextToSpeech.SUCCESS) {
-				// The framework has torn the callback down already, so done()
-				// is neither wanted nor listened to.
+			if (!deliver(callback, buffer, n)) {
 				target.stop()
-				return false
+				return Pump.Gone
 			}
 			pace.handed(n)
-			hold(pace)
+			if (!hold(pace, leadMs)) return Pump.Over
 		}
-		return true
+		return Pump.Next
+	}
+
+	/**
+	 * Hands one run of samples to the framework, and answers whether it took
+	 * them.
+	 *
+	 * It answers no for two reasons that want different answers. A callback that
+	 * has been torn down is an utterance that is over, and the speech stops
+	 * here; a full buffer in a reader that is still playing is a momentary
+	 * thing, and dropping the samples on the floor would be losing words for
+	 * nothing. So the second is waited out, and the first is noticed at once
+	 * because the flag that says so has been set before it matters.
+	 */
+	private fun deliver(callback: SynthesisCallback, buffer: ByteArray, n: Int): Boolean {
+		var tries = 0
+		while (!stopped) {
+			if (callback.audioAvailable(buffer, 0, n) == TextToSpeech.SUCCESS) return true
+			if (++tries >= DELIVER_TRIES) return false
+			try {
+				Thread.sleep(DELIVER_WAIT_MS)
+			} catch (stopping: InterruptedException) {
+				Thread.currentThread().interrupt()
+				return false
+			}
+		}
+		return false
 	}
 
 	private fun remember(pace: Pace) {
 		if (pace.handedMs() > mostAudioHandedMs) mostAudioHandedMs = pace.handedMs()
+	}
+
+	/** What happens in the pause after an utterance: the CPU held a little
+	 *  longer when that was asked for, and the engine given back when it has
+	 *  been quiet long enough. */
+	private fun afterAnUtterance(s: Settings) {
+		if (engineIsSuspect) {
+			engineIsSuspect = false
+			main.removeCallbacks(closeIdle)
+			main.post(closeIdle)
+		}
+		if (s.wakeLock && s.wakeLockTailMs > 0) {
+			val held = tailLock
+			if (held == null) {
+				val made = wakeLockManager?.newWakeLock(
+					PowerManager.PARTIAL_WAKE_LOCK, "$TAG:wake:tail"
+				)?.apply {
+					setReferenceCounted(false)
+					// The timeout is the release. A lock the system takes back
+					// at the end of the wait is a lock that cannot be forgotten
+					// because the next utterance never came.
+					runCatching { acquire(s.wakeLockTailMs.toLong()) }
+				}
+				tailLock = made
+			} else {
+				runCatching { if (held.isHeld) held.release() }
+				runCatching { held.acquire(s.wakeLockTailMs.toLong()) }
+			}
+		}
+		val after = s.releaseEngineAfterS
+		if (after > 0) {
+			main.removeCallbacks(closeIdle)
+			main.postDelayed(closeIdle, after * 1000L)
+		}
 	}
 
 	// ---- keeping the CPU awake ------------------------------------------
@@ -335,39 +617,44 @@ class EvvTtsService : TextToSpeechService() {
 	}
 
 	private fun releaseWakeLock(lock: PowerManager.WakeLock?) {
-		lock?.takeIf { it.isHeld }?.release()
+		lock?.takeIf { it.isHeld }?.let { runCatching { it.release() } }
 	}
 
 	/**
-	 * Waits until the audio already handed over has nearly caught up.
+	 * Waits until the audio already handed over has nearly caught up, and
+	 * answers whether the piece after it is still wanted.
 	 *
-	 * This engine is far faster than the speech it makes -- a second and a
-	 * third of audio comes out in twelve milliseconds -- and Android takes
-	 * every byte of it without complaint and queues it. So a reader swiping
-	 * quickly has five or six items synthesised and queued while the first is
-	 * still being spoken, and when it then asks for silence the whole queue
-	 * goes, which is items that were never heard at all. Running no further
-	 * ahead than [LEAD_MS] keeps at most one utterance in flight, so silence
-	 * arrives where the reader actually is.
+	 * This engine is far faster than the speech it makes, and Android queues
+	 * every byte of it, so a reader swiping quickly has five or six items
+	 * synthesised and waiting while the first is still being spoken -- and when
+	 * it then asks for silence, the whole of that goes, which is items that were
+	 * never heard at all. Running no further ahead than [leadMs] keeps at most
+	 * one utterance in flight, so silence arrives where the reader actually is.
 	 *
-	 * The wait is in slices so that a stop is noticed at once rather than at
-	 * the end of it.
+	 * How far ahead that is belongs to the message rather than to the engine,
+	 * which is what [Pacing] works out: tight for the line of a list somebody is
+	 * swiping through, wide for the paragraph nobody is going to interrupt
+	 * between two of its own sentences.
+	 *
+	 * The wait is in slices so that a stop is noticed at once rather than at the
+	 * end of it.
 	 */
-	private fun hold(pace: Pace) {
+	private fun hold(pace: Pace, leadMs: Long): Boolean {
 		while (!stopped) {
-			val ahead = pace.ahead() - LEAD_MS
-			if (ahead <= 0) return
+			val ahead = pace.ahead() - leadMs
+			if (ahead <= 0) return true
 			try {
 				Thread.sleep(minOf(ahead, SLICE_MS))
 			} catch (stopping: InterruptedException) {
 				Thread.currentThread().interrupt()
-				return
+				return false
 			}
 		}
+		return false
 	}
 
-	/** Tells the framework an utterance has begun, once, and not before there
-	 *  is something to hear. [began] answers whether it was ever told, which is
+	/** Tells the framework an utterance has begun, once, and not before there is
+	 *  something to hear. [began] answers whether it was ever told, which is
 	 *  what decides whether it is owed a finish. */
 	private class Opening(private val callback: SynthesisCallback, private val rateHz: Int) {
 		var began = false
@@ -380,8 +667,8 @@ class EvvTtsService : TextToSpeechService() {
 		}
 	}
 
-	/** How far the audio handed over has run ahead of the time it takes to
-	 *  play it. */
+	/** How far the audio handed over has run ahead of the time it takes to play
+	 *  it. */
 	private class Pace(private val bytesPerSecond: Int) {
 		private val from = System.nanoTime()
 		private var bytes = 0L
@@ -396,6 +683,12 @@ class EvvTtsService : TextToSpeechService() {
 	}
 
 	internal companion object {
+		/** The service to speak to, while one is running. Nothing else in the
+		 *  app can ask a bound service to be quiet, which is why the reference
+		 *  is here and why it is cleared the moment the service is not. */
+		@Volatile
+		var instance: EvvTtsService? = null
+
 		/** The most audio, in milliseconds, that any one utterance has handed
 		 *  over since this was last cleared. Nothing in the app reads it. It is
 		 *  what lets a test say the engine is not running ahead of the speech,
@@ -407,12 +700,31 @@ class EvvTtsService : TextToSpeechService() {
 
 		const val TAG = "alteloquencetts"
 		const val MIN_CHUNK = 1024
-		const val MAX_CHUNK = 8192
+		const val MAX_CHUNK = 65536
 		const val BYTES_PER_SAMPLE = 2
-		/** How much audio may sit ahead of the speech, so that the track never
-		 *  runs dry while the engine is held back. */
-		const val LEAD_MS = 300L
-		const val SLICE_MS = 50L
+
+		/** What [EvvNative.read] answers when the engine has gone quiet rather
+		 *  than finished, which is the difference between a piece that ended and
+		 *  a message that has to be given up on. */
+		const val TIMED_OUT = -2
+
+		/** How much audio may sit ahead of the speech by default. The setting on
+		 *  the battery screen says so, and this is the answer when nobody has
+		 *  changed it: see [Pacing]. */
+		const val LEAD_MS = Pacing.DEFAULT_MS.toLong()
+
+		/** How long a wait for the speech to catch up is slept in one go. It is
+		 *  what bounds how long a request for silence can take, so it is kept
+		 *  well under the lead. */
+		const val SLICE_MS = 25L
+
+		/** How often, and how many times, the framework is asked again for room.
+		 *  A buffer that will not take another run of samples is nearly always
+		 *  one that is full, and the next moment it is not is the next one to
+		 *  ask in. */
+		const val DELIVER_TRIES = 200
+		const val DELIVER_WAIT_MS = 25L
+
 		/** The longest an utterance may hold the wake lock before the system
 		 *  takes it back, as a ceiling rather than a course. */
 		const val WAKELOCK_TIMEOUT_MS = 10 * 60 * 1000L

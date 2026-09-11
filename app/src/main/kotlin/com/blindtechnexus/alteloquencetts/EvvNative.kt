@@ -28,8 +28,14 @@ internal object EvvNative {
 	external fun speak(handle: Long, text: ByteArray): Boolean
 
 	/** Fills [dst] with PCM bytes. Answers 0 at the end of the utterance and
-	 *  -1 when it was stopped or something went wrong. */
-	external fun read(handle: Long, dst: ByteArray): Int
+	 *  -1 when it was stopped or something went wrong.
+	 *
+	 *  [timeoutMs] is how long to wait for samples that are not coming. The
+	 *  engine is asked for silence by a flag rather than by a call, so the
+	 *  only thing that can bring a hung one back is a wait that ends; without
+	 *  one the framework's synthesis thread sits in here for the rest of the
+	 *  day, and every later request for speech is behind it. */
+	external fun read(handle: Long, dst: ByteArray, timeoutMs: Int): Int
 
 	external fun stop(handle: Long)
 

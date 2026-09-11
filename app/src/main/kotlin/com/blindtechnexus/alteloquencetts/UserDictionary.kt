@@ -22,9 +22,16 @@ object UserDictionary {
 
 	private const val NAME = "words.dic"
 
-	fun file(context: Context): File {
-		val into = DirectBoot.dictionaries(context)
-		into.mkdirs()
+	/** The file the words live in. Nothing is created here: the service asks
+	 *  for this on every utterance to decide whether the words it taught are
+	 *  still the words in the file, and a directory made on every utterance is
+	 *  a system call for nothing. */
+	fun file(context: Context): File = File(DirectBoot.dictionaries(context), NAME)
+
+	/** [file], with the directory that holds it made. What the dictionary
+	 *  screen goes through when it has something to write. */
+	fun fileForWriting(context: Context): File {
+		val into = DirectBoot.dictionariesReady(context)
 		return File(into, NAME)
 	}
 
@@ -52,7 +59,7 @@ object UserDictionary {
 				append('\n')
 			}
 		}
-		file(context).writeText(body)
+		fileForWriting(context).writeText(body)
 		true
 	} catch (unwritable: Exception) {
 		false

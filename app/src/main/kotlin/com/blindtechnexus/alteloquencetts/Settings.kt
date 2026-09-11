@@ -41,6 +41,19 @@ class Settings(context: Context) {
 		prefs.registerOnSharedPreferenceChangeListener(watcher)
 	}
 
+	/** Takes the listener off the preferences.
+	 *
+	 *  Worth saying out loud because it is the one thing about this class that
+	 *  is easy to get wrong: the preferences are cached by the system for the
+	 *  life of the process, so an instance made for the length of one visit to a
+	 *  screen and never unhooked is a listener the process holds for ever, and a
+	 *  screen that is opened and left a hundred times a day leaks a hundred of
+	 *  them. Whoever holds one for the life of the process -- the service, and
+	 *  the settings model -- has nothing to give back. */
+	fun close() {
+		prefs.unregisterOnSharedPreferenceChangeListener(watcher)
+	}
+
 	var voice: Int
 		get() = prefs.getInt(KEY_VOICE, 0).coerceIn(0, Eci.PRESET_NAMES.lastIndex)
 		set(value) = prefs.edit().putInt(KEY_VOICE, value).apply()
@@ -80,15 +93,82 @@ class Settings(context: Context) {
 		set(value) = prefs.edit().putInt(KEY_CAPITAL_MODE, value.coerceIn(CapitalLetters.NONE, CapitalLetters.PITCH)).apply()
 
 	/** Whether the keep-alive notification holds the engine in the foreground,
-	 *  so Android leaves it running in the background. */
+	 *  so Android leaves it running in the background.
+	 *
+	 * The notification belongs to the app rather than to the speech service,
+	 * which is what lets it stay up when nothing is bound to the engine: see
+	 * [KeepAliveService]. */
 	var persistentNotification: Boolean
 		get() = prefs.getBoolean(KEY_PERSISTENT_NOTIFICATION, false)
 		set(value) = prefs.edit().putBoolean(KEY_PERSISTENT_NOTIFICATION, value).apply()
+
+	/** Whether the app and its notification come back by themselves after the
+	 *  phone has been restarted. The engine itself is started by the system
+	 *  when a screen reader asks for it, but the process the keep-alive lives
+	 *  in does not come back on its own, and a voice that has to be waited for
+	 *  after a reboot is a voice that is not there when it is needed. */
+	var startOnBoot: Boolean
+		get() = prefs.getBoolean(KEY_START_ON_BOOT, false)
+		set(value) = prefs.edit().putBoolean(KEY_START_ON_BOOT, value).apply()
+
+	/** Whether the notification carries a button that stops whatever is being
+	 *  spoken. The engine has no other way of being silenced from outside the
+	 *  app that is asking to be heard, and a reader that has started a
+	 *  paragraph has to be reached through that app to stop it. */
+	var notificationStopButton: Boolean
+		get() = prefs.getBoolean(KEY_NOTIFICATION_STOP, true)
+		set(value) = prefs.edit().putBoolean(KEY_NOTIFICATION_STOP, value).apply()
 
 	/** Whether the CPU is kept awake while an utterance is being made. */
 	var wakeLock: Boolean
 		get() = prefs.getBoolean(KEY_WAKE_LOCK, false)
 		set(value) = prefs.edit().putBoolean(KEY_WAKE_LOCK, value).apply()
+
+	/** How long the CPU stays awake after the last thing said, in
+	 *  milliseconds. A screen reader speaks in bursts -- a swipe, a line, a
+	 *  swipe -- and on the devices that sleep between one and the next the
+	 *  wake-up is charged to the second line. Holding the processor for a
+	 *  moment after the first costs a little battery and takes the wait out
+	 *  of the burst. Nought is not holding it at all, which is what the
+	 *  switch above has always meant. */
+	var wakeLockTailMs: Int
+		get() = prefs.getInt(KEY_WAKE_LOCK_TAIL, 0).coerceAtLeast(0)
+		set(value) = prefs.edit().putInt(KEY_WAKE_LOCK_TAIL, value.coerceAtLeast(0)).apply()
+
+	/** How long an engine instance is kept after the last thing it said, in
+	 *  seconds, before it is closed to give its memory back. The engine holds
+	 *  the language's tables for as long as it lives, which is worth it while
+	 *  a reader is being used and is not worth it an hour after anybody
+	 *  stopped swiping. Nought is never, which is how it has always been. */
+	var releaseEngineAfterS: Int
+		get() = prefs.getInt(KEY_RELEASE_ENGINE, 0).coerceAtLeast(0)
+		set(value) = prefs.edit().putInt(KEY_RELEASE_ENGINE, value.coerceAtLeast(0)).apply()
+
+	/** How far the samples handed to the framework may run ahead of the
+	 *  speech, in milliseconds. See [Pacing]: it is the one number that
+	 *  decides both how much of a queue a reader has to lose when it asks for
+	 *  silence and how much of a long message the engine is allowed to get on
+	 *  with at once. */
+	var speechLeadMs: Int
+		get() = prefs.getInt(KEY_SPEECH_LEAD, Pacing.DEFAULT_MS).coerceIn(Pacing.MIN_MS, Pacing.MAX_MS)
+		set(value) = prefs.edit().putInt(KEY_SPEECH_LEAD, value.coerceIn(Pacing.MIN_MS, Pacing.MAX_MS)).apply()
+
+	/** Whether a message long enough to be a paragraph is synthesised as fast
+	 *  as the engine can make it, rather than at the pace it is heard at. */
+	var runAheadOnLongText: Boolean
+		get() = prefs.getBoolean(KEY_RUN_AHEAD, true)
+		set(value) = prefs.edit().putBoolean(KEY_RUN_AHEAD, value).apply()
+
+	/** How long the engine may go on making no samples at all before the
+	 *  utterance is given up on, in milliseconds. An engine that has hung is
+	 *  worse than an engine that has finished the sentence early: the
+	 *  framework's synthesis thread is the one thing waiting on it, and while
+	 *  it waits every later request for speech is behind it, which is a phone
+	 *  that has gone quiet for the rest of the day. */
+	var engineSilenceMs: Int
+		get() = prefs.getInt(KEY_ENGINE_SILENCE, DEFAULT_SILENCE_MS).coerceIn(MIN_SILENCE_MS, MAX_SILENCE_MS)
+		set(value) = prefs.edit()
+			.putInt(KEY_ENGINE_SILENCE, value.coerceIn(MIN_SILENCE_MS, MAX_SILENCE_MS)).apply()
 
 	/** Whether what the user does on the battery screen is written to the
 	 *  system log, so a stopped engine can be traced back to what changed. */
@@ -234,7 +314,41 @@ class Settings(context: Context) {
 		const val KEY_PERSISTENT_NOTIFICATION = "persistent_notification"
 		const val KEY_WAKE_LOCK = "wake_lock"
 		const val KEY_TRACK_ACTIONS = "track_actions"
+		const val KEY_START_ON_BOOT = "start_on_boot"
+		const val KEY_NOTIFICATION_STOP = "notification_stop"
+		const val KEY_WAKE_LOCK_TAIL = "wake_lock_tail_ms"
+		const val KEY_RELEASE_ENGINE = "release_engine_after_s"
+		const val KEY_SPEECH_LEAD = "speech_lead_ms"
+		const val KEY_RUN_AHEAD = "run_ahead_on_long_text"
+		const val KEY_ENGINE_SILENCE = "engine_silence_ms"
 		const val DEFAULT_SAMPLE_RATE = 11025
+
+		/** What the engine is allowed to go silent for before the utterance is
+		 *  given up on. Fifteen seconds is already a hundred times what the
+		 *  engine takes to make a piece of speech, so getting here means
+		 *  something has gone wrong rather than that the text is long. */
+		const val DEFAULT_SILENCE_MS = 15000
+		const val MIN_SILENCE_MS = 1000
+		const val MAX_SILENCE_MS = 300000
+
+		/** The place every setting in this app is written down. Named once,
+		 *  because the file is what it is and a second copy of its name would
+		 *  be a second thing to get wrong. */
+		fun store(context: Context): SharedPreferences = DirectBoot.storage(context)
+			.getSharedPreferences("${context.packageName}_preferences", Context.MODE_PRIVATE)
+
+		/** One value, read without an instance of this class.
+		 *
+		 *  A [Settings] registers a listener on the preferences and holds it
+		 *  for as long as the process does, which suits a screen and is a leak
+		 *  in a notification built every few seconds. Anything that asks once
+		 *  in passing asks through here. */
+		fun flag(context: Context, key: String, default: Boolean): Boolean =
+			store(context).getBoolean(key, default)
+
+		/** The same for a number. */
+		fun number(context: Context, key: String, default: Int): Int =
+			store(context).getInt(key, default)
 
 		/** The eight. The order they have always been written and read in,
 		 *  which is not the order the screen shows them in: [BEHAVIOURS] is

@@ -19,10 +19,12 @@ No warranty. See LICENSE, and read the part about language data before redistrib
 * All eight voice parameters: speed, pitch, inflection, head size, roughness, breathiness, volume, gender.
 * Speech rate and pitch from the system settings, with a switch to force this app's own over them.
 * Symbol pronunciation: all, most, some, a custom list, or none.
-* Pronunciation dictionaries.
+* Pronunciation dictionaries, and a user dictionary file.
+* A notification that keeps the engine in the foreground whether or not anything is bound to it, a stop button on it, and the same after a restart for whoever wants it: see [Keeping the voice alive](#keeping-the-voice-alive-when-nothing-is-speaking).
+* An update channel, checked in the background on every launch, that ends at Android's own installer: see [Updates](#updates).
 * Android 6 and later. arm64-v8a, armeabi-v7a, x86_64.
 
-`app/src/androidTest` runs on a device. 85 checks.
+`app/src/androidTest` runs on a device: 151 test methods, of which the ones that matter most are the ones that never start a sound.
 
 ## Turning it on
 
@@ -41,7 +43,13 @@ git submodule update --init --recursive
 export ANDROID_NDK_HOME=/path/to/ndk
 ./gradlew installDebug
 ./gradlew connectedDebugAndroidTest
+./gradlew assembleDebugAndroidTest
 ```
+
+The middle line needs a phone. The last one does not: it compiles the instrumented
+tests against the app and stops there, which is the half of the check that can be
+done where no device is plugged in -- and it is worth doing, because a test that
+has never been compiled is a test that has never been read.
 
 First build is about four minutes per ABI. Most of that is the engine writing the language rules out of text with Python and decompiling them into roughly 13 MB of C, which is per language rather than per ABI, so only the first ABI pays for it.
 
@@ -66,13 +74,35 @@ Four, in one activity. A screen reader announces the departure and the arrival o
 
 *Eloquence settings*, which is also what the gear beside the engine in the system settings opens, straight to it rather than by way of the main screen. Six sections, each a heading TalkBack can jump to: voice customization, voice behaviors, voice quality, voice dictionary settings, other settings, and a voice to test the lot of them on.
 
-*About us*: what the app is, who made it -- Sujan Rai, with the Blind Tech Nexus team -- and three ways to reach them, as buttons rather than as addresses to copy down. WhatsApp on [w.me/9779708340992](https://w.me/9779708340992) for bugs, feedback and feature requests, the Telegram channel on [t.me/blindtechnexus](https://t.me/blindtechnexus) for update broadcasts and the rest, and blindtechvisionary@gmail.com for an answer that can be relied on, with the address and a subject already filled in. Each asks twice, by link and then by the app's own scheme, and a link that nothing on the device can follow says so out loud rather than doing nothing at all.
+*About us*: what the app is, who made it -- Sujan Rai, with the Blind Tech Nexus team -- and three ways to reach them, as buttons rather than as addresses to copy down. WhatsApp on [wa.me/9779708340992](https://wa.me/9779708340992) for bugs, feedback and feature requests, the Telegram channel on [t.me/blindtechnexus](https://t.me/blindtechnexus) for update broadcasts and the rest, and blindtechvisionary@gmail.com for an answer that can be relied on, with the address and a subject already filled in. Each asks by link first and then by the app's own scheme, and a link that nothing on the device can follow says so out loud rather than doing nothing at all. WhatsApp is asked three ways rather than two: `wa.me` is the address WhatsApp hands out, `api.whatsapp.com/send?phone=` is what `wa.me` redirects to and is the one that works on a browser that will not follow the redirect, and `whatsapp://send?phone=` is for a device with the app and no browser. The address this used to name, `w.me`, is the short form of a signed-in desktop session and answers a phone with a page saying it cannot be loaded there, which is what the button labelled "Contact on WhatsApp" arrived at. The `<queries>` block in the manifest names the messaging apps for the same reason: Android 11 and later answer "nothing is installed" to an app that has not said what it is looking for, and a scheme that cannot be resolved is a button that does nothing.
 
 ### Battery optimization
 
 The exemption from battery optimization is required rather than wanted. A text-to-speech engine is idle almost all the time and has to answer at once when it is not, which is the shape every battery policy is written to kill: Doze takes the alarms away from anything not exempt, and the manufacturer policies stacked on top of it are stricter than Doze and do not say what they did. Refused, the voice stops in the middle of a sentence, or does not start at all once the phone has been still for a while, and nothing inside the app can see that happening in order to explain it.
 
 So the app asks on every launch: whatever has not been given is asked for in `onCreate`, the notification permission first and then the exemption, and the welcome screen does the same asking on the way past it. The reason is said in words of the app's own before handing over to a system screen that is a yes or no with nothing said about it. The asking happens once per launch rather than on every resume, because a dialog that comes back every time the app is resumed is a dialog that gets refused every time the app is resumed. The answer is read again on every resume, since the screens that grant it are not ours. Two of them are tried: the one that asks about this app by name, and the list of every app for a build whose manufacturer took the first one out.
+
+### Keeping the voice alive when nothing is speaking
+
+The notification is what holds the engine up, and for most of the life of a phone it is holding it up while nothing is bound to the engine at all. That is the reason it is not posted by the engine: a text-to-speech service belongs to the system, which starts it when a reader binds and destroys it when the last reader lets go, so a notification posted by the engine is a notification that goes away precisely when it is wanted. `KeepAliveService` exists for that one job. It is a foreground service of the same special-use type, started when the switch is turned on, started again by `EngineReceiver` on `LOCKED_BOOT_COMPLETED`, `BOOT_COMPLETED` and `MY_PACKAGE_REPLACED` when "Start again after a restart" is on, and stopped when the switch is turned off. `KeepAlive`, which the engine still owns, now only holds the notification itself while the app's service cannot: Android 12 and later refuse a foreground service started by a service the system bound, and when that happens the engine posts it for as long as it is bound and hands it over the moment the other one is up.
+
+The two post one notification, with one id and one channel, because a foreground service is only as protected as the notice that says it is and two ids are two notifications to explain. Both look for it every three seconds and put it back when anything has taken it away, and both stop when the setting is turned off -- the check re-reads the setting rather than trusting what it was told at the start, so a switch moved on the battery screen is obeyed within three seconds by whatever was holding the notification up.
+
+The notification carries the app's only control that works while the engine is speaking and the screen is off. Its button sends a broadcast naming this app's own receiver, which asks the running service to be quiet: nothing outside a speech service can reach the audio a service has already handed to Android. It is off by default and it is a switch on this screen, because a button on a notification that does something the person using the phone did not ask for is a worse default than no button. Tapping the notification itself opens the battery screen rather than the launcher, which is where the answer to "why did my voice stop" lives.
+
+### The numbers on the battery screen
+
+Four of them, and every one is a trade the app cannot make on anybody's behalf. They are choice buttons rather than sliders, because the values that mean anything are a handful of measured ones and a bar between them invites a number that has no meaning.
+
+*Hold the CPU a little longer*, from not at all to a minute: how long the wake lock is kept after the last sample has been handed over. The tail of an utterance is where a device that has decided to sleep catches one.
+
+*How far ahead of the speech*, 150 to 4000 milliseconds. This engine makes audio about five hundred times faster than it can be heard (see [Speed](#speed)), so with nothing to hold it back a reader swiping through a list has six items synthesized and waiting and loses five of them when it interrupts. A short lead loses fewer; a long one lets a paragraph finish the moment it was asked for, which is what *Run ahead on long text* is for -- four seconds for anything the length of a paragraph and whatever was set for anything shorter.
+
+*Give the engine back when idle*, from never to an hour. An engine instance holds its language's tables and its arena; making a fresh one costs a second or so before the first syllable, which is why the default is a quarter of an hour rather than either end.
+
+*Give up after the engine goes silent*, five seconds to five minutes. The read that has nothing to wait for any more is what ends an utterance rather than the thread that asked for it: without a ceiling, an engine that has stopped answering holds the framework's synthesis thread for the rest of the day and the phone's voice with it.
+
+Below them, one paragraph says what is in force now -- whether the app's own service is holding the notification and whether notifications are allowed at all -- because the question this screen is opened to answer is not what was set but whether it is working.
 
 ## Settings
 
@@ -151,6 +181,28 @@ A screen reader wants each string to cut off the one before it. Two things make 
 The engine cannot abandon an utterance, so long text is handed over in sentence-sized pieces and asking for silence waits out a piece rather than a whole paragraph. The rule for where a piece may end is openevv's, ported from its NVDA driver: a sentence end is free because the engine already pauses there, anywhere else costs about 0.4s, so a full stop has to prove itself. A word with a dot inside it is an abbreviation, and a short capitalised word is an initial.
 
 Synthesis is paced to real time. The engine produces 1.3s of audio in 12 ms and Android queues every byte of it, so a reader swiping quickly would leave five or six items queued while the first is still playing and lose all of them when it asks for silence. Output runs no more than 300 ms ahead. Measured on the same text: 2229 ms of audio handed over in 700 ms of speaking without that limit, about 1000 ms with it.
+
+## Updates
+
+The app asks one URL when it starts: [the release channel](https://raw.githubusercontent.com/blind-tech-nexus/remote-data-json/main/alt-eloquence-tts-update.json), a file with two values in it, `version` and `url`. The version is compared with this build's `versionName` and, if they are not the same, a dialog says so in the words "A new version (%s) is available to download" and asks whether to fetch it now. "Later" is not a setting: the same version is not offered again for the rest of that run of the app and is asked about again the next time it opens. `UpdateTest` holds the rules of the answer: that the same version is no update, that a missing or blank value is no update, and that an address that is not https is no update -- the download is an executable, so a plain http address is refused rather than warned about, since a person halfway through a download is not in a position to judge a certificate.
+
+Nothing is installed by the app. When the bytes are down the file is validated as a package by the package manager, and the installer is asked with a one-read grant on a content URI into the cache. On Android 8 and later that needs this app to have been allowed to install apps at all, which is not the app's to grant: the allowance is asked for on the system's screen, and the file waits in the cache until it has been given. The dialog while bytes are arriving says how many have arrived, in megabytes, and has a button that breaks the read off and deletes the partial file; the bar under the number is for whoever can see it, and nothing that has to be heard depends on it.
+
+The asking is one `HttpURLConnection` and one `JSONObject`, on a thread of its own, with no library. The About screen says what it found whenever it is asked from there, which is the only case in which an answer of "you are up to date" or "nothing could be reached" is worth a sentence; on the way into a launch, silence is the right answer to both.
+
+## Speed
+
+The engine is not slow. A host build of the same C the app ships, on the same single thread the app uses, said 4003 characters of English to 8.5 megabytes of audio -- 386 seconds of speech -- in 0.74 seconds, 520 times real time. So every part of "the engine is slow" that was real was somewhere else, and the four that were found are worth writing down because none of them is where a person reading the code would look first.
+
+**The engine's output buffer was too small.** Samples leave this engine one buffer at a time, and the buffer's size is asked of `eciSetOutputBuffer` in samples: the engine fills it, hands it over on the callback, and only then makes the next. At 1024 samples -- two kilobytes -- a long paragraph is four thousand callbacks, each one a lock, a copy into a malloc, a `SetByteArrayRegion` and a wake-up on the other side, and the same again in reverse for the read. Measured on the same text, going to 4096 samples took the whole utterance from 0.961 s to 0.742 s and the reads from 4156 to 1039; 16384 was faster again, but the first byte of audio arrived 2 milliseconds later and the ring has to be a multiple of the buffer, so four thousand and ninety-six samples is where it stays. The latency cost is one buffer's worth of synthesis and it shows: 12.0 ms to 12.3 ms. What was not worth doing is the reverse, a bigger buffer for a shorter first pause -- the first byte arrives when the *first* buffer is full, so past about a third of a second of speech the wait is heard.
+
+**A piece boundary was a full stop.** Long text is handed over in pieces, because the engine cannot abandon an utterance and a cancel has to wait for something. Where the text has a sentence end, the piece goes there and it is free -- measured exactly: 482,449 samples whole, the same 482,449 in six pieces. Where it has none within reach, the cut lands on whitespace and the engine puts the pause of a full stop there anyway: 0.39 seconds, measured, every boundary. Text with no full stops in it is the ordinary case for a chapter of a book or a page of a table, and thirty seconds of silence in ten minutes of speech was what "slow" meant. `TextPieces` now marks a cut it had to make as forced and the service ends such a piece with the engine's own `` `p1 `` annotation, which measured 0.15 s for two boundaries instead of 0.78: the pause is not prosody, it is an artefact of where a splitter happened to cut, and it can be taken back out.
+
+**The engine's own log was on.** `g_iTTSLogLevel` in openevv's port layer starts at 9, and at 4 and above the engine's internals write a line to stderr for a mutex that did not answer the way they expected. That path is not taken on the shipping arrangement, where one thread drives the engine and one reads it, so nothing was changed here -- but it is why a harness that runs the engine differently looks twenty per cent slower than the app is, and it is worth knowing before the next measurement of this kind is believed.
+
+**Everything before the first syllable was done on every utterance.** The text used to be copied through a chain of five passes that each built new strings, the pronunciation dictionary was re-taught per utterance, and the settings were compared field by field. Now the emoji, symbol, fix-up and code-set passes each make one scan of the characters and each answer with the original string when they have nothing to change; `WesternText` keeps a table that says whether a character needs work at all, so ordinary English is a copy rather than a lookup per character; a dictionary is re-taught when the file's last-modified time has moved and not otherwise; and the settings carry a revision that goes up on any write, so an unchanged configuration is one integer comparison. What the reader waits for is the first frame of audio, which is 12 ms of this engine's time on a desktop build and is the only number in the whole utterance that cannot be shared out over the rest of it.
+
+The engine is also kept between utterances rather than made and thrown away each time, which is what the "give the engine back when idle" number on the battery screen is for; and one read takes everything the engine has written rather than everything a caller happened to ask for, so a 4096-sample frame crosses the boundary between the two threads in one go whatever the size of the buffer the framework offered.
 
 ## Wear OS
 

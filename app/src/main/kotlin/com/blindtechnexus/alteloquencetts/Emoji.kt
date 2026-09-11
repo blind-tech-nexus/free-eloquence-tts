@@ -190,62 +190,173 @@ object Emoji {
 		"🌍" to "earth"
 	)
 
-	/** The typed emoticons, longest first so ":-)" is read before ")". */
+	/** One typed emoticon: what to look for, what to say for it, and the
+	 *  character it starts with. */
+	private class Pattern(val finder: Regex, val name: String, val lead: Char)
+
+	/** The typed emoticons, longest first so ":-)" is read before ")". The
+	 *  lead is the first character of the pattern, which is what lets [apply]
+	 *  leave the whole set alone -- twenty-four searches over the text --
+	 *  whenever no character that could begin one of them is present. */
 	private val EMOTICONS = listOf(
-		Regex("(?<![A-Za-z0-9]):-\\)(?![A-Za-z0-9])") to "smiley face",
-		Regex("(?<![A-Za-z0-9]):\\)(?![A-Za-z0-9])") to "smiley face",
-		Regex("(?<![A-Za-z0-9]):-D(?![A-Za-z0-9])") to "big grin",
-		Regex("(?<![A-Za-z0-9]):D(?![A-Za-z0-9])") to "big grin",
-		Regex("(?<![A-Za-z0-9]);-\\)(?![A-Za-z0-9])") to "wink",
-		Regex("(?<![A-Za-z0-9]);\\)(?![A-Za-z0-9])") to "wink",
-		Regex("(?<![A-Za-z0-9]):-\\((?![A-Za-z0-9])") to "frowning face",
-		Regex("(?<![A-Za-z0-9]):\\((?![A-Za-z0-9])") to "frowning face",
-		Regex("(?<![A-Za-z0-9]):-P(?![A-Za-z0-9])") to "tongue out",
-		Regex("(?<![A-Za-z0-9]):P(?![A-Za-z0-9])") to "tongue out",
-		Regex("(?<![A-Za-z0-9]):'\\((?![A-Za-z0-9])") to "crying face",
-		Regex("(?<![A-Za-z0-9]):-\\|(?![A-Za-z0-9])") to "neutral face",
-		Regex("(?<![A-Za-z0-9]):\\|(?![A-Za-z0-9])") to "neutral face",
-		Regex("(?<![A-Za-z0-9]):-/(?![A-Za-z0-9])") to "confused face",
-		Regex("(?<![A-Za-z0-9]):/(?![A-Za-z0-9])") to "confused face",
-		Regex("(?<![A-Za-z0-9])XD(?![A-Za-z0-9])") to "laughing",
-		Regex("(?<![A-Za-z0-9])<3(?![A-Za-z0-9])") to "heart",
-		Regex("(?<![A-Za-z0-9])</3(?![A-Za-z0-9])") to "broken heart",
-		Regex("(?<![A-Za-z0-9])8-\\)(?![A-Za-z0-9])") to "cool",
-		Regex("(?<![A-Za-z0-9])B-\\)(?![A-Za-z0-9])") to "cool",
-		Regex("(?<![A-Za-z0-9])O_O(?![A-Za-z0-9])") to "surprised face",
-		Regex("(?<![A-Za-z0-9])\\^_\\^(?![A-Za-z0-9])") to "happy face",
-		Regex("(?<![A-Za-z0-9])T_T(?![A-Za-z0-9])") to "crying face",
-		Regex("(?<![A-Za-z0-9])>_<(?![A-Za-z0-9])") to "frustrated face"
+		Pattern(Regex("(?<![A-Za-z0-9]):-\\)(?![A-Za-z0-9])"), "smiley face", ':'),
+		Pattern(Regex("(?<![A-Za-z0-9]):\\)(?![A-Za-z0-9])"), "smiley face", ':'),
+		Pattern(Regex("(?<![A-Za-z0-9]):-D(?![A-Za-z0-9])"), "big grin", ':'),
+		Pattern(Regex("(?<![A-Za-z0-9]):D(?![A-Za-z0-9])"), "big grin", ':'),
+		Pattern(Regex("(?<![A-Za-z0-9]);-\\)(?![A-Za-z0-9])"), "wink", ';'),
+		Pattern(Regex("(?<![A-Za-z0-9]);\\)(?![A-Za-z0-9])"), "wink", ';'),
+		Pattern(Regex("(?<![A-Za-z0-9]):-\\((?![A-Za-z0-9])"), "frowning face", ':'),
+		Pattern(Regex("(?<![A-Za-z0-9]):\\((?![A-Za-z0-9])"), "frowning face", ':'),
+		Pattern(Regex("(?<![A-Za-z0-9]):-P(?![A-Za-z0-9])"), "tongue out", ':'),
+		Pattern(Regex("(?<![A-Za-z0-9]):P(?![A-Za-z0-9])"), "tongue out", ':'),
+		Pattern(Regex("(?<![A-Za-z0-9]):'\\((?![A-Za-z0-9])"), "crying face", ':'),
+		Pattern(Regex("(?<![A-Za-z0-9]):-\\|(?![A-Za-z0-9])"), "neutral face", ':'),
+		Pattern(Regex("(?<![A-Za-z0-9]):\\|(?![A-Za-z0-9])"), "neutral face", ':'),
+		Pattern(Regex("(?<![A-Za-z0-9]):-/(?![A-Za-z0-9])"), "confused face", ':'),
+		Pattern(Regex("(?<![A-Za-z0-9]):/(?![A-Za-z0-9])"), "confused face", ':'),
+		Pattern(Regex("(?<![A-Za-z0-9])XD(?![A-Za-z0-9])"), "laughing", 'X'),
+		Pattern(Regex("(?<![A-Za-z0-9])<3(?![A-Za-z0-9])"), "heart", '<'),
+		Pattern(Regex("(?<![A-Za-z0-9])</3(?![A-Za-z0-9])"), "broken heart", '<'),
+		Pattern(Regex("(?<![A-Za-z0-9])8-\\)(?![A-Za-z0-9])"), "cool", '8'),
+		Pattern(Regex("(?<![A-Za-z0-9])B-\\)(?![A-Za-z0-9])"), "cool", 'B'),
+		Pattern(Regex("(?<![A-Za-z0-9])O_O(?![A-Za-z0-9])"), "surprised face", 'O'),
+		Pattern(Regex("(?<![A-Za-z0-9])\\^_\\^(?![A-Za-z0-9])"), "happy face", '^'),
+		Pattern(Regex("(?<![A-Za-z0-9])T_T(?![A-Za-z0-9])"), "crying face", 'T'),
+		Pattern(Regex("(?<![A-Za-z0-9])>_<(?![A-Za-z0-9])"), "frustrated face", '>')
 	)
+
+	/** Every character any emoticon can begin with, as a lookup rather than as
+	 *  a search. */
+	private val LEADS = BooleanArray(0x10000).apply {
+		for (pattern in EMOTICONS) this[pattern.lead.code] = true
+	}
+
+	/** The emoji whose name is one code unit, and the ones whose name is a
+	 *  surrogate pair. Two tables rather than one keyed by strings, because
+	 *  making a key per character is an allocation per character -- a
+	 *  paragraph of ordinary words is a few thousand objects made to be thrown
+	 *  away, and that is what made this the slowest thing on the way to an
+	 *  utterance. */
+	private val BY_CHAR = HashMap<Char, String>()
+	private val BY_PAIR = HashMap<String, String>()
+
+	/** Whether a character is one the table names, answered from a table of
+	 *  its own so that the scan over the text never has to build a key. */
+	private val NAMED = BooleanArray(0x10000)
 
 	private val SPACES = Regex(" {2,}")
 
-	/** [text] with emoji and emoticons named when [read] is on, and taken out
-	 *  when it is off. */
+	init {
+		for ((key, name) in NAMES) {
+			when (key.length) {
+				1 -> {
+					BY_CHAR[key[0]] = name
+					NAMED[key[0].code] = true
+				}
+				2 -> BY_PAIR[key] = name
+				// Nothing in the table is longer, and a key that was would
+				// silently never be found, so it is said about instead.
+				else -> error("an emoji name is " + key.length + " code units long")
+			}
+		}
+	}
+
+	/**
+	 * [text] with emoji and emoticons named when [read] is on, and taken out
+	 * when it is off.
+	 *
+	 * The text is scanned once, and the work is only done for the text that
+	 * asks for it. A paragraph of ordinary words has no emoji in it, no
+	 * character an emoticon could begin with, no double space and nothing to
+	 * trim: it comes back as the very string that went in. What used to happen
+	 * to it was a rebuilt copy, and twenty-four regular expressions run over
+	 * that copy, on the way to every utterance -- which is the sort of cost
+	 * that reads as "the engine is slow" and has nothing to do with the engine.
+	 */
 	fun apply(text: String, read: Boolean): String {
 		if (text.isEmpty()) return text
-		val withEmoji = StringBuilder(text.length + 16)
+		var emoji = false
+		var emoticon = false
+		var spacing = false
 		var at = 0
 		while (at < text.length) {
 			val c = text[at]
-			val here = if (c.isHighSurrogate() && at + 1 < text.length && text[at + 1].isLowSurrogate()) {
-				text.substring(at, at + 2)
-			} else {
-				c.toString()
+			if (!spacing) {
+				val doubled = at > 0 && text[at - 1] == ' ' && c == ' '
+				val edge = (at == 0 || at == text.length - 1) && c.isWhitespace()
+				spacing = doubled || edge
 			}
-			val name = NAMES[here]
-			if (name != null) {
-				withEmoji.append(if (read) " $name " else " ")
-			} else {
-				withEmoji.append(here)
+			if (!emoji) {
+				emoji = c.isHighSurrogate() || (c.code < NAMED.size && NAMED[c.code])
 			}
-			at += here.length
+			if (!emoticon && c.code < LEADS.size && LEADS[c.code]) emoticon = true
+			if (emoji && emoticon && spacing) break
+			at++
 		}
-		val flat = SPACES.replace(withEmoji.toString(), " ")
-		var out = flat
-		for ((pattern, name) in EMOTICONS) {
-			out = pattern.replace(out, if (read) " $name " else " ")
+		if (!emoji && !emoticon && !spacing) return text
+		val built = if (emoji) name(text, read) else collapse(text)
+		if (!emoticon) return built
+		var out = built
+		for (pattern in EMOTICONS) {
+			if (!out.contains(pattern.lead)) continue
+			out = pattern.finder.replace(out, if (read) " " + pattern.name + " " else " ")
 		}
-		return SPACES.replace(out, " ").trim()
+		return if (out == built) built else SPACES.replace(out, " ").trim()
+	}
+
+	/** [text] with every emoji the table knows turned into its name, or into
+	 *  nothing, and with runs of spaces run into one as they go. */
+	private fun name(text: String, read: Boolean): String {
+		val out = StringBuilder(text.length + 16)
+		var at = 0
+		while (at < text.length) {
+			val c = text[at]
+			if (c.isHighSurrogate() && at + 1 < text.length && text[at + 1].isLowSurrogate()) {
+				val pair = BY_PAIR[text.substring(at, at + 2)]
+				if (pair == null) {
+					append(out, c)
+					append(out, text[at + 1])
+				} else {
+					append(out, if (read) " " + pair + " " else " ")
+				}
+				at += 2
+				continue
+			}
+			val known = BY_CHAR[c]
+			if (known == null) append(out, c) else append(out, if (read) " " + known + " " else " ")
+			at++
+		}
+		return out.toString().trim()
+	}
+
+	/** [text] with runs of two or more spaces down to one, and the ends
+	 *  trimmed -- which is all there is to do when there is no emoji in it. */
+	private fun collapse(text: String): String {
+		if (!hasDoubleSpace(text)) return text.trim()
+		val out = StringBuilder(text.length)
+		for (c in text) {
+			if (c == ' ' && out.isNotEmpty() && out[out.length - 1] == ' ') continue
+			out.append(c)
+		}
+		return out.toString().trim()
+	}
+
+	private fun hasDoubleSpace(text: String): Boolean {
+		for (at in 1 until text.length) {
+			if (text[at] == ' ' && text[at - 1] == ' ') return true
+		}
+		return false
+	}
+
+	/** Into [out], keeping runs of spaces down to one space as they go. That
+	 *  is what the whole rebuilt text used to be handed to a regular
+	 *  expression for afterwards, and it costs nothing to do on the way. */
+	private fun append(out: StringBuilder, c: Char) {
+		if (c == ' ' && out.isNotEmpty() && out[out.length - 1] == ' ') return
+		out.append(c)
+	}
+
+	private fun append(out: StringBuilder, more: String) {
+		for (c in more) append(out, c)
 	}
 }

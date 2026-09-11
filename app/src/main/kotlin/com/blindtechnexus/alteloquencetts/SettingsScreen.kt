@@ -451,8 +451,14 @@ private fun symbolDescriptionOf(mode: Int): Int = when (mode) {
  * the control's own announcement it would be heard again every single time the
  * control is reached, and there would be no way past it.
  */
+/** One setting: the sentence that says what it is for, and the control.
+ *
+ * Shared with the battery screen, which has settings of its own and the same
+ * reason for a description above each: a control's label does not carry its
+ * own meaning, and a description folded into the label would be said again on
+ * every visit with no way past it. */
 @Composable
-private fun Described(description: String?, control: @Composable () -> Unit) {
+internal fun Described(description: String?, control: @Composable () -> Unit) {
 	Column(
 		modifier = Modifier
 			.fillMaxWidth()
@@ -487,7 +493,7 @@ private fun Described(description: String?, control: @Composable () -> Unit) {
  * see it.
  */
 @Composable
-private fun ValueButton(shown: String, onClick: () -> Unit) {
+internal fun ValueButton(shown: String, onClick: () -> Unit) {
 	val change = stringResource(R.string.action_click_to_change)
 	OutlinedButton(
 		onClick = onClick,
@@ -648,7 +654,7 @@ private fun SliderDialog(
  * chosen one marked, and choosing one of them applies it at once and closes.
  */
 @Composable
-private fun ChoiceButton(
+internal fun ChoiceButton(
 	title: String,
 	shown: String,
 	options: List<String>,
@@ -779,7 +785,7 @@ private fun SymbolDialog(state: SettingsModel, onDismiss: () -> Unit) {
 
 /** A label, a switch, and the state of it, as one control. */
 @Composable
-private fun SwitchRow(
+internal fun SwitchRow(
 	label: String,
 	checked: Boolean,
 	onChange: (Boolean) -> Unit,
@@ -813,7 +819,7 @@ private fun SwitchRow(
  *  rather than a row that behaves like one, so that its label needs no
  *  semantics of ours to be announced as one. */
 @Composable
-private fun ActionRow(label: String, description: String?, onClick: () -> Unit) {
+internal fun ActionRow(label: String, description: String?, onClick: () -> Unit) {
 	Described(description = description) {
 		OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
 			Text(text = label, style = MaterialTheme.typography.labelLarge)

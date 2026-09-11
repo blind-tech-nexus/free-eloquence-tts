@@ -39,17 +39,38 @@ object WesternText {
 
 	private const val HIGHEST = 0xFF
 
+	/** Which characters [PLAIN] has an equivalent for, so that the scan for
+	 *  "is there anything to do here" is a read rather than a hash lookup per
+	 *  character. */
+	private val MAPPED = BooleanArray(0x10000).apply {
+		for (c in PLAIN.keys) this[c.code] = true
+	}
+
 	/**
 	 * The bytes to hand the engine, without a terminator: the native side adds
 	 * one, and a nought anywhere inside would end the text early, so there is
 	 * none in what comes back.
+	 *
+	 * Text that is already in the code set -- which is all of what a screen
+	 * reader reads out of prose, names and settings -- goes straight from one
+	 * array to the other. The general road below, which builds a second string
+	 * before turning it into bytes, only runs for the text that needs
+	 * something done to a character.
 	 */
 	fun encode(text: String): ByteArray {
+		if (needsNoHelp(text)) {
+			val direct = ByteArray(text.length)
+			for (at in text.indices) {
+				val c = text[at].code
+				direct[at] = if (c in 1..HIGHEST) c.toByte() else ' '.code.toByte()
+			}
+			return direct
+		}
 		val flat = StringBuilder(text.length)
 		var i = 0
 		while (i < text.length) {
 			val c = text[i]
-			val plain = PLAIN[c]
+			val plain = if (MAPPED[c.code]) PLAIN[c] else null
 			when {
 				plain != null -> flat.append(plain)
 				c.code == 0 -> flat.append(' ')
@@ -64,6 +85,17 @@ object WesternText {
 			out[n] = if (c in 1..HIGHEST) c.toByte() else ' '.code.toByte()
 		}
 		return out
+	}
+
+	/** Whether every character in [text] is one the code set has room for,
+	 *  as itself, which is the case that wants no builder and no second
+	 *  pass. */
+	private fun needsNoHelp(text: String): Boolean {
+		for (at in text.indices) {
+			val c = text[at]
+			if (c.code > HIGHEST || c.code == 0 || MAPPED[c.code]) return false
+		}
+		return true
 	}
 
 	/**

@@ -6,6 +6,10 @@ import android.provider.Settings
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -31,11 +35,85 @@ class SystemIntentsTest {
 	fun whatsAppIsTheNumberTheTeamGave() {
 		val ways = ExternalLinks.whatsAppWays()
 		assertEquals(Intent.ACTION_VIEW, ways[0].action)
-		assertEquals("https://w.me/${ExternalLinks.WHATSAPP_NUMBER}", ways[0].data.toString())
+		// wa.me rather than w.me. The short form is a session on a signed-in
+		// desktop and a web page that says it cannot be loaded on a phone
+		// otherwise, which is what the button used to arrive at.
+		assertEquals("https://wa.me/${ExternalLinks.WHATSAPP_NUMBER}", ways[0].data.toString())
+		// The address wa.me turns into, given on its own because a browser
+		// that will not follow the redirect still follows this one.
 		assertEquals(
-			"whatsapp://send?phone=${ExternalLinks.WHATSAPP_NUMBER}",
+			"https://api.whatsapp.com/send?phone=${ExternalLinks.WHATSAPP_NUMBER}",
 			ways[1].data.toString()
 		)
+		assertEquals(
+			"whatsapp://send?phone=${ExternalLinks.WHATSAPP_NUMBER}",
+			ways[2].data.toString()
+		)
+		// Every one of them carries the number in the same international form,
+		// with no plus: a plus in a query is read as a space by both of the web
+		// addresses, and the digits are the one part of a contact that nobody
+		// can correct afterwards.
+		for (way in ways) {
+			assertTrue(way.data.toString().contains(ExternalLinks.WHATSAPP_NUMBER))
+			assertFalse(way.data.toString().contains("+${ExternalLinks.WHATSAPP_NUMBER}"))
+		}
+	}
+
+	@Test
+	fun thePhoneMakersBatteryScreenEndsWithAndroidsOwn() {
+		// The names a manufacturer's screen has gone by are tried in order, and
+		// the last is Android's own list -- the answer for every device, and the
+		// reason this cannot end in a button that did nothing.
+		val candidates = ManufacturerScreens.candidates()
+		assertTrue(candidates.isNotEmpty())
+		assertEquals(
+			Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
+			candidates.last().intent.action
+		)
+		// Every one of them is asked for by name rather than by data, so none of
+		// them can end up naming somebody else's package: a screen of this app's
+		// own is asked for by [ManufacturerScreens.appDetails] instead, and that
+		// one does carry the package, which is what the next check is about.
+		for (candidate in candidates) {
+			assertNull(candidate.intent.data)
+			assertNotNull(candidate.intent.component)
+		}
+		assertEquals(
+			context.packageName,
+			ManufacturerScreens.appDetailsIntent(context).data?.lastPathSegment
+		)
+	}
+
+	@Test
+	fun thisAppIsWhereTheInstallerIsToldToLook() {
+		// The provider the update hands its file to, read out of the installed
+		// manifest rather than out of this file. The authority, the path and the
+		// name [Installer] builds have to agree, and a mismatch is an update
+		// that cannot be offered for installation at all.
+		val info = context.packageManager.getProviderInfo(
+			android.content.ComponentName(context.packageName, "androidx.core.content.FileProvider"),
+			0
+		)
+		assertEquals(Installer.authority(context), info.authority)
+		assertTrue(info.grantUriPermissions)
+		assertFalse(info.exported)
+		// And the one directory the provider publishes. Anything else is the
+		// IllegalArgumentException that [Installer.install] answers by refusing
+		// to start anything, so this is the difference between a download that
+		// can be installed and one that sits in the cache for nothing.
+		val file = java.io.File(context.cacheDir, "update/probe.apk")
+		try {
+			file.parentFile?.mkdirs()
+			file.writeBytes(ByteArray(4))
+			val uri = androidx.core.content.FileProvider.getUriForFile(
+				context, Installer.authority(context), file
+			)
+			assertEquals("content", uri.scheme)
+			assertEquals(Installer.authority(context), uri.authority)
+			assertTrue(uri.path!!.startsWith("/updates/"))
+		} finally {
+			file.delete()
+		}
 	}
 
 	@Test

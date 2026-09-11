@@ -136,14 +136,65 @@
 	<string name="battery_exemption_granted">Granted</string>
 	<string name="battery_exemption_not_granted">Not granted. Tap to allow it.</string>
 	<string name="battery_exemption_description">The one setting that matters most. Without the exemption Android puts the engine to sleep when the phone is idle, and the voice stops. Tap to open the system screen that grants it.</string>
+	<!-- What the notification is, and what it is worth. It stands whether or not
+	     anything is bound to the engine now, which is the whole of the point of
+	     it: the voice is wanted at the moment nobody has thought to open the app. -->
 	<string name="persistent_notification_label">Persistent notification</string>
-	<string name="persistent_notification_description">Keeps a notification showing while the engine is in use, which holds it in the foreground where Android does not kill it. The app checks every few seconds that the notification is still there and restores it if it is not.</string>
+	<string name="persistent_notification_description">Keeps one notification showing all the time, which holds the app in the foreground where Android does not put it to sleep. It stays whether or not the engine is being used, because a voice that has been stopped by the battery optimizer is worth nothing at the moment it is wanted. The app checks every few seconds that the notification is still there and puts it back if anything has taken it away.</string>
+	<string name="notification_stop_label">Stop button in the notification</string>
+	<string name="notification_stop_description">Puts a button on the notification that stops whatever is being said. It is the only control that works while the engine is speaking and the screen is off. The notification is put up again a few seconds after this is changed, which is when the button appears or goes.</string>
+	<string name="start_on_boot_label">Start again after a restart</string>
+	<string name="start_on_boot_description">Puts the notification back when the phone has been restarted, so that the voice is ready before the app has been opened. The notification is what there is to bring back, so turning this on turns that on too.</string>
+	<string name="battery_idle_heading">While the phone is idle</string>
+	<string name="battery_speaking_heading">While speaking</string>
+	<string name="battery_fault_heading">For finding a fault</string>
+<!-- The wake lock and the log, which are the two rows here that are not about
+	     Android deciding anything: one holds the processor and the other writes
+	     what was changed, and both are for a fault somebody has to find later. -->
 	<string name="wake_lock_label">Keep the CPU awake while speaking</string>
 	<string name="wake_lock_description">Holds the processor awake while an utterance is being made. On some devices the CPU sleeps mid sentence and the tail of the speech is lost.</string>
 	<string name="track_actions_label">Track your actions</string>
 	<string name="track_actions_description">Writes what you do on this screen to the system log, so a problem with the engine stopping can be traced back to what was changed.</string>
+	<string name="keep_alive_channel">Engine running</string>
+	<string name="keep_alive_channel_description">The notice that the speech engine is being kept in the foreground, and the button on it that stops the speech. Silencing it does not stop the voice, but it removes the one control that works while the screen is off.</string>
+	<string name="keep_alive_stop">Stop speaking</string>
 	<string name="keep_alive_title">Alt eloquence TTS is running</string>
 	<string name="keep_alive_text">The engine stays in the foreground so the voice keeps working in the background.</string>
+
+<!-- The numbers this screen offers. Nought means two different things, so it is
+	     named twice: no wait at all, and no limit at all. -->
+	<string name="battery_never">Not at all</string>
+	<string name="battery_forever">For ever</string>
+	<string name="battery_milliseconds">%1$d milliseconds</string>
+	<plurals name="battery_seconds">
+		<item quantity="one">%1$d second</item>
+		<item quantity="other">%1$d seconds</item>
+	</plurals>
+	<plurals name="battery_minutes">
+		<item quantity="one">%1$d minute</item>
+		<item quantity="other">%1$d minutes</item>
+	</plurals>
+	<string name="battery_value_is">%1$s (%2$s)</string>
+	<string name="wake_lock_tail_label">Hold the CPU a little longer</string>
+	<string name="wake_lock_tail_description">How long the processor is kept awake after the last of the speech has been handed over. The tail of an utterance is where a device that has decided to sleep catches one, and the wait is silent either way; it costs a little battery and it saves the end of a sentence.</string>
+	<string name="speech_lead_label">How far ahead of the speech</string>
+	<string name="speech_lead_description">The engine makes audio about a hundred times faster than it can be heard, so it is held back to this much ahead of what has been played. A shorter lead loses fewer words when a reader interrupts; a longer one is what lets a paragraph be finished in the moment it was asked for, so that the next thing asked for does not wait behind it. Three hundred milliseconds is what a screen reader wants.</string>
+	<string name="run_ahead_label">Run ahead on long text</string>
+	<string name="run_ahead_description">Lets the engine get four seconds ahead of the speech whenever a message is a paragraph rather than a line, whatever the lead above says. It holds the framework\'s own thread busy for longer, which is what a reader with a queue of items to say minds.</string>
+	<string name="engine_release_label">Give the engine back when idle</string>
+	<string name="engine_release_description">How long an instance of the engine is kept after the last thing it said, before its memory goes back to the phone. An engine that has just been made costs a second or so of the reader\'s patience on the next request for speech; one that is never given back holds tens of megabytes for the length of a day.</string>
+	<string name="engine_silence_label">Give up after the engine goes silent</string>
+	<string name="engine_silence_description">How long the engine may answer with nothing in the middle of an utterance before that utterance is taken to be over. It is the wait that keeps a stuck engine from holding the phone\'s voice still for the rest of the day. A short one cuts an utterance off if the phone is busy; a long one waits out anything.</string>
+	<string name="battery_manufacturer_open">Open this phone\'s background settings</string>
+	<string name="battery_android_open">Open Android\'s battery optimization list</string>
+	<string name="battery_manufacturer_description">Several makers put a screen of their own in front of Android\'s: one that closes background activity or refuses an app its start, and the exemption above does nothing against it. This opens whichever of those this phone has, and Android\'s own list if it has none.</string>
+	<string name="battery_no_screen">Nothing on this phone opened a screen for what may run in the background. Look under Battery and under Apps in the system settings instead.</string>
+	<string name="battery_boot_needs_notification">The persistent notification was turned on with it, because it is the thing that comes back.</string>
+	<string name="battery_now">At the moment: %1$s. Notifications are %2$s.</string>
+	<string name="battery_now_service">the notification is being held up by a service that exists for it, and it will be put back within a few seconds of anything taking it away</string>
+	<string name="battery_now_none">the notification is held up only while something is bound to the engine, which is when it matters least</string>
+	<string name="battery_now_allowed">allowed</string>
+	<string name="battery_now_refused">not allowed, so no notification can be shown at all</string>
 
 	<string name="section_other">Other settings</string>
 	<string name="pauses_label">Pauses</string>
@@ -178,7 +229,7 @@
 	<string name="about_title">About us</string>
 	<string name="about_app">Alt eloquence TTS is a free eloquence text to speech engine for Android and for Wear OS.</string>
 	<string name="about_accessibility">It is built for blind and low vision people. Every control on every screen is one stop for a screen reader, says what it is and what it is set to, and can be changed without leaving the screen.</string>
-	<string name="about_free">It is free, and it asks for no account, no payment and nothing from the network. The two permissions it asks for are notifications and an exemption from battery optimization, and both are about staying available while the phone is idle.</string>
+	<string name="about_free">It is free, and it asks for no account, no payment and nothing to sign in to. The one thing it does on the network is to ask which version of itself has been published, which carries nothing about you and can be left alone; the permissions it asks for are notifications and an exemption from battery optimization, and both are about staying available while the phone is idle.</string>
 	<string name="about_unofficial">It is a hobby project, and nobody\'s product. It is not from IBM, Nuance, Cerence or Google, and none of them have endorsed or reviewed it.</string>
 	<string name="about_developer_heading">Developers</string>
 	<string name="about_developer">Developed by Sujan Rai, with the Blind Tech Nexus team.</string>
@@ -194,6 +245,40 @@
 	<string name="about_build_heading">This build</string>
 	<string name="about_version">App version %1$s.</string>
 	<string name="about_unavailable">Nothing on this device can open %1$s.</string>
+
+	<!-- The update channel, and what it is worth to a person who cannot see a
+	     progress bar. The asking is done by itself on every start; the row here
+	     is for wanting to know now, and it answers whatever the answer is. -->
+	<string name="about_updates_heading">Updates</string>
+	<string name="about_updates">The app asks the release channel which version to be on when it starts, and says something only when this build is not it. The asking is one small file on a git host: no account, no address of yours, and nothing about this phone in it. Nothing is ever installed by the app itself -- the download ends at the system\'s own installer, which is where the decision is made.</string>
+	<string name="about_update_check">Check for updates</string>
+	<string name="about_update_check_description">Asks the release channel again now, and says what it found. It is asked by itself every time the app starts, so this is only for when you want to know now.</string>
+	<string name="about_update_never_asked">Nothing has been asked about updates yet.</string>
+	<string name="about_update_checking">Asking which the newest version is.</string>
+	<string name="about_update_current">This is the newest version (%1$s).</string>
+	<string name="about_update_found">A new version (%1$s) is available. The dialog that offers it is where the download starts; saying Later to it does not refuse it for ever, only for now.</string>
+	<string name="about_update_unreachable">Nothing could be reached, so nothing is known about whether there is a newer version.</string>
+	<string name="about_update_dismissed">Nothing is being downloaded.</string>
+	<string name="about_update_answer_current">You asked, and %1$s is the version the release channel stands behind.</string>
+	<string name="about_update_answer_unreachable">You asked, and nothing could be reached. The phone may be offline, or the release channel may not be answering.</string>
+
+	<!-- The dialogs an update turns into. -->
+	<string name="update_available_title">Update available</string>
+	<string name="update_available_message">A new version (%1$s) is available to download.</string>
+	<string name="update_download_question">Would you like to download it now?</string>
+	<string name="update_download">Download update</string>
+	<string name="update_later">Later</string>
+	<string name="update_downloading_title">Downloading the update</string>
+	<string name="update_progress_of">%1$s of %2$s downloaded</string>
+	<string name="update_progress_so_far">%1$s downloaded so far</string>
+	<string name="update_cancel">Cancel the download</string>
+	<string name="update_ready_title">The update is downloaded and ready to install</string>
+	<string name="update_nothing_to_install">The download did not leave anything that could be installed.</string>
+	<string name="update_refused">Nothing on this device will take the update for installation.</string>
+	<string name="update_failed">The download could not be finished. Nothing was installed.</string>
+	<string name="update_permission_title">Permission to install apps</string>
+	<string name="update_permission_message">Alt eloquence TTS is not allowed to install apps yet. Allow it on the system screen that has just been opened, then press Check for updates here and the download that is already finished will be offered for installation again.</string>
+	<string name="update_ok">Understood</string>
 
 	<!-- How a row speaks. A label and a value are one control and one stop, so
 	     both of these end up in the same node. -->

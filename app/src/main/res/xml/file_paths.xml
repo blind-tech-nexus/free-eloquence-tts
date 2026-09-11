@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Where the file provider will look, which is nowhere but the one directory
+     an update is downloaded into. The name is what a granted URI is called by,
+     and the path is relative to the cache, which the system is free to empty
+     once the install has been handed over. That is also what makes a
+     half-finished download a thing that costs the phone nothing to get rid of. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+	<cache-path name="updates" path="update/" />
+</paths>
