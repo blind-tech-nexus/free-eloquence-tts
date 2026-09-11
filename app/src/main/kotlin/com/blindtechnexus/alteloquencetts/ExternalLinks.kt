@@ -61,9 +61,29 @@ object ExternalLinks {
 	const val TELEGRAM_CHANNEL = "blindtechnexus"
 	const val EMAIL_ADDRESS = "blindtechvisionary@gmail.com"
 
-	/** For bugs, feedback and feature requests. */
+	/**
+	 * For bugs, feedback and feature requests.
+	 *
+	 * The address is `wa.me`, which is the link WhatsApp itself hands out, and
+	 * not `w.me`: that is the short form of the same thing only for a signed-in
+	 * desktop session, and opened on a phone with the app installed it goes to
+	 * WhatsApp's web page, which says it cannot be loaded there. A button
+	 * labelled "Contact on WhatsApp" that arrives at an error page is what this
+	 * address used to be, and it is the reason the other two are here as well.
+	 *
+	 * `wa.me` redirects to `api.whatsapp.com/send`, and both are given because
+	 * a device whose browser is old or blocked follows the redirect badly: the
+	 * direct api. address is the one that works when the short link does not.
+	 * The `whatsapp:` scheme is last rather than first, since a link the
+	 * browser can carry is worth more than one that needs the app to answer a
+	 * scheme not every build registers.
+	 *
+	 * The number is in international form with no plus, which is what both of
+	 * the web addresses want; a plus in the query is read as a space.
+	 */
 	fun whatsAppWays(): List<Intent> = listOf(
-		view("https://w.me/$WHATSAPP_NUMBER"),
+		view("https://wa.me/$WHATSAPP_NUMBER"),
+		view("https://api.whatsapp.com/send?phone=$WHATSAPP_NUMBER"),
 		view("whatsapp://send?phone=$WHATSAPP_NUMBER")
 	)
 

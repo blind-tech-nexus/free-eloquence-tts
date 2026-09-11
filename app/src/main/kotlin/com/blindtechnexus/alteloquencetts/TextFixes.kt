@@ -17,6 +17,10 @@ package com.blindtechnexus.alteloquencetts
  * This runs before Pauses and Prosody, and has to. Those add annotations like
  * `` `p1 ``, and a rule here that puts a space between a letter and a digit
  * would turn that into `` `p 1 ``, which the engine speaks rather than obeys.
+ *
+ * Each rule is asked first whether the text could hold anything it matches,
+ * because a rule that cannot has no reason to be run over a chapter of a book.
+ * The one scan that answers all five is cheaper than any one of them.
  */
 object TextFixes {
 
@@ -26,12 +30,33 @@ object TextFixes {
 	 */
 	fun apply(text: String): String {
 		if (text.isEmpty()) return text
+		var letter = false
+		var digit = false
+		var opener = false
+		var mark = false
+		var comma = false
+		var bracket = false
+		var at = 0
+		while (at < text.length) {
+			val c = text[at]
+			if (!letter) letter = c.isLetter()
+			if (!digit) digit = c in '0'..'9'
+			if (!opener) opener = c.code < OPENERS_AT.size && OPENERS_AT[c.code]
+			if (!mark) mark = c in MARKS
+			if (!comma) comma = c == ','
+			if (!bracket) bracket = c == '('
+			if (letter && digit && opener && mark && comma && bracket) break
+			at++
+		}
 		var out = text
-		out = BEFORE_A_DIGIT.replace(out, "$1 $2")
-		out = BEFORE_AN_OPENER.replace(out, "$1 $2")
-		out = LOOSE_S_SUFFIX.replace(out, "$1$2")
-		out = SPACE_BEFORE_A_MARK.replace(out, "$1$2")
-		out = GROUPED_THOUSANDS.replace(out) { it.value.replace(",", "") }
+		// A letter against a digit, which is the whole of the teamtalk5
+		// problem, and needs one of each to have anything to do.
+		if (letter && digit) out = BEFORE_A_DIGIT.replace(out, "$1 $2")
+		if (letter && opener) out = BEFORE_AN_OPENER.replace(out, "$1 $2")
+		// "books (s)" costs a third more than "books(s)".
+		if (bracket && letter) out = LOOSE_S_SUFFIX.replace(out, "$1$2")
+		if (mark) out = SPACE_BEFORE_A_MARK.replace(out, "$1$2")
+		if (comma && digit) out = GROUPED_THOUSANDS.replace(out) { it.value.replace(",", "") }
 		return out
 	}
 
@@ -48,6 +73,12 @@ object TextFixes {
 	 *  "abc )" costs twice as much. */
 	private val OPENERS = """~#${'$'}%^*({|\[<""" + "\u2022"
 
+	/** The same set as a lookup, so that the scan above can ask it a character
+	 *  at a time without searching a string. */
+	private val OPENERS_AT = BooleanArray(0x2030).apply {
+		for (c in OPENERS) if (c.code < size) this[c.code] = true
+	}
+
 	private val BEFORE_AN_OPENER = Regex("([A-Za-z]+)([" + Regex.escape(OPENERS) + "])")
 
 	/** "books (s)" back to "books(s)", which is a third shorter. */
@@ -56,6 +87,9 @@ object TextFixes {
 	/** The engine does not tolerate a space in front of a punctuation mark. The
 	 *  lookahead keeps decimals and thousands separators out of it. */
 	private val SPACE_BEFORE_A_MARK = Regex("""([A-Za-z]+|\d+|\W+)\s+([:.!;,?](?![A-Za-z]|\d))""")
+
+	/** The marks that rule can begin with, and the only reason to run it. */
+	private val MARKS = charArrayOf(':', '.', '!', ';', ',', '?')
 
 	/** A number grouped with commas around a round thousand, which the engine
 	 *  reads as "one comma hundred". The driver spells this out as four rules,

@@ -32,6 +32,11 @@ object Pauses {
 	 *  later, by which point this has already run. */
 	private const val MARKS = "-,.:;?!–—"
 
+	/** The same set, so that asking whether the last thing said was a mark is
+	 *  a lookup rather than a copy of the string and a fresh set made on
+	 *  every utterance of every piece. */
+	private val MARK_SET: Set<Char> = MARKS.toSet()
+
 	/** A mark that is really punctuation rather than part of a number: after a
 	 *  letter, digit or space, and before whitespace, a slash or the end. The
 	 *  third group takes a run of the same mark, so "wait..." is one pause. */
@@ -49,6 +54,23 @@ object Pauses {
 	private const val AT_THE_END = "`p100"
 
 	/**
+	 * The gap a piece boundary leaves that the text did not ask for.
+	 *
+	 * [TextPieces] has to cut long text somewhere, and the engine ends an
+	 * utterance with the pause it gives a full stop whether or not the text
+	 * there wanted one. Where the cut landed on a sentence end that is free;
+	 * where it did not, four tenths of a second of silence is inserted into
+	 * what the reader hears, every few hundred characters, for a reason that
+	 * has nothing to do with the text. This takes it back out again.
+	 *
+	 * It goes at the end of a piece rather than the start of the next, and it
+	 * is not the same thing as [AT_THE_END]: the audio of the pieces of one
+	 * utterance runs on into each other, so there is no playback boundary to
+	 * clip against and the pause can go all the way down.
+	 */
+	const val AT_A_BOUNDARY = " `p1"
+
+	/**
 	 * [text] with the pauses [mode] asks for. [last] says whether this is the
 	 * end of what was asked for, since the gap after that is the one
 	 * [END_ONLY] is about.
@@ -59,7 +81,15 @@ object Pauses {
 		if (mode == ALL) out = AT_A_MARK.replace(out, "$1 $BRIEF$2$3$4")
 		// The engine pauses at the end of an utterance whether or not anything
 		// there asked it to. A mark at the end has already been dealt with.
-		if (last && out.trimEnd().lastOrNull() !in MARKS.toSet()) out = "$out $AT_THE_END"
+		if (last && !endsWithMark(out)) out = "$out $AT_THE_END"
 		return out
+	}
+
+	/** Whether [text] already ends in one of the marks the engine pauses at,
+	 *  which is what says a pause of our own is not wanted on top of it. */
+	private fun endsWithMark(text: String): Boolean {
+		var at = text.length
+		while (at > 0 && text[at - 1].isWhitespace()) at--
+		return at > 0 && text[at - 1] in MARK_SET
 	}
 }

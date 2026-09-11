@@ -1,6 +1,7 @@
 package com.blindtechnexus.alteloquencetts
 
 import android.util.Log
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * One engine instance and the settings in force on it.
@@ -14,6 +15,9 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 
 	@Volatile
 	private var closed = false
+
+	/** How many threads are inside the native read right now. */
+	private val reading = AtomicInteger()
 
 	var sampleRateHz: Int = Eci.sampleRateHz(1)
 		private set
@@ -187,21 +191,88 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 		if (closed) false else EvvNative.speak(handle, WesternText.encode(text))
 	}
 
-	/** Bytes of PCM, blocking until there are some. 0 ends the utterance and
-	 *  -1 says it was stopped. */
-	fun read(into: ByteArray): Int {
+	/**
+	 * Bytes of PCM, blocking until there are some. 0 ends the utterance and
+	 * -1 says it was stopped or that nothing came for [timeoutMs].
+	 *
+	 * The timeout is not a courtesy. The engine cannot be made to abandon an
+	 * utterance from outside, and this call is the one place the framework's
+	 * synthesis thread waits for it, so a wait that never ends is a phone that
+	 * has stopped speaking for the rest of the day rather than one that has
+	 * lost the tail of a sentence. Whoever is speaking is asking to be heard
+	 * as fast as the engine can manage, which is a hundred times faster than
+	 * real time: anything still silent after a second of this is not slow, it
+	 * is stuck.
+	 */
+	fun read(into: ByteArray, timeoutMs: Int = READ_TIMEOUT_MS): Int {
 		if (closed) return -1
-		return EvvNative.read(handle, into)
+		reading.incrementAndGet()
+		try {
+			if (closed) return -1
+			return EvvNative.read(handle, into, timeoutMs)
+		} finally {
+			reading.decrementAndGet()
+		}
 	}
 
 	fun stop() = synchronized(guard) {
 		if (!closed) EvvNative.stop(handle)
 	}
 
+	/**
+	 * Puts the instance away.
+	 *
+	 * [read] is deliberately not guarded by the same lock, because the thread
+	 * sitting in it is the one the abort has to reach, and a close that waited
+	 * on the lock would be a close that waited for speech that will never
+	 * come. What it waits on instead is the count: the handle cannot go away
+	 * under a reader that is still using it, so the abort goes first -- which
+	 * is what makes that read return at once -- and the destroy follows the
+	 * reader out.
+	 *
+	 * A reader that has not come out by [CLOSE_WAIT_MS] is left alone rather
+	 * than waited for for ever: the handle is kept by a thread of its own until
+	 * it does, and if it never does the instance is destroyed after
+	 * [CLOSE_HARD_WAIT_MS] all the same. A leak would be the smaller of the two
+	 * wrongs, and neither should ever happen.
+	 */
 	fun close() = synchronized(guard) {
 		if (closed) return
 		closed = true
-		EvvNative.destroy(handle)
+		EvvNative.stop(handle)
+		if (awaitReader()) {
+			EvvNative.destroy(handle)
+			handle = 0
+			return
+		}
+		val orphan = handle
 		handle = 0
+		Thread({
+			var waited = 0
+			while (reading.get() > 0 && waited < CLOSE_HARD_WAIT_MS) {
+				try {
+					Thread.sleep(CLOSE_POLL_MS)
+				} catch (stopping: InterruptedException) {
+					Thread.currentThread().interrupt()
+					break
+				}
+				waited += CLOSE_POLL_MS.toInt()
+			}
+			EvvNative.destroy(orphan)
+		}, "evv-close").also { it.isDaemon = true }.start()
+	}
+
+	private fun awaitReader(): Boolean {
+		var waited = 0
+		while (reading.get() > 0 && waited < CLOSE_WAIT_MS) {
+			try {
+				Thread.sleep(CLOSE_POLL_MS)
+			} catch (stopping: InterruptedException) {
+				Thread.currentThread().interrupt()
+				return reading.get() == 0
+			}
+			waited += CLOSE_POLL_MS.toInt()
+		}
+		return reading.get() == 0
 	}
 }

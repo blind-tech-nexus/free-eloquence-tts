@@ -26,6 +26,23 @@ package com.blindtechnexus.alteloquencetts
  * than the same sentences whole. Only past [PIECE_CAP] characters does a piece
  * end at plain whitespace, which bounds the case that offers no sentence end
  * at all.
+ *
+ * A cut that had to be made is marked as one, in [Piece.forced], and the
+ * service answers it with the engine's own short-pause annotation. That pause
+ * is not the engine's prosody, which is reading the text as it stands: it is
+ * an artefact of where this file happened to cut, and thousands of words of
+ * text with few full stops in it used to carry four tenths of a second of
+ * silence every [PIECE_CAP] characters -- some thirty seconds of waiting in a
+ * ten minute passage, added to nothing. Everything the text says is still
+ * said: the pieces are the same bytes in the same order, and only the gap
+ * between them is what the unsplit text would have had.
+ *
+ * Everything here is one pass over the text, at indices, because this runs on
+ * the way to every utterance. It used to cut the text into a list of runs
+ * first, which is two allocations per word and a second pass over all of it,
+ * and on a chapter of a book that is a hundred thousand small objects made to
+ * be thrown away -- the sort of cost that reads as "the engine is slow" and
+ * has nothing to do with the engine.
  */
 object TextPieces {
 
@@ -33,20 +50,37 @@ object TextPieces {
 	 *  sentence end. */
 	const val PIECE_CAP = 500
 
+	/** One piece of text, and whether its end is a place the engine would have
+	 *  paused anyway. [forced] says it is not, which is what earns the
+	 *  shortened pause described above. */
+	class Piece(val text: String, val forced: Boolean)
+
 	/** Closing marks that may sit after the punctuation that ends a sentence. */
 	private const val CLOSERS = "\"')]}»”’"
 
 	private const val ENDERS = "?!…。！？"
 
 	/** Whether a word ends a sentence rather than being a dotted abbreviation. */
-	fun endsSentence(word: String): Boolean {
-		val tail = word.trimEnd { it in CLOSERS }
-		if (tail.isEmpty()) return false
-		if (tail.last() in ENDERS) return true
-		if (!tail.endsWith('.') || tail.length < 2 || tail[tail.length - 2].isDigit()) return false
-		val without = tail.dropLast(1)
-		if (without.contains('.')) return false
-		return !(without.length <= 3 && without.first().isUpperCase())
+	fun endsSentence(word: String): Boolean = endsSentence(word, 0, word.length)
+
+	/** The same question, asked of `text[from, to)` without cutting a string
+	 *  out to ask it. */
+	fun endsSentence(text: CharSequence, from: Int, to: Int): Boolean {
+		var end = to
+		while (end > from && text[end - 1] in CLOSERS) end--
+		if (end == from) return false
+		val last = text[end - 1]
+		if (last in ENDERS) return true
+		if (last != '.' || end - from < 2 || text[end - 2].isDigit()) return false
+		var inside = false
+		for (at in from until end - 1) {
+			if (text[at] == '.') {
+				inside = true
+				break
+			}
+		}
+		if (inside) return false
+		return !(end - 1 - from <= 3 && text[from].isUpperCase())
 	}
 
 	/**
@@ -54,48 +88,44 @@ object TextPieces {
 	 * original is in exactly one piece and in the same order, so the speech is
 	 * the same speech.
 	 */
-	fun split(text: String): List<String> {
-		if (text.length <= PIECE_CAP && !text.any { it.isWhitespace() }) return listOf(text)
-		val pieces = ArrayList<String>()
-		val piece = StringBuilder()
-		var gathered = 0
+	fun split(text: String): List<String> = pieces(text).map { it.text }
+
+	/** [text] as the pieces to hand over, with what each end is. */
+	fun pieces(text: String): List<Piece> {
+		if (text.length <= PIECE_CAP && !text.any { it.isWhitespace() }) {
+			return listOf(Piece(text, false))
+		}
+		val pieces = ArrayList<Piece>()
+		var start = 0
 		var sentence = false
-		for (part in runs(text)) {
-			piece.append(part)
-			gathered += part.length
-			if (part.isNotBlank()) {
-				sentence = endsSentence(part)
+		var at = 0
+		while (at < text.length) {
+			val space = text[at].isWhitespace()
+			val from = at
+			while (at < text.length && text[at].isWhitespace() == space) at++
+			if (!space) {
+				sentence = endsSentence(text, from, at)
 				continue
 			}
 			// A piece ends after the space that follows the word, so no word is
 			// split and nothing is left leaning on the next piece.
-			if (sentence || gathered >= PIECE_CAP) {
-				pieces.add(piece.toString())
-				piece.setLength(0)
-				gathered = 0
+			if (sentence || at - start >= PIECE_CAP) {
+				pieces.add(Piece(text.substring(start, at), !sentence))
+				start = at
 			}
 			sentence = false
 		}
-		if (piece.isNotBlank()) {
-			pieces.add(piece.toString())
-		} else if (piece.isNotEmpty() && pieces.isNotEmpty()) {
-			// Trailing space belongs to the piece in front of it rather than to
-			// a piece of its own, which would be an utterance saying nothing.
-			pieces[pieces.lastIndex] = pieces.last() + piece
+		if (start < text.length) {
+			val rest = text.substring(start)
+			if (rest.isNotBlank()) {
+				pieces.add(Piece(rest, false))
+			} else if (pieces.isNotEmpty()) {
+				// Trailing space belongs to the piece in front of it rather
+				// than to a piece of its own, which would be an utterance
+				// saying nothing.
+				pieces[pieces.lastIndex] = Piece(pieces.last().text + rest, pieces.last().forced)
+			}
 		}
-		return if (pieces.isEmpty()) listOf(text) else pieces
-	}
-
-	/** [text] as alternating runs of whitespace and everything else. */
-	private fun runs(text: String): List<String> {
-		val out = ArrayList<String>()
-		var at = 0
-		while (at < text.length) {
-			val from = at
-			val space = text[at].isWhitespace()
-			while (at < text.length && text[at].isWhitespace() == space) at++
-			out.add(text.substring(from, at))
-		}
-		return out
+		return if (pieces.isEmpty()) listOf(Piece(text, false)) else pieces
 	}
 }

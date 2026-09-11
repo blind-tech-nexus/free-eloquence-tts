@@ -139,6 +139,24 @@ object Symbols {
 		'•' to ".", '·' to "."
 	)
 
+	/** Whether a character is one either table knows, which is the whole of
+	 *  what decides whether there is anything here to do. A lookup of a
+	 *  character against a hash map is a boxed character and a hash; this is a
+	 *  read. Long text is mostly characters nobody can name, and it used to be
+	 *  walked one map lookup at a time to find that out, then rebuilt, then
+	 *  handed to a regular expression to collapse the spaces that were never
+	 *  added. */
+	private val RELEVANT = BooleanArray(0x10000).apply {
+		for (c in TABLE.keys) this[c.code] = true
+		for (c in PLAIN.keys) this[c.code] = true
+	}
+
+	/** The typographic characters on their own, which is what [normalize] is
+	 *  looking for and nothing else. */
+	private val PLAIN_CHARS = BooleanArray(0x10000).apply {
+		for (c in PLAIN.keys) this[c.code] = true
+	}
+
 	/** The marks the engine needs where they are, to leave its pauses alone. */
 	private const val PROSODY = ",.;:?!"
 
@@ -148,6 +166,18 @@ object Symbols {
 	 */
 	fun apply(text: String, mode: Int, custom: String): String {
 		if (mode == SOME || text.isEmpty()) return text
+		var relevant = false
+		for (at in text.indices) {
+			if (RELEVANT[text[at].code]) {
+				relevant = true
+				break
+			}
+		}
+		// Nothing in the text is a symbol or a typographic character, so there
+		// is nothing to name, nothing to take away, and no spaces left behind
+		// by either. What is said is trimmed, which is what the rebuild below
+		// trims to as well.
+		if (!relevant) return text.trim()
 		val listed = if (mode == CUSTOM) custom.filter { TABLE.containsKey(it) }.toSet() else emptySet()
 		val source = normalize(text)
 		val out = StringBuilder(source.length + 32)
@@ -208,7 +238,15 @@ object Symbols {
 
 	/** [text] with every typographic character turned into its plain one. */
 	private fun normalize(text: String): String {
-		if (text.none { PLAIN.containsKey(it) }) return text
+		var needed = false
+		for (at in text.indices) {
+			val c = text[at].code
+			if (c < PLAIN_CHARS.size && PLAIN_CHARS[c]) {
+				needed = true
+				break
+			}
+		}
+		if (!needed) return text
 		val out = StringBuilder(text.length)
 		for (c in text) out.append(PLAIN[c] ?: c)
 		return out.toString()

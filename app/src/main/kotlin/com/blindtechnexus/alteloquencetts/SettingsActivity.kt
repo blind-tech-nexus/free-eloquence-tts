@@ -91,6 +91,16 @@ class SettingsActivity : ComponentActivity() {
 		val configured = intent?.action == ACTION_CONFIGURE_ENGINE
 		enteredAt = if (configured) Destination.SETTINGS else Destination.MAIN
 		destination = if (firstLaunch) Destination.WELCOME else enteredAt
+		// The keep-alive notification's own way in. It is sent with a screen named
+		// on it because that notification is what a person is looking at when the voice
+		// has stopped, and the settings that decide whether it should have been there at
+		// all are two taps away on the main screen and one tap away here. Entering at
+		// the screen it names is also what lets the back key leave the app rather than
+		// walk through a main screen nobody asked to see.
+		if (intent?.getStringExtra(EXTRA_SCREEN) == SCREEN_BATTERY) {
+			enteredAt = Destination.BATTERY
+			destination = Destination.BATTERY
+		}
 		asksAboutTheDefaultEngine = !isDefaultTts()
 		refresh()
 		// Every launch, not only the first: whatever has not been given is
@@ -98,6 +108,12 @@ class SettingsActivity : ComponentActivity() {
 		// voice that stops working with nothing said about why. The welcome
 		// screen does its own asking on the way past it.
 		if (!firstLaunch) checkPermissions()
+		// The update check, once per launch and after everything that has to happen
+		// first. It is a background question, so the order is all it is about: the
+		// permissions, the screens and the engine are all served by not waiting on a
+		// server for them.
+		Updater.attach(applicationContext)
+		Updater.check()
 		setContent {
 			MaterialTheme {
 				Surface {
@@ -149,6 +165,10 @@ class SettingsActivity : ComponentActivity() {
 								},
 								onRefuse = { asksAboutTheDefaultEngine = false }
 							)
+							// The update, last of the three and only when neither of the others is
+							// up: a dialog about a version that is not installed yet is worth less
+							// than the two that decide whether this one keeps working at all.
+							else -> UpdateDialogs()
 						}
 					}
 				}
@@ -183,7 +203,10 @@ class SettingsActivity : ComponentActivity() {
 				model?.stopSpeaking()
 				if (enteredAt == Destination.SETTINGS) finish() else destination = Destination.MAIN
 			}
-			Destination.DICTIONARY, Destination.BATTERY -> destination = Destination.SETTINGS
+			Destination.DICTIONARY -> destination = Destination.SETTINGS
+			Destination.BATTERY ->
+				// The notification sent us here, and there is nothing behind it.
+				if (enteredAt == Destination.BATTERY) finish() else destination = Destination.SETTINGS
 			Destination.ABOUT -> destination = Destination.MAIN
 			Destination.MAIN, Destination.WELCOME -> finish()
 		}
@@ -279,6 +302,18 @@ class SettingsActivity : ComponentActivity() {
 		 *  for it to itself, and the intent filter in the manifest names the
 		 *  same string: the two have to agree, and a test says they do. */
 		const val ACTION_CONFIGURE_ENGINE = "android.speech.tts.engine.CONFIGURE_ENGINE"
+
+		/** What the keep-alive notification puts on the intent that opens this
+			*  activity, to say which of the screens it wants. A literal here and a
+			*  matching one in [KeepAliveNotification]: the notification is built without
+			*  this activity being up, so there is no call to make and no constant to
+			*  borrow. */
+		const val EXTRA_SCREEN = "com.blindtechnexus.alteloquencetts.extra.SCREEN"
+
+		/** The only screen named that way today, because the only thing a notification
+			*  has to say about itself is what it is for: keeping the voice running, which
+			*  is what this screen decides. */
+		const val SCREEN_BATTERY = "battery"
 
 		/** Where it is remembered that the welcome screen has been read. A
 		 *  test writes it, so that a launch lands on the screen being tested

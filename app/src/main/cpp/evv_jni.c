@@ -12,6 +12,8 @@
  */
 
 #include <jni.h>
+#include <stdint.h>
+#include <errno.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,9 +27,28 @@
 
 /* What the engine writes at a time, in samples, and what the ring holds, in
    bytes. The ring has to be bigger than one frame or the callback would wait
-   for room that can never arrive. */
-#define FRAME_SAMPLES 1024
-#define RING_BYTES    (128 * 1024)
+   for room that can never arrive.
+
+   The frame is the whole of what a callback costs: the engine fills its output
+   buffer and hands it over only when it is exactly full, so every FRAME_SAMPLES
+   samples is one lock, one copy and one wake-up on the other side. It is also
+   how much of the utterance has to be made before the first of it can be heard,
+   which is why it is not merely as big as possible. Measured at eleven
+   thousand and twenty five hertz, four thousand and ninety six samples is a
+   third of a second of speech and rather under four milliseconds of this
+   engine's time, and the round trips the reader and the writer make over one
+   utterance go down fourfold. */
+#define FRAME_SAMPLES 4096
+#define RING_BYTES    (256 * 1024)
+
+/* How much of a frame one read will carry, and so how big the buffer that
+   carries it has to be. The ring is the ceiling: whatever is asked for beyond
+   what the ring can hold is asked for in vain. */
+#define READ_MAX      RING_BYTES
+
+/* How big the buffer the text of an utterance is read into starts out. It grows
+   beyond this only for a piece that needs more. */
+#define TEXT_INITIAL  (64 * 1024)
 
 /* How many milliseconds the end-of-utterance wait will spend watching for the
    engine to take the work up before it stops waiting for that. */
@@ -52,6 +73,9 @@ typedef struct {
 	int             busy;
 	int             quitting;
 	unsigned char*  text;
+	size_t          textroom;
+	unsigned char*  scratch;
+	int             waiters;
 	ECIDictHand     dict;
 	short           frame[FRAME_SAMPLES];
 } instance;
@@ -123,14 +147,35 @@ static void* worker_loop(void* data) {
 		}
 		in->pending = 0;
 		pthread_mutex_unlock(&in->lock);
+		/* Waiting to be told is better than being asked. The loop is the same
+		   one it always was -- however long it takes, in milliseconds -- but
+		   the first thing the callback hands over wakes it out of the wait
+		   rather than the next poll finding it there, so the utterance is not
+		   started on up to a millisecond late every single time. */
 		for (spins = 0; spins < START_SPINS; spins++) {
 			int begun;
 			pthread_mutex_lock(&in->lock);
 			begun = in->started || in->aborted;
+			if (!begun) {
+				struct timespec until;
+				clock_gettime(CLOCK_REALTIME, &until);
+				until.tv_nsec += tick.tv_nsec;
+				if (until.tv_nsec >= 1000000000L) {
+					until.tv_nsec -= 1000000000L;
+					until.tv_sec += 1;
+				}
+				/* Counted as a waiter, because that is what the callback looks
+				   for before it goes to the trouble of a wake-up. The read is
+				   not the only thread that sleeps on this condition, and a
+				   worker that is not counted is a worker that has to wait out
+				   the millisecond instead. */
+				in->waiters++;
+				pthread_cond_timedwait(&in->filled, &in->lock, &until);
+				in->waiters--;
+			}
 			pthread_mutex_unlock(&in->lock);
 			if (begun || eciSpeaking(in->eci))
 				break;
-			nanosleep(&tick, NULL);
 		}
 		eciSynchronize(in->eci);
 		pthread_mutex_lock(&in->lock);
@@ -163,6 +208,24 @@ static void wait_until_idle(instance* in) {
 	pthread_mutex_unlock(&in->lock);
 }
 
+/* Waits on a condition for at so many milliseconds, and answers 1 when it was
+   the clock that let the caller go rather than the condition. The lock has to
+   be held, as it is with any wait on a condition. */
+static int
+wait_millis(pthread_cond_t* cond, pthread_mutex_t* lock, long millis)
+{
+	struct timespec until;
+
+	clock_gettime(CLOCK_REALTIME, &until);
+	until.tv_sec += millis / 1000;
+	until.tv_nsec += (millis % 1000) * 1000000L;
+	if (until.tv_nsec >= 1000000000L) {
+		until.tv_nsec -= 1000000000L;
+		until.tv_sec += 1;
+	}
+	return pthread_cond_timedwait(cond, lock, &until) == ETIMEDOUT;
+}
+
 /* Runs on the engine's synthesis thread. It may not call back into the same
    instance, and it does not: everything it touches is ours. */
 static int ECICALL on_message(ECIHand handle, ECIMessage message, int param, void* data) {
@@ -183,7 +246,12 @@ static int ECICALL on_message(ECIHand handle, ECIMessage message, int param, voi
 	}
 	put(in, (const unsigned char*)in->frame, want);
 	in->started = 1;
-	pthread_cond_signal(&in->filled);
+	/* Only wake what is waiting. A reader that has not got to the wait yet is
+	   woken by nothing and a reader that has is woken by this, and the syscall
+	   in the middle of the engine's own callback is the one thing in here that
+	   runs a thousand times an utterance. */
+	if (in->waiters > 0)
+		pthread_cond_signal(&in->filled);
 	pthread_mutex_unlock(&in->lock);
 	return eciDataProcessed;
 }
@@ -200,9 +268,24 @@ JNIEXPORT jlong JNICALL Java_com_blindtechnexus_alteloquencetts_EvvNative_create
 		free(in);
 		return 0;
 	}
+	in->text = (unsigned char*)malloc(TEXT_INITIAL);
+	in->textroom = (in->text == NULL) ? 0 : TEXT_INITIAL;
+	/* One buffer for every read, rather than one per read. It is copied into
+	   under the lock and copied out of afterwards, which is the same two memcpys
+	   there always were without a malloc and a free between them: at four
+	   kilobytes at a time a long paragraph is a thousand of each, and none of
+	   them was ever wanted. */
+	in->scratch = (unsigned char*)malloc(READ_MAX);
+	if (in->scratch == NULL) {
+		free(in->ring);
+		free(in);
+		return 0;
+	}
 	in->eci = eciNewEx(language);
 	if (in->eci == NULL_ECI_HAND) {
 		LOGE("eciNewEx(%#x) gave no instance", language);
+		free(in->scratch);
+		free(in->text);
 		free(in->ring);
 		free(in);
 		return 0;
@@ -215,6 +298,8 @@ JNIEXPORT jlong JNICALL Java_com_blindtechnexus_alteloquencetts_EvvNative_create
 	if (!eciSetOutputBuffer(in->eci, FRAME_SAMPLES, in->frame)) {
 		LOGE("the engine refused the output buffer");
 		eciDelete(in->eci);
+		free(in->scratch);
+		free(in->text);
 		free(in->ring);
 		free(in);
 		return 0;
@@ -222,6 +307,8 @@ JNIEXPORT jlong JNICALL Java_com_blindtechnexus_alteloquencetts_EvvNative_create
 	if (pthread_create(&in->worker, NULL, worker_loop, in) != 0) {
 		LOGE("no thread to run the engine on");
 		eciDelete(in->eci);
+		free(in->scratch);
+		free(in->text);
 		free(in->ring);
 		free(in);
 		return 0;
@@ -265,6 +352,7 @@ JNIEXPORT void JNICALL Java_com_blindtechnexus_alteloquencetts_EvvNative_destroy
 	pthread_cond_destroy(&in->work);
 	pthread_mutex_destroy(&in->lock);
 	free(in->text);
+	free(in->scratch);
 	free(in->ring);
 	free(in);
 }
@@ -284,11 +372,8 @@ JNIEXPORT jboolean JNICALL Java_com_blindtechnexus_alteloquencetts_EvvNative_spe
 	if (in == NULL || text == NULL)
 		return JNI_FALSE;
 	n = (*env)->GetArrayLength(env, text);
-	buf = (unsigned char*)malloc((size_t)n + 1);
-	if (buf == NULL)
+	if (n <= 0)
 		return JNI_FALSE;
-	(*env)->GetByteArrayRegion(env, text, 0, n, (jbyte*)buf);
-	buf[n] = 0;
 	wait_until_idle(in);
 	pthread_mutex_lock(&in->lock);
 	in->aborted = 0;
@@ -297,8 +382,23 @@ JNIEXPORT jboolean JNICALL Java_com_blindtechnexus_alteloquencetts_EvvNative_spe
 	in->busy = 1;
 	in->head = in->tail = in->count = 0;
 	pthread_mutex_unlock(&in->lock);
-	free(in->text);
-	in->text = buf;
+	/* The text is kept until the next utterance, so the buffer is kept too and
+	   the bytes are read into it where they lie: a paragraph is a thousand
+	   pieces and a thousand mallocs, a thousand frees and a thousand copies
+	   that bought nothing. It can only be done after wait_until_idle, since the
+	   engine may still be reading the text it was given last. */
+	if (in->textroom < (size_t)n + 1) {
+		free(in->text);
+		in->text = (unsigned char*)malloc((size_t)n + 1);
+		in->textroom = (in->text == NULL) ? 0 : (size_t)n + 1;
+	}
+	if (in->text == NULL) {
+		LOGE("no room for the text");
+		return finished(in);
+	}
+	buf = in->text;
+	(*env)->GetByteArrayRegion(env, text, 0, n, (jbyte*)buf);
+	buf[n] = 0;
 	if (!in->running) {
 		LOGE("there is no worker to run the engine");
 		return finished(in);
@@ -318,41 +418,54 @@ JNIEXPORT jboolean JNICALL Java_com_blindtechnexus_alteloquencetts_EvvNative_spe
 	return JNI_TRUE;
 }
 
-/* Bytes out, blocking until there are some. Answers 0 at the end of the
-   utterance and -1 when it was stopped. */
-JNIEXPORT jint JNICALL Java_com_blindtechnexus_alteloquencetts_EvvNative_read(JNIEnv* env, jclass cls, jlong handle, jbyteArray dst) {
-	instance*      in = unwrap(handle);
-	size_t         room;
-	size_t         got;
-	unsigned char* scratch;
+/* Bytes out, blocking until there are some or until the caller has waited long
+   enough. Answers 0 at the end of the utterance, -1 when it was stopped, and
+   -2 when timeoutMs ran out first -- which is the one answer the caller has to
+   be able to tell from an end, because an engine with nothing left to say and
+   an engine that has stopped saying anything look the same from here.
+   timeoutMs of zero or less means wait as long as it takes. */
+JNIEXPORT jint JNICALL Java_com_blindtechnexus_alteloquencetts_EvvNative_read(JNIEnv* env, jclass cls, jlong handle, jbyteArray dst, jint timeoutMs) {
+	instance* in = unwrap(handle);
+	size_t    room;
+	size_t    got;
+	int       timed_out = 0;
 	(void)cls;
 	if (in == NULL || dst == NULL)
 		return -1;
 	room = (size_t)(*env)->GetArrayLength(env, dst);
 	if (room == 0)
 		return -1;
+	if (room > READ_MAX)
+		room = READ_MAX;
 	pthread_mutex_lock(&in->lock);
-	while (in->count == 0 && !in->done && !in->aborted)
-		pthread_cond_wait(&in->filled, &in->lock);
+	if (in->count == 0 && !in->done && !in->aborted) {
+		in->waiters++;
+		while (in->count == 0 && !in->done && !in->aborted) {
+			if (timeoutMs <= 0)
+				pthread_cond_wait(&in->filled, &in->lock);
+			else if (wait_millis(&in->filled, &in->lock, (long)timeoutMs) != 0) {
+				timed_out = 1;
+				break;
+			}
+		}
+		in->waiters--;
+	}
 	if (in->aborted) {
 		pthread_mutex_unlock(&in->lock);
 		return -1;
 	}
 	if (in->count == 0) {
 		pthread_mutex_unlock(&in->lock);
-		return 0;
+		return timed_out ? -2 : 0;
 	}
+	/* Everything that is there rather than what was asked for, in one go. A
+	   frame of four kilobytes read a kilobyte at a time is four of these, and
+	   each one is a lock, a wake-up on the other side and a copy. */
 	got = in->count < room ? in->count : room;
-	scratch = (unsigned char*)malloc(got);
-	if (scratch == NULL) {
-		pthread_mutex_unlock(&in->lock);
-		return -1;
-	}
-	take(in, scratch, got);
+	take(in, in->scratch, got);
 	pthread_cond_signal(&in->room);
 	pthread_mutex_unlock(&in->lock);
-	(*env)->SetByteArrayRegion(env, dst, 0, (jsize)got, (const jbyte*)scratch);
-	free(scratch);
+	(*env)->SetByteArrayRegion(env, dst, 0, (jsize)got, (const jbyte*)in->scratch);
 	return (jint)got;
 }
 
