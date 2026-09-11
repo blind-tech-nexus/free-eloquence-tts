@@ -2,6 +2,9 @@ package com.blindtechnexus.alteloquencetts
 
 import android.util.Log
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
+import java.nio.charset.StandardCharsets
 
 /**
  * The pronunciation dictionaries people write for this engine.
@@ -14,18 +17,21 @@ import java.io.File
  *
  * A line is a key, a tab, and what to say instead. What to say is either a
  * respelling ("dee oe jeigh") or a pronunciation in the engine's own alphabet
- * ("`[Ekspoz1e]"), and the engine takes both. The bytes are the engine's own
- * code set already -- an e-acute is one byte -- so the file is read as Latin-1
- * rather than as UTF-8, which is what the files in the wild actually are.
+ * ("`[Ekspoz1e]"), and the engine takes both. The bytes of a file shared in
+ * the wild are the engine's own code set -- an e-acute is one byte -- so they
+ * are read as Latin-1. The file this app writes for the user's own words is
+ * UTF-8, since what someone typed may hold characters Latin-1 has no room
+ * for, and is read as such.
  */
 object Dictionaries {
 
-	/** Teaches the engine every entry in [file]. Answers how many went in. */
-	fun load(engine: EvvEngine, volume: Int, file: File): Int {
+	/** Teaches the engine every entry in [file]. Answers how many went in.
+	 *  [charset] is how the file is decoded. */
+	fun load(engine: EvvEngine, volume: Int, file: File, charset: java.nio.charset.Charset = Charsets.ISO_8859_1): Int {
 		var taught = 0
 		var refused = 0
 		try {
-			file.forEachLine(Charsets.ISO_8859_1) { line ->
+			file.forEachLine(charset) { line ->
 				val split = line.indexOf('\t')
 				if (split > 0) {
 					val key = line.substring(0, split).trim()
@@ -45,10 +51,37 @@ object Dictionaries {
 
 	/** How many entries a file offers, for saying so on the settings screen
 	 *  without an engine to hand. */
-	fun count(file: File): Int = try {
-		file.useLines(Charsets.ISO_8859_1) { lines -> lines.count { it.indexOf('\t') > 0 } }
+	fun count(file: File, charset: java.nio.charset.Charset = Charsets.ISO_8859_1): Int = try {
+		file.useLines(charset) { lines -> lines.count { it.indexOf('\t') > 0 } }
 	} catch (unreadable: Exception) {
 		0
+	}
+
+	/**
+	 * The text of a file a caller picked, decoded the way the files in the
+	 * wild are. The engine's own code set is Latin-1, so that is the fallback;
+	 * a file that is valid UTF-8 -- one this app exported, say -- is read as
+	 * UTF-8. Neither way is the text refused.
+	 */
+	fun read(file: File): String {
+		val bytes = runCatching { file.readBytes() }.getOrNull() ?: return ""
+		return decode(bytes)
+	}
+
+	/** [bytes] decoded as UTF-8 when they are, and as Latin-1 -- the code set
+	 *  the engine and the files in the wild use -- when they are not. Neither
+	 *  way is the text refused. */
+	fun decode(bytes: ByteArray): String = utf8(bytes) ?: String(bytes, Charsets.ISO_8859_1)
+
+	/** [bytes] as UTF-8, or nothing when they are not UTF-8. */
+	private fun utf8(bytes: ByteArray): String? = try {
+		StandardCharsets.UTF_8.newDecoder()
+			.onMalformedInput(CodingErrorAction.REPORT)
+			.onUnmappableCharacter(CodingErrorAction.REPORT)
+			.decode(ByteBuffer.wrap(bytes))
+			.toString()
+	} catch (broken: Exception) {
+		null
 	}
 
 	private const val TAG = "alteloquencetts"

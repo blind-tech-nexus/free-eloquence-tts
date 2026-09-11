@@ -2,8 +2,6 @@ package com.blindtechnexus.alteloquencetts
 
 import android.content.Context
 import android.os.Build
-import android.os.UserManager
-import android.util.Log
 import java.io.File
 
 /**
@@ -28,73 +26,15 @@ object DirectBoot {
 		val app = context.applicationContext
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return app
 		val device = app.createDeviceProtectedStorageContext() ?: return app
-		// Both of these are no-ops once there is nothing left behind to bring
-		// over, which is every run after the first.
 		device.moveSharedPreferencesFrom(app, prefsName(app))
-		bringDictionariesForward(app, device)
 		return device
 	}
 
-	/** The dictionaries directory, wherever it is being kept. */
+	/** The directory the user dictionary lives in, wherever it is being kept. */
 	fun dictionaries(context: Context): File =
 		File(storage(context).filesDir, DICTIONARIES)
 
 	private fun prefsName(app: Context) = "${app.packageName}_preferences"
 
-	/**
-	 * Moves dictionaries picked by an earlier build into device-protected
-	 * storage and points the settings at where they went.
-	 *
-	 * Nothing can be moved while the phone is locked -- the directory being
-	 * moved from is the one that is not readable yet -- so a locked start
-	 * leaves this for the next unlocked one. Until then the service finds the
-	 * files missing and speaks without them, which is what it already does for
-	 * a dictionary that has been deleted.
-	 */
-	private fun bringDictionariesForward(app: Context, device: Context) {
-		if (!isUnlocked(app)) return
-		val from = File(app.filesDir, DICTIONARIES)
-		if (!from.isDirectory) return
-		val into = File(device.filesDir, DICTIONARIES)
-		val moved = mutableMapOf<String, String>()
-		for (file in from.listFiles().orEmpty()) {
-			if (!file.isFile) continue
-			if (!into.isDirectory && !into.mkdirs()) return
-			val there = File(into, file.name)
-			try {
-				// The two are on different mounts, so a rename can refuse and
-				// the copy is not a fallback for a rare case but the usual way.
-				if (!file.renameTo(there)) {
-					file.copyTo(there, overwrite = true)
-					file.delete()
-				}
-			} catch (stuck: Exception) {
-				// Left where it is, and left in the settings as where it is,
-				// so the next unlocked start tries again.
-				Log.e(TAG, "cannot move ${file.name} to device-protected storage", stuck)
-				continue
-			}
-			moved[file.absolutePath] = there.absolutePath
-		}
-		from.delete()
-		if (moved.isEmpty()) return
-		val prefs = device.getSharedPreferences(prefsName(app), Context.MODE_PRIVATE)
-		val edit = prefs.edit()
-		for (volume in Eci.DICT_VOLUMES) {
-			val key = Settings.dictionaryPathKey(volume)
-			val was = prefs.getString(key, null) ?: continue
-			moved[was]?.let { edit.putString(key, it) }
-		}
-		edit.apply()
-	}
-
-	private fun isUnlocked(app: Context): Boolean {
-		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return true
-		val users = app.getSystemService(UserManager::class.java) ?: return true
-		return users.isUserUnlocked
-	}
-
-	private const val DICTIONARIES = "dictionaries"
-
-	private const val TAG = "alteloquencetts"
+	const val DICTIONARIES = "dictionaries"
 }

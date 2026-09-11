@@ -66,8 +66,9 @@ class EvvPreview(private val language: Int) {
 	}
 
 	/** Says [text] in [voice] with [shape] on it, stopping whatever was being
-	 *  said. */
-	fun say(text: String, voice: Int, shape: Map<Int, Int>, rateHz: Int) {
+	 *  said. [abbreviations] is the same switch the service reads, so the
+	 *  sample hears what a caller hears. */
+	fun say(text: String, voice: Int, shape: Map<Int, Int>, rateHz: Int, abbreviations: Boolean = false) {
 		// Whatever is being said stops first, and the turn this utterance
 		// belongs to is taken after that -- stopping is what moves the count
 		// on, so reading it first would leave this utterance holding a number
@@ -78,6 +79,7 @@ class EvvPreview(private val language: Int) {
 			if (mine != generation) return@post
 			val e = engine ?: EvvEngine.open(language)?.also { engine = it } ?: return@post
 			e.setSampleRate(rateHz)
+			e.setAbbreviations(abbreviations)
 			e.applyVoice(voice, shape)
 			if (!e.speak(text)) {
 				Log.e(TAG, "the engine refused the sample")

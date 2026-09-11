@@ -42,6 +42,18 @@ class SettingsModel(context: Context) {
 	var customSymbols by mutableStateOf(settings.customSymbols)
 		private set
 
+	var readEmoji by mutableStateOf(settings.readEmoji)
+		private set
+
+	var numberMode by mutableStateOf(settings.numberMode)
+		private set
+
+	var stripSsml by mutableStateOf(settings.stripSsml)
+		private set
+
+	var capitalMode by mutableStateOf(settings.capitalMode)
+		private set
+
 	var forceRate by mutableStateOf(settings.forceRate)
 		private set
 
@@ -52,12 +64,6 @@ class SettingsModel(context: Context) {
 		private set
 
 	private val shape = mutableStateMapOf<Int, Int>().apply { putAll(settings.shape(settings.voice)) }
-
-	private var dictionaries: Map<Int, String> by mutableStateOf(
-		Eci.DICT_VOLUMES.mapNotNull { volume ->
-			settings.dictionaryName(volume)?.let { volume to it }
-		}.toMap()
-	)
 
 	val gender: Int get() = shape[Eci.VOICE_GENDER] ?: 0
 
@@ -115,66 +121,25 @@ class SettingsModel(context: Context) {
 		settings.abbreviations = on
 	}
 
-	/** What the row for [volume] says: the file picked for it, or nothing. */
-	fun dictionaryName(volume: Int): String = dictionaries[volume] ?: app.getString(R.string.dictionary_none)
-
-	/**
-	 * Takes a copy of the file the picker handed back, and answers whether
-	 * there is now a dictionary where that row said there was one.
-	 *
-	 * The answer is for the screen to say out loud. A file that cannot be read
-	 * and a file with nothing the engine can use in it both leave the row
-	 * saying what it said before, which to a finger is the same as a pick that
-	 * worked and to an eye is not: without the answer the two are the same to
-	 * both.
-	 *
-	 * A picked document is a content URI belonging to whichever app supplied
-	 * it, readable now and quite possibly not tomorrow, and the speech service
-	 * is a different process that reads these when it starts. So what is stored
-	 * is a copy of our own rather than a reference to somebody else's, kept in
-	 * device-protected storage so that the service can still read it during a
-	 * locked boot.
-	 */
-	fun chooseDictionary(volume: Int, uri: android.net.Uri): Boolean {
-		val into = DirectBoot.dictionaries(app).apply { mkdirs() }
-		val file = java.io.File(into, "volume-$volume.dic")
-		val name = nameOf(uri) ?: file.name
-		try {
-			app.contentResolver.openInputStream(uri).use { source ->
-				if (source == null) return false
-				file.outputStream().use { sink -> source.copyTo(sink) }
-			}
-		} catch (unreadable: Exception) {
-			android.util.Log.e("alteloquencetts", "cannot read the dictionary picked", unreadable)
-			return false
-		}
-		val entries = Dictionaries.count(file)
-		if (entries == 0) {
-			file.delete()
-			dictionaries = dictionaries - volume
-			settings.setDictionary(volume, null, null)
-			return false
-		}
-		val said = app.getString(R.string.dictionary_entries, name, entries)
-		settings.setDictionary(volume, file.absolutePath, said)
-		dictionaries = dictionaries + (volume to said)
-		return true
+	fun chooseReadEmoji(on: Boolean) {
+		readEmoji = on
+		settings.readEmoji = on
 	}
 
-	fun removeDictionaries() {
-		for (volume in Eci.DICT_VOLUMES) {
-			settings.dictionaryPath(volume)?.let { java.io.File(it).delete() }
-			settings.setDictionary(volume, null, null)
-		}
-		dictionaries = emptyMap()
+	fun chooseNumberMode(mode: Int) {
+		numberMode = mode
+		settings.numberMode = mode
 	}
 
-	private fun nameOf(uri: android.net.Uri): String? = runCatching {
-		app.contentResolver.query(uri, null, null, null, null)?.use { row ->
-			val at = row.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-			if (at >= 0 && row.moveToFirst()) row.getString(at) else null
-		}
-	}.getOrNull()
+	fun chooseStripSsml(on: Boolean) {
+		stripSsml = on
+		settings.stripSsml = on
+	}
+
+	fun chooseCapitalMode(mode: Int) {
+		capitalMode = mode
+		settings.capitalMode = mode
+	}
 
 	fun choosePhrasePrediction(on: Boolean) {
 		phrasePrediction = on
@@ -219,9 +184,14 @@ class SettingsModel(context: Context) {
 	// ---- hearing it ------------------------------------------------------
 
 	/** Nothing here speaks by itself. Every setting is in force the moment it
-	 *  is written down, and this is how it gets heard. */
+	 *  is written down, and this is how it gets heard. The sample goes through
+	 *  the same text road as a caller's speech, so what is heard is what the
+	 *  setting really does. */
 	fun say() {
-		preview?.say(app.getString(R.string.preview_text), voice, settings.shape(voice), sampleRateHz)
+		val text = TextPipeline.apply(app.getString(R.string.preview_text), settings)
+		val said = Prosody.prefix(settings.phrasePrediction) +
+			Pauses.apply(text, settings.pauses, true)
+		preview?.say(said, voice, settings.shape(voice), sampleRateHz, settings.abbreviations)
 	}
 
 	private fun adoptVoice() {
