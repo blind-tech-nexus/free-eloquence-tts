@@ -60,12 +60,15 @@ internal fun UpdateDialogs() {
 		is Updater.State.Downloading -> DownloadingDialog(state)
 
 		is Updater.State.Ready -> {
-			// The installer is asked for as soon as the bytes are down, which is
-			// what the whole of the download was for, and from here the screen is
-			// the installer's own. Asked only once per file: an effect on a state
-			// that is written more than once must not start a second install on
-			// the same download.
-			LaunchedEffect(state.file.absolutePath) {
+			// The installer is asked for as soon as the bytes are down, which
+			// is what the whole of the download was for, and from here the
+			// screen is the installer's own. Asked once per answer rather than
+			// once per file: the file is the same one after a trip to the
+			// permission screen, and the second answer about it is exactly
+			// when a retry is wanted. A new State.Ready is a new question about
+			// installing; the same one recomposed is not, which is what keeps
+			// this from being a loop that opens the installer again and again.
+			LaunchedEffect(state) {
 				activity?.let { outcome = Updater.install(it) }
 			}
 			ReadyDialog(outcome, acknowledged) { acknowledged = true }

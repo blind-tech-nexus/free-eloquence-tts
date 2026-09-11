@@ -24,7 +24,7 @@ No warranty. See LICENSE, and read the part about language data before redistrib
 * An update channel, checked in the background on every launch, that ends at Android's own installer: see [Updates](#updates).
 * Android 6 and later. arm64-v8a, armeabi-v7a, x86_64.
 
-`app/src/androidTest` runs on a device: 150 test methods, of which the ones that matter most are the ones that never start a sound.
+`app/src/androidTest` runs on a device: 151 test methods, of which the ones that matter most are the ones that never start a sound.
 
 ## Turning it on
 

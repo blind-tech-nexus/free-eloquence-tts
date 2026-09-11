@@ -141,6 +141,25 @@ class UpdateTest {
 		assertTrue(UpdateInfo.fetch("0.0", cancelled) is UpdateInfo.Result.Cancelled)
 	}
 
+	@Test
+	fun aFileThatIsNotAPackageIsNeverReadyToInstall() {
+		// What the downloaded file is asked before it is offered again, since a
+		// download broken off by a phone running out of room is half an APK and
+		// half an APK is no APK at all. The answer for a file that is only
+		// partly here and for one that is not here is the same, and it is no:
+		// the person is offered the download rather than an installer that has
+		// nothing to say about the file it was handed.
+		val partial = java.io.File(context.cacheDir, "update/probe-partial.apk")
+		try {
+			partial.parentFile?.mkdirs()
+			partial.writeBytes(ByteArray(1024) { (it % 251).toByte() })
+			assertFalse(Installer.isInstallable(context, partial))
+			assertFalse(Installer.isInstallable(context, java.io.File(context.cacheDir, "update/no-such-file.apk")))
+		} finally {
+			partial.delete()
+		}
+	}
+
 	private companion object {
 		const val HTTPS = "https://example.com/alt-eloquence-tts.apk"
 	}

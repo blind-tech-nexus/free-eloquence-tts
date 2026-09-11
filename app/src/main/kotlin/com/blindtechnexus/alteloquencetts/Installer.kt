@@ -120,6 +120,13 @@ internal object Installer {
 	/** The package the file holds, which is what the installer's own screen will
 	 *  say. Asked of the archive rather than of the installed app, because what
 	 *  matters is what is about to be put on the phone. */
+	/** Whether the file still reads as a package this phone could install. Asked
+	 *  of a file the app put in the cache a while ago, because the cache is
+	 *  Android's to empty when it wants, and a download that was broken off is
+	 *  half an APK, which is not an APK at all. */
+	fun isInstallable(context: Context, file: File): Boolean =
+		archiveVersion(context, file).isNotEmpty()
+
 	fun archiveVersion(context: Context, file: File): String = runCatching {
 		context.packageManager.getPackageArchiveInfo(file.absolutePath, 0)?.versionName.orEmpty()
 	}.getOrDefault("")
