@@ -27,14 +27,17 @@ internal object EvvNative {
 
 	external fun speak(handle: Long, text: ByteArray): Boolean
 
-	/** Fills [dst] with PCM bytes. Answers 0 at the end of the utterance and
-	 *  -1 when it was stopped or something went wrong.
+	/** Fills [dst] with PCM bytes. Answers 0 at the end of the utterance, -1
+	 *  when it was stopped or the instance is closed, and -2 when [timeoutMs]
+	 *  ran out -- see [EvvTtsService.TIMED_OUT], which is what the service
+	 *  tells the two answers apart with.
 	 *
 	 *  [timeoutMs] is how long to wait for samples that are not coming. The
-	 *  engine is asked for silence by a flag rather than by a call, so the
-	 *  only thing that can bring a hung one back is a wait that ends; without
-	 *  one the framework's synthesis thread sits in here for the rest of the
-	 *  day, and every later request for speech is behind it. */
+	 *  engine is asked for silence by a flag rather than by a call, and that
+	 *  flag wakes a wait like this one the moment it goes up; the timeout is
+	 *  what brings back an engine that is not even going to look at the
+	 *  flag. Without it the framework's synthesis thread sits in here for
+	 *  the rest of the day, and every later request for speech is behind it. */
 	external fun read(handle: Long, dst: ByteArray, timeoutMs: Int): Int
 
 	external fun stop(handle: Long)

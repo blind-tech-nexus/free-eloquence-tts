@@ -38,7 +38,43 @@ class Settings(context: Context) {
 
 	init {
 		carryOverTheOldKeys()
+		pinStabilityNumbers()
 		prefs.registerOnSharedPreferenceChangeListener(watcher)
+	}
+
+	/** Puts the stability numbers on the screen's list back to the best of
+	 *  them and keeps them there.
+	 *
+	 *  They were choices once, on the battery screen's "While speaking"
+	 *  section, and every one of them was a trade between two kinds of wrong
+	 *  that the app is better placed to strike than anybody setting up a
+	 *  phone in five minutes. The rows are gone; the code still reads the
+	 *  same settings, so the behaviour is exactly the one the best answers
+	 *  give and a number left behind by an older build is rewritten, not
+	 *  obeyed. A value the screen never stored needs no write at all: the
+	 *  defaults below already answer what the pin would set, and the places
+	 *  that read these keys straight off the preferences without an instance
+	 *  see the same answer through their own default. */
+	private fun pinStabilityNumbers() {
+		var edit: SharedPreferences.Editor? = null
+		fun pin(key: String, value: Int) {
+			if (prefs.getInt(key, value) == value) return
+			(edit ?: prefs.edit().also { edit = it }).putInt(key, value)
+		}
+		fun pin(key: String, value: Boolean) {
+			if (prefs.getBoolean(key, value) == value) return
+			(edit ?: prefs.edit().also { edit = it }).putBoolean(key, value)
+		}
+		pin(KEY_FOREGROUND_WHILE_SPEAKING, PIN_FOREGROUND_WHILE_SPEAKING)
+		pin(KEY_WAKE_LOCK, PIN_WAKE_LOCK)
+		pin(KEY_WAKE_LOCK_TAIL, PIN_WAKE_LOCK_TAIL_MS)
+		pin(KEY_SPEECH_LEAD, PIN_SPEECH_LEAD_MS)
+		pin(KEY_RUN_AHEAD, PIN_RUN_AHEAD)
+		pin(KEY_RELEASE_ENGINE, PIN_RELEASE_ENGINE_S)
+		pin(KEY_ENGINE_SILENCE, PIN_ENGINE_SILENCE_MS)
+		pin(KEY_KEEP_ALIVE_CHECK_MS, PIN_KEEP_ALIVE_CHECK_MS)
+		pin(KEY_NOTIFICATION_STOP, PIN_NOTIFICATION_STOP)
+		edit?.apply()
 	}
 
 	/** Takes the listener off the preferences.
@@ -114,33 +150,49 @@ class Settings(context: Context) {
 	/** Whether the notification carries a button that stops whatever is being
 	 *  spoken. The engine has no other way of being silenced from outside the
 	 *  app that is asking to be heard, and a reader that has started a
-	 *  paragraph has to be reached through that app to stop it. */
+	 *  paragraph has to be reached through that app to stop it. It is the
+	 *  button's whole point, so the row that offered it is gone and the answer
+	 *  is always yes. */
 	var notificationStopButton: Boolean
-		get() = prefs.getBoolean(KEY_NOTIFICATION_STOP, true)
+		get() = prefs.getBoolean(KEY_NOTIFICATION_STOP, PIN_NOTIFICATION_STOP)
 		set(value) = prefs.edit().putBoolean(KEY_NOTIFICATION_STOP, value).apply()
 
 	/** How often the notification is looked for and put back, in
 	 *  milliseconds. One of [Stability.NOTIFICATION_CHECKS]; anything else
-	 *  is answered with the default, which is the promise the screen makes. */
+	 *  is answered with the default, which is what the pin keeps set and
+	 *  what the screen promised before the choice left it. */
 	var keepAliveCheckMs: Int
-		get() = prefs.getInt(KEY_KEEP_ALIVE_CHECK_MS, KeepAlive.CHECK_MS.toInt())
-			.let { if (Stability.NOTIFICATION_CHECKS.contains(it)) it else KeepAlive.CHECK_MS.toInt() }
+		get() = prefs.getInt(KEY_KEEP_ALIVE_CHECK_MS, PIN_KEEP_ALIVE_CHECK_MS)
+			.let { if (Stability.NOTIFICATION_CHECKS.contains(it)) it else PIN_KEEP_ALIVE_CHECK_MS }
 		set(value) = prefs.edit().putInt(
 			KEY_KEEP_ALIVE_CHECK_MS,
-			if (Stability.NOTIFICATION_CHECKS.contains(value)) value else KeepAlive.CHECK_MS.toInt()
+			if (Stability.NOTIFICATION_CHECKS.contains(value)) value else PIN_KEEP_ALIVE_CHECK_MS
 		).apply()
 
 	/** Whether the engine is held in the foreground while each utterance is
 	 *  being made, even when the persistent notification is off. The
 	 *  notification is shown when speaking starts and taken away when it
-	 *  ends, which is the protection without the standing notice. */
+	 *  ends, which is the protection without the standing notice.
+	 *
+	 *  Pinned off. It was a second way to ask for what the keep-alive
+	 *  service already does, and Android 12 and later refuse it outright:
+	 *  a foreground service cannot be started by a service the system
+	 *  bound, which is exactly what a speech service is. What a build on
+	 *  those versions did was try, be refused, and put a notification up
+	 *  and take it away again around every utterance in between. */
 	var foregroundWhileSpeaking: Boolean
-		get() = prefs.getBoolean(KEY_FOREGROUND_WHILE_SPEAKING, false)
+		get() = prefs.getBoolean(KEY_FOREGROUND_WHILE_SPEAKING, PIN_FOREGROUND_WHILE_SPEAKING)
 		set(value) = prefs.edit().putBoolean(KEY_FOREGROUND_WHILE_SPEAKING, value).apply()
 
-	/** Whether the CPU is kept awake while an utterance is being made. */
+	/** Whether the CPU is kept awake while an utterance is being made.
+	 *  Pinned on: the pump below sleeps between chunks of delivery on
+	 *  purpose, and a device that decides to sleep in one of those sleeps
+	 *  is a device that drops the tail of a sentence and starts the next
+	 *  one late. Which devices do that is not knowable from here, so the
+	 *  cost -- a wake lock for the length of the speech -- is paid by
+	 *  everybody to buy the speed for the ones that need it. */
 	var wakeLock: Boolean
-		get() = prefs.getBoolean(KEY_WAKE_LOCK, false)
+		get() = prefs.getBoolean(KEY_WAKE_LOCK, PIN_WAKE_LOCK)
 		set(value) = prefs.edit().putBoolean(KEY_WAKE_LOCK, value).apply()
 
 	/** How long the CPU stays awake after the last thing said, in
@@ -148,34 +200,45 @@ class Settings(context: Context) {
 	 *  swipe -- and on the devices that sleep between one and the next the
 	 *  wake-up is charged to the second line. Holding the processor for a
 	 *  moment after the first costs a little battery and takes the wait out
-	 *  of the burst. Nought is not holding it at all, which is what the
-	 *  switch above has always meant. */
+	 *  of the burst. Pinned at five seconds, which is a swipe apart and
+	 *  then some, and short enough that a phone put down still sleeps. */
 	var wakeLockTailMs: Int
-		get() = prefs.getInt(KEY_WAKE_LOCK_TAIL, 0).coerceAtLeast(0)
+		get() = prefs.getInt(KEY_WAKE_LOCK_TAIL, PIN_WAKE_LOCK_TAIL_MS).coerceAtLeast(0)
 		set(value) = prefs.edit().putInt(KEY_WAKE_LOCK_TAIL, value.coerceAtLeast(0)).apply()
 
 	/** How long an engine instance is kept after the last thing it said, in
-	 *  seconds, before it is closed to give its memory back. The engine holds
-	 *  the language's tables for as long as it lives, which is worth it while
-	 *  a reader is being used and is not worth it an hour after anybody
-	 *  stopped swiping. Nought is never, which is how it has always been. */
+	 *  seconds, before it is closed to give its memory back. Pinned at zero,
+	 *  which is for ever: making an engine takes about a second, and a voice
+	 *  that is made again for every return to the phone is exactly the wait
+	 *  this whole screen exists to take out. The tens of megabytes the
+	 *  language's tables cost are what the protection is, and the
+	 *  notification's own switch is the one that trades it away. */
 	var releaseEngineAfterS: Int
-		get() = prefs.getInt(KEY_RELEASE_ENGINE, 0).coerceAtLeast(0)
+		get() = prefs.getInt(KEY_RELEASE_ENGINE, PIN_RELEASE_ENGINE_S).coerceAtLeast(0)
 		set(value) = prefs.edit().putInt(KEY_RELEASE_ENGINE, value.coerceAtLeast(0)).apply()
 
 	/** How far the samples handed to the framework may run ahead of the
 	 *  speech, in milliseconds. See [Pacing]: it is the one number that
 	 *  decides both how much of a queue a reader has to lose when it asks for
 	 *  silence and how much of a long message the engine is allowed to get on
-	 *  with at once. */
+	 *  with at once. Pinned at three hundred, which is what a screen reader
+	 *  wants: short enough that an interruption throws away a third of a
+	 *  second rather than a paragraph, long enough that the framework's own
+	 *  queue never runs dry. */
 	var speechLeadMs: Int
-		get() = prefs.getInt(KEY_SPEECH_LEAD, Pacing.DEFAULT_MS).coerceIn(Pacing.MIN_MS, Pacing.MAX_MS)
-		set(value) = prefs.edit().putInt(KEY_SPEECH_LEAD, value.coerceIn(Pacing.MIN_MS, Pacing.MAX_MS)).apply()
+		get() = prefs.getInt(KEY_SPEECH_LEAD, PIN_SPEECH_LEAD_MS).coerceIn(Pacing.MIN_MS, Pacing.MAX_MS)
+		set(value) = prefs.edit().putInt(
+			KEY_SPEECH_LEAD, value.coerceIn(Pacing.MIN_MS, Pacing.MAX_MS)
+		).apply()
 
 	/** Whether a message long enough to be a paragraph is synthesised as fast
-	 *  as the engine can make it, rather than at the pace it is heard at. */
+	 *  as the engine can make it, rather than at the pace it is heard at.
+	 *  Pinned on, and it is the other half of the lead above: a paragraph is
+	 *  one request whose successors wait behind it on the framework's single
+	 *  synthesis thread, so the engine is let ahead on it and whatever the
+	 *  reader asks for next is queued behind a thread that is nearly done. */
 	var runAheadOnLongText: Boolean
-		get() = prefs.getBoolean(KEY_RUN_AHEAD, true)
+		get() = prefs.getBoolean(KEY_RUN_AHEAD, PIN_RUN_AHEAD)
 		set(value) = prefs.edit().putBoolean(KEY_RUN_AHEAD, value).apply()
 
 	/** How long the engine may go on making no samples at all before the
@@ -183,9 +246,13 @@ class Settings(context: Context) {
 	 *  worse than an engine that has finished the sentence early: the
 	 *  framework's synthesis thread is the one thing waiting on it, and while
 	 *  it waits every later request for speech is behind it, which is a phone
-	 *  that has gone quiet for the rest of the day. */
+	 *  that has gone quiet for the rest of the day. Pinned at fifteen seconds,
+	 *  which is a hundred times what the engine takes to say the longest
+	 *  thing it is usually asked for: arriving there means something has gone
+	 *  wrong, not that the text is long. */
 	var engineSilenceMs: Int
-		get() = prefs.getInt(KEY_ENGINE_SILENCE, DEFAULT_SILENCE_MS).coerceIn(MIN_SILENCE_MS, MAX_SILENCE_MS)
+		get() = prefs.getInt(KEY_ENGINE_SILENCE, PIN_ENGINE_SILENCE_MS)
+			.coerceIn(MIN_SILENCE_MS, MAX_SILENCE_MS)
 		set(value) = prefs.edit()
 			.putInt(KEY_ENGINE_SILENCE, value.coerceIn(MIN_SILENCE_MS, MAX_SILENCE_MS)).apply()
 
@@ -343,6 +410,30 @@ class Settings(context: Context) {
 		const val KEY_RUN_AHEAD = "run_ahead_on_long_text"
 		const val KEY_ENGINE_SILENCE = "engine_silence_ms"
 		const val DEFAULT_SAMPLE_RATE = 11025
+
+		// ---- the stability numbers the battery screen no longer offers -----
+
+		/** The one place each pinned number is written down. The getters read
+		 *  them as their defaults and [pinStabilityNumbers] writes them over
+		 *  whatever an older build left behind, and every row that used to
+		 *  change them has come off the screen -- so the trade is made once,
+		 *  here, in the open, rather than by whoever finds a settings row
+		 *  they do not understand. */
+		const val PIN_FOREGROUND_WHILE_SPEAKING = false
+		const val PIN_WAKE_LOCK = true
+		const val PIN_WAKE_LOCK_TAIL_MS = 5000
+		const val PIN_SPEECH_LEAD_MS = Pacing.DEFAULT_MS
+		const val PIN_RUN_AHEAD = true
+		const val PIN_RELEASE_ENGINE_S = 0
+		const val PIN_ENGINE_SILENCE_MS = DEFAULT_SILENCE_MS
+
+		/** Three seconds, the same figure [KeepAlive.CHECK_MS] carries and
+		 *  the promise the screen made before the choice came off it. A test
+		 *  holds the two against each other, because the notification's
+		 *  readers ask for this number without an instance of this class to
+		 *  coerce it through. */
+		const val PIN_KEEP_ALIVE_CHECK_MS = 3000
+		const val PIN_NOTIFICATION_STOP = true
 
 		/** What the engine is allowed to go silent for before the utterance is
 		 *  given up on. Fifteen seconds is already a hundred times what the

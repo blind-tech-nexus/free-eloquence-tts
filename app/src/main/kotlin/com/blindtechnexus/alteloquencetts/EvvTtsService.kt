@@ -35,8 +35,14 @@ import java.util.concurrent.atomic.AtomicInteger
  * for every word in it.
  *
  * The samples travel from the engine to the framework in one buffer, as big as
- * the framework asks for and allocated once for the utterance, and the engine is
- * not held back in slices any more than [Pacing] requires.
+ * the framework asks for and allocated once for the life of the service, and the
+ * engine is not held back in slices any more than [Pacing] requires.
+ *
+ * A request for silence is not waited on anywhere. The abort reaches the engine
+ * by its flag, the read that is sitting on samples by the wake-up under the
+ * same lock, and the sleeps that pace the delivery and retry a full framework
+ * buffer by an interrupt of the utterance's own thread, so the next thing asked
+ * to be said starts behind nothing.
  *
  * The words a dictionary holds are taught when the service starts rather than in
  * front of the first thing said ([warmUp]), and the file they live in is asked
@@ -74,6 +80,28 @@ class EvvTtsService : TextToSpeechService() {
 	/** Utterances being driven right now, so that the idle timer can tell a
 	 *  quiet engine from a working one. */
 	private val speaking = AtomicInteger()
+
+	/** The thread driving the utterance in hand, or null.
+	 *
+	 *  It is kept so that a request for silence can wake the waits inside the
+	 *  utterance rather than waiting for them to finish. The abort flag and
+	 *  the engine's own wake-up reach a read that is sitting on the samples;
+	 *  this reaches the two sleeps that pace the delivery and retry a full
+	 *  framework buffer, which are the last things between an interruption
+	 *  being asked for and the next utterance being allowed to start.
+	 *
+	 *  Interrupting a thread that is doing framework work is not safe, so
+	 *  nothing on this path interrupts anything; it is the utterance's own
+	 *  thread that interrupts its own sleeps, and the flag each catch clears
+	 *  rather than re-lights. */
+	@Volatile
+	private var utteranceThread: Thread? = null
+
+	/** One read buffer for the life of the service, rather than one per
+	 *  utterance. The framework drives utterances one at a time and on one
+	 *  thread, so nothing is ever reading the buffer while the next
+	 *  utterance is filling it, and its size is its own business. */
+	private var chunkBuffer: ByteArray? = null
 
 	/** Whether the engine has just done something no setting explains, which is
 	 *  answered by giving the instance back rather than by guessing at a fix.
@@ -320,6 +348,12 @@ class EvvTtsService : TextToSpeechService() {
 		held?.close()
 		val made = EvvEngine.open(language)
 		engine = made
+		// A new instance knows nothing of the words taught to the one it
+		// replaces, and the file they live in has not changed, so the stamp
+		// that says "taught" is now a lie. Taking it back is what makes the
+		// applySettings below teach them again; without it a dictionary
+		// survived the file being edited and not the engine being remade.
+		if (made != null && made !== held) loadedWordsStamp = -1L
 		if (made != null) settings?.let { applySettings(made, it) }
 		return made
 	}
@@ -336,11 +370,37 @@ class EvvTtsService : TextToSpeechService() {
 	 *  when the file changes rather than whenever any setting does. The check is
 	 *  the file's own stamp, which is two reads of a directory entry, so a word
 	 *  added on the dictionary screen is heard the next time anything is spoken
-	 *  without restarting the service. */
-	private fun loadWords(target: EvvEngine) {
+	 *  without restarting the service.
+	 *
+	 *  The stamp is read outside [engineLock] and only a change takes the lock.
+	 *  The lock is the thing that makes an utterance wait behind a warm-up or a
+	 *  close, and the ordinary answer is that nothing has changed: paying the
+	 *  wait for the two reads that say so is a toll on every word for a road
+	 *  that is empty almost all of the time. When it is not empty the double
+	 *  check inside the lock is what keeps two utterances from teaching the
+	 *  same file twice. */
+	private fun loadWordsIfChanged(target: EvvEngine) {
+		if (wordsStamp() == loadedWordsStamp) return
+		synchronized(engineLock) {
+			if (wordsStamp() == loadedWordsStamp) return
+			loadWords(target)
+		}
+	}
+
+	/** The dictionary file's own stamp: when it last changed, or nought minus
+	 *  one for a file that is not there. */
+	private fun wordsStamp(): Long {
 		val file = wordsFile ?: runCatching { UserDictionary.file(this) }.getOrNull()?.also { wordsFile = it }
-		val stamp = if (file != null && file.exists()) file.lastModified() else -1L
+		return if (file != null && file.exists()) file.lastModified() else -1L
+	}
+
+	/** Teach the file's words to [target] if they are not taught already.
+	 *  The caller holds [engineLock]; the stamp check inside is what keeps
+	 *  a configuration pass and a changed-file pass from both teaching. */
+	private fun loadWords(target: EvvEngine) {
+		val stamp = wordsStamp()
 		if (stamp == loadedWordsStamp) return
+		val file = wordsFile
 		target.forgetDictionaries()
 		if (file != null && file.exists()) {
 			val taught = Dictionaries.load(target, Eci.DICT_MAIN, file, Charsets.UTF_8)
@@ -366,6 +426,11 @@ class EvvTtsService : TextToSpeechService() {
 	 * It is deliberately not [stopSelf]: that would take the process's engine
 	 * away with it, and the next request for speech would be answered by a
 	 * phone that has to make the voice again from nothing.
+	 *
+	 * The interrupt of [utteranceThread] is what makes the stop instant
+	 * rather than prompt: without it, a thread asleep in the pacing wait or
+	 * in the retry on a full framework buffer notices the flag when its
+	 * slice ends, and every later utterance is queued behind that slice.
 	 */
 	internal fun stopSpeakingNow() {
 		stopped = true
@@ -374,10 +439,24 @@ class EvvTtsService : TextToSpeechService() {
 			runCatching { held.stop() }
 				.onFailure { Log.e(TAG, "the abort did not reach the engine", it) }
 		}
+		// The read waiting on samples is woken by the abort itself; this wakes
+		// the thread that is not waiting on samples yet but is sleeping
+		// between turns. Only while an utterance is actually being driven: a
+		// flag set on an idle thread would sit there until somebody cleared
+		// it, and the thread this one belongs to has framework work of its own
+		// to do between utterances.
+		if (speaking.get() > 0) {
+			utteranceThread?.takeIf { it !== Thread.currentThread() }?.interrupt()
+		}
 	}
 
 	override fun onSynthesizeText(request: SynthesisRequest?, callback: SynthesisCallback?) {
 		if (request == null || callback == null) return
+		// A stop that arrived while the last utterance was on its way out can
+		// leave an interrupt standing on this one's thread, and a standing
+		// flag makes every later sleep on this thread throw. The utterance
+		// starts by taking the flag back, whatever was lit just before it.
+		Thread.interrupted()
 		stopped = false
 		val s = settings
 		if (s == null) {
@@ -429,10 +508,13 @@ class EvvTtsService : TextToSpeechService() {
 		callback: SynthesisCallback,
 		s: Settings
 	) {
+		// The thread a request for silence has to wake, from now until the
+		// utterance is over.
+		utteranceThread = Thread.currentThread()
 		// Re-sent every time rather than once, because it is the one setting
 		// with no way of telling whether something else has moved it.
 		target.setAbbreviations(s.abbreviations)
-		synchronized(engineLock) { loadWords(target) }
+		loadWordsIfChanged(target)
 		// The rate and pitch a client asks for are scaled onto the voice,
 		// unless the settings say this app's own are to be forced over them: a
 		// screen reader that has set a rate is asking for that rate, and this is
@@ -469,7 +551,7 @@ class EvvTtsService : TextToSpeechService() {
 			// running dry. So the opening is made lazily, below.
 			val opening = Opening(callback, target.sampleRateHz)
 			val pace = Pace(target.sampleRateHz * BYTES_PER_SAMPLE)
-			val buffer = ByteArray(callback.maxBufferSize.coerceIn(MIN_CHUNK, MAX_CHUNK))
+			val buffer = bufferFor(callback)
 			// Piece by piece, so that asking for silence waits out a piece
 			// rather than the whole message: the engine cannot abandon what it is
 			// saying. Pauses are shortened after the split rather than before
@@ -511,9 +593,21 @@ class EvvTtsService : TextToSpeechService() {
 			remember(pace)
 			finish(callback, opening)
 		} finally {
+			utteranceThread = null
 			if (speakForeground) KeepAliveNotification.release(this, detach = false)
 			releaseWakeLock(lock)
 		}
+	}
+
+	/** The buffer the samples ride in, made once and kept. Its size is what
+	 *  the framework says it will take, which is a property of its audio
+	 *  player and not of the utterance, so in the ordinary run of a phone
+	 *  this is one allocation for the life of the service rather than one
+	 *  per thing said. */
+	private fun bufferFor(callback: SynthesisCallback): ByteArray {
+		val want = callback.maxBufferSize.coerceIn(MIN_CHUNK, MAX_CHUNK)
+		chunkBuffer?.let { if (it.size == want) return it }
+		return ByteArray(want).also { chunkBuffer = it }
 	}
 
 	/**
@@ -604,7 +698,12 @@ class EvvTtsService : TextToSpeechService() {
 			try {
 				Thread.sleep(DELIVER_WAIT_MS)
 			} catch (stopping: InterruptedException) {
-				Thread.currentThread().interrupt()
+				// The interrupt only ever comes from a request for silence,
+				// which is what the stopped flag already says, and the flag is
+				// swallowed on purpose: it was aimed at this sleep, and this
+				// thread goes on from here to call back into the framework,
+				// where a standing interrupt flag would trip whatever blocks
+				// next and is nobody's business to be interrupted.
 				return false
 			}
 		}
@@ -686,8 +785,11 @@ class EvvTtsService : TextToSpeechService() {
 	 * swiping through, wide for the paragraph nobody is going to interrupt
 	 * between two of its own sentences.
 	 *
-	 * The wait is in slices so that a stop is noticed at once rather than at the
-	 * end of it.
+	 * The wait is in slices so that a stop that arrives some other way is
+	 * noticed within a slice, and a slice is slept only for what is left of
+	 * the lead -- and it is interrupted outright by [stopSpeakingNow], which
+	 * is what makes the notice of a real interruption a thing of the moment
+	 * rather than a thing of the next slice.
 	 */
 	private fun hold(pace: Pace, leadMs: Long): Boolean {
 		while (!stopped) {
@@ -696,7 +798,9 @@ class EvvTtsService : TextToSpeechService() {
 			try {
 				Thread.sleep(minOf(ahead, SLICE_MS))
 			} catch (stopping: InterruptedException) {
-				Thread.currentThread().interrupt()
+				// Swallowed for the same reason as in [deliver]: the stop
+				// flag is the message, and the flag on the thread was aimed
+				// at the sleep it woke.
 				return false
 			}
 		}
@@ -758,22 +862,27 @@ class EvvTtsService : TextToSpeechService() {
 		 *  a message that has to be given up on. */
 		const val TIMED_OUT = -2
 
-		/** How much audio may sit ahead of the speech by default. The setting on
-		 *  the battery screen says so, and this is the answer when nobody has
-		 *  changed it: see [Pacing]. */
+		/** How much audio may sit ahead of the speech. This is the answer the
+		 *  battery screen used to offer a choice around and no longer does:
+		 *  the setting, pinned, and this is its shape as a duration, which is
+		 *  what the tests hold the two against. See [Pacing]. */
 		const val LEAD_MS = Pacing.DEFAULT_MS.toLong()
 
 		/** How long a wait for the speech to catch up is slept in one go. It is
-		 *  what bounds how long a request for silence can take, so it is kept
-		 *  well under the lead. */
-		const val SLICE_MS = 25L
+		 *  what bounds how long a request for silence that arrived some other
+		 *  way than by the interrupt can take, so it is kept well under the
+		 *  lead and small enough that the waking of it is noise against the
+		 *  ten milliseconds of audio it is worth. */
+		const val SLICE_MS = 10L
 
 		/** How often, and how many times, the framework is asked again for room.
 		 *  A buffer that will not take another run of samples is nearly always
 		 *  one that is full, and the next moment it is not is the next one to
-		 *  ask in. */
-		const val DELIVER_TRIES = 200
-		const val DELIVER_WAIT_MS = 25L
+		 *  ask in. The wait is the same slice as the pacing one: a full track
+		 *  empties at the rate it plays at, and one wake in ten milliseconds
+		 *  keeps a swallowed chunk from costing more than that. */
+		const val DELIVER_TRIES = 500
+		const val DELIVER_WAIT_MS = 10L
 
 		/** The longest an utterance may hold the wake lock before the system
 		 *  takes it back, as a ceiling rather than a course. */

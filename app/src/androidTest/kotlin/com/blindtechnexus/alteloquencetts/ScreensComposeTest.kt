@@ -24,8 +24,10 @@ import org.junit.runner.RunWith
  * The switches are found by what they say rather than by their text: a
  * switch here is one control whose label is its content description and whose
  * state is its state description, and that is what a screen reader meets. The
- * interval row is a button carrying its value, so its label is found as part
- * of what the button shows.
+ * rows the engine now answers for itself are checked the other way round --
+ * they have to answer that they are not there -- because a screen that lost a
+ * row by accident and a screen that was never given one look the same to
+ * nobody.
  */
 @RunWith(AndroidJUnit4::class)
 class ScreensComposeTest {
@@ -44,17 +46,30 @@ class ScreensComposeTest {
 		}
 		for (label in listOf(
 			R.string.persistent_notification_label,
-			R.string.notification_stop_label,
 			R.string.start_on_boot_label,
-			R.string.foreground_while_speaking_label,
-			R.string.wake_lock_label,
 			R.string.track_actions_label
 		)) {
 			compose.onNodeWithContentDescription(context.getString(label)).assertExists()
 		}
-		compose.onNodeWithText(context.getString(R.string.notification_check_label), substring = true)
-			.assertExists()
-		compose.onNodeWithText(context.getString(R.string.notification_check_description)).assertExists()
+		// The engine's own numbers are pinned in the settings rather than
+		// offered here, so the section they lived in and every row under it
+		// have to be absent, not merely empty. The literals are written out
+		// because the strings they used to name are gone from the build,
+		// which is half of the point of saying them here.
+		for (gone in listOf(
+			"While speaking",
+			"Speak in the foreground",
+			"Keep the CPU awake while speaking",
+			"Hold the CPU a little longer",
+			"How far ahead of the speech",
+			"Run ahead on long text",
+			"Give the engine back when idle",
+			"Give up after the engine goes silent",
+			"How often the notification is looked for",
+			"Stop button in the notification"
+		)) {
+			compose.onNodeWithText(gone, substring = true).assertDoesNotExist()
+		}
 	}
 
 	@Test

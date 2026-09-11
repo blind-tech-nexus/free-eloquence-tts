@@ -212,8 +212,13 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 	}
 
 	/**
-	 * Bytes of PCM, blocking until there are some. 0 ends the utterance and
-	 * -1 says it was stopped or that nothing came for [timeoutMs].
+	 * Bytes of PCM, blocking until there are some. 0 ends the utterance, -1
+	 * says it was stopped -- by [stop], which is what makes an interruption
+	 * answer the same instant it is asked for -- and
+	 * [EvvTtsService.TIMED_OUT] says that nothing came for [timeoutMs] and
+	 * the engine is likely wedged. The two negatives are kept apart on
+	 * purpose: a stopped utterance has nothing wrong with it, and a silent
+	 * one is why the instance gets given back.
 	 *
 	 * The timeout is not a courtesy. The engine cannot be made to abandon an
 	 * utterance from outside, and this call is the one place the framework's
