@@ -35,10 +35,12 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 		private const val TAG = "alteloquencetts"
 
 		/** How long a [read] waits for samples when the caller has not named a
-		 *  wait of its own. The service passes the user's own figure; this is
-		 *  the number for anybody else, and it is the same length of silence
-		 *  because there is no second sensible answer. */
-		const val READ_TIMEOUT_MS = 15000
+		 *  wait of its own. The service passes the fixed figure; this is the
+		 *  number for anybody else -- the settings screen's own preview --
+		 *  and it is the same length of silence because there is no second
+		 *  sensible answer. Five seconds is still a thousand times the gap
+		 *  this engine ever legitimately leaves between two frames. */
+		const val READ_TIMEOUT_MS = 5000
 
 		/** How long [close] waits for a thread that is inside [read] to get
 		 *  out before it leaves the handle to that thread and takes the rest

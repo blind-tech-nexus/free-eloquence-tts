@@ -46,8 +46,6 @@ class ScreensComposeTest {
 			R.string.persistent_notification_label,
 			R.string.notification_stop_label,
 			R.string.start_on_boot_label,
-			R.string.foreground_while_speaking_label,
-			R.string.wake_lock_label,
 			R.string.track_actions_label
 		)) {
 			compose.onNodeWithContentDescription(context.getString(label)).assertExists()
@@ -55,6 +53,24 @@ class ScreensComposeTest {
 		compose.onNodeWithText(context.getString(R.string.notification_check_label), substring = true)
 			.assertExists()
 		compose.onNodeWithText(context.getString(R.string.notification_check_description)).assertExists()
+		// The "while speaking" section is gone: its answers are fixed in
+		// Stability and Pacing rather than chosen here, so none of its rows
+		// may be composed at all.
+		for (label in listOf(
+			R.string.foreground_while_speaking_label,
+			R.string.wake_lock_label
+		)) {
+			compose.onNodeWithContentDescription(context.getString(label)).assertDoesNotExist()
+		}
+		for (label in listOf(
+			R.string.wake_lock_tail_label,
+			R.string.speech_lead_label,
+			R.string.run_ahead_label,
+			R.string.engine_release_label,
+			R.string.engine_silence_label
+		)) {
+			compose.onNodeWithText(context.getString(label), substring = true).assertDoesNotExist()
+		}
 	}
 
 	@Test

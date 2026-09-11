@@ -81,12 +81,15 @@ class SettingsTest {
 		assertEquals(Eci.DEFAULT_SPEED, settings.shape(REED)[Eci.VOICE_SPEED])
 	}
 
-	/** The switches on the battery and stability screen are remembered, and
+	/** The switches for the battery and stability screen are remembered, and
 	 *  each is off until somebody turns it on: a notification or a wake lock
 	 *  nobody asked for would be a surprise, and so would a log of what they
 	 *  never did. The notification check starts at three seconds -- the
 	 *  promise the screen makes -- and a value nobody offered falls back to
-	 *  it rather than running wild. */
+	 *  it rather than running wild. The foreground and wake lock properties
+	 *  are retired from the screen and fixed in Stability, but they still
+	 *  round-trip here so that preferences written by an earlier build keep
+	 *  parsing. */
 	@Test
 	fun theBatteryAndStabilitySwitchesRememberTheirState() {
 		assertFalse("the persistent notification starts on", settings.persistentNotification)
