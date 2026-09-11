@@ -26,10 +26,12 @@ package com.blindtechnexus.alteloquencetts
  * instead, which is far more than any caller's buffer wants but is a rounding
  * error next to the minutes a long one runs to.
  *
- * Both numbers are the user's to move, on the battery and stability screen:
- * whoever finds that a reader is losing the item after the one they stopped
- * wants the short one, and whoever wants the engine to finish a chapter the
- * moment it is asked for wants the long one.
+ * Both numbers were once the user's to move, on the battery and stability
+ * screen. They are not any more: the screen keeps no row a person cannot
+ * answer a question about, and the app answers them itself, at the values the
+ * measurements say a screen reader wants. The range stays here, and so does
+ * [Settings]' pin, because the settings still travel through the same doors
+ * and a number an older build left behind is met by the same bounds.
  */
 object Pacing {
 
@@ -42,7 +44,8 @@ object Pacing {
 	 *  far ahead the engine gets, so the number stops meaning anything. */
 	const val MAX_MS = 4000
 
-	/** What it has always been, and what a screen reader wants. */
+	/** What it has always been, what a screen reader wants, and what the app
+	 *  now holds it at: [Settings.PIN_SPEECH_LEAD_MS] is this number. */
 	const val DEFAULT_MS = 300
 
 	/** The lead a message long enough to be a paragraph is given. */
@@ -71,9 +74,14 @@ object Pacing {
 }
 
 /**
- * The choices the battery and stability screen offers for the numbers that
- * keep the engine alive, so that the screen, the settings and the service all
- * read the same list rather than three copies of it.
+ * The numbers that keep the engine alive, and the shape the screen used to
+ * offer them in, so that the settings and the service all read the same list
+ * rather than three copies of it.
+ *
+ * The rows have come off the screen and [Settings] pins each number to the
+ * best of these; the lists are what "best" is measured against, what an old
+ * stored value is snapped back to, and what the bounds in [Pacing] and
+ * [Settings] mean.
  */
 object Stability {
 

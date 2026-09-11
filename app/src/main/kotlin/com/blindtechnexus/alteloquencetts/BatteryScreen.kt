@@ -1,6 +1,5 @@
 package com.blindtechnexus.alteloquencetts
 
-import android.content.res.Resources
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,40 +32,48 @@ import androidx.lifecycle.LifecycleEventObserver
 /**
  * Everything this app can do to keep Android from stopping the voice.
  *
- * The screen is in three parts, because the three things they are for happen at
- * three different times.
+ * Two things hold the engine up, and this screen is the pair of them plus the
+ * one question Android will not answer by itself:
  *
- * While the phone is idle: the exemption from battery optimization, which is the
- * single most important and cannot be granted from inside the app -- the button
- * hands over to the system's own screen, and the state shown here is read again
- * on every resume, because the answer can change while that screen is up; the
- * notification that holds the app in the foreground, which now stands whether or
- * not anything is bound to the engine, since a service that keeps it up of its
- * own has been added for the purpose; the same notification coming back
- * after a restart, which is the one thing a reboot takes away; and how often
- * the notification is looked for, where a phone that clears notifications
- * aggressively wants the short end.
- *
- * While speaking: speaking in the foreground, which holds the engine there
- * only while each utterance is being made, for whoever wants the protection
- * without a notification that never goes away; the wake lock, for the devices
- * whose processor sleeps mid sentence and drops the tail of the speech; how far the engine may run ahead of
- * what has been heard, which is the trade between losing words when a reader
- * interrupts and finishing a chapter the moment it was asked for; how long an
- * engine instance is kept after the last thing it said; and how long the engine
- * may go silent in the middle of an utterance before it is given up on.
+ * While the phone is idle: the exemption from battery optimization, which is
+ * the single most important and cannot be granted from inside the app -- the
+ * button hands over to the system's own screen, and the state shown here is
+ * read again on every resume, because the answer can change while that screen
+ * is up; the notification that holds the app in the foreground, which stands
+ * whether or not anything is bound to the engine, since a service that keeps it
+ * up of its own has been added for the purpose; the same notification coming
+ * back after a restart, which is the one thing a reboot takes away; and the
+ * phone's own background settings, where the makers who stack their own policy
+ * on top of Doze keep their answer.
  *
  * And for a fault: the switch that writes what is changed here to the system
  * log, so that a voice that stopped can be traced back to what was changed
  * before it did.
  *
- * Every one of the rows has its sentence above it, the way the rest of the
- * settings do: the names do not carry their own meaning, and a description
- * folded into a control would be read out again on every visit with no way past
- * it. What is in force at the moment is said once, at the bottom, in the terms
- * of what the phone is doing rather than in the names of the switches -- because
- * the question this screen is opened to answer is not what was set but whether
- * it is working.
+ * There used to be a third part, a section called "While speaking" and seven
+ * numbers under it -- how far the engine may run ahead of the speech, whether
+ * to keep running ahead on long text, whether the CPU should be held awake and
+ * for how long after, how long an engine instance is kept after the last thing
+ * it said, how long the engine may go silent before an utterance is given up
+ * on, and whether to take the engine into the foreground for the length of
+ * each utterance -- with a row above them saying how often the notification is
+ * looked for and a row saying whether it should carry a stop button at all.
+ * They are gone, and the code still reads every one of those settings; what
+ * changed is that the app answers them, from [Settings]'s pinned numbers, with
+ * the best value of each. Not one of the rows was a thing a person could tell
+ * the right answer for from its own words, and every one of the trades they
+ * made is better made once, in the open, in the code, than once per phone by
+ * whoever finds the section. The one that would not have settled -- speaking
+ * in the foreground, which the screen could not make work on Android 12 and
+ * later anyway -- is pinned off and explained where it is read.
+ *
+ * Every one of the rows that has stayed has its sentence above it, the way the
+ * rest of the settings do: the names do not carry their own meaning, and a
+ * description folded into a control would be read out again on every visit with
+ * no way past it. What is in force at the moment is said once, at the bottom,
+ * in the terms of what the phone is doing rather than in the names of the
+ * switches -- because the question this screen is opened to answer is not what
+ * was set but whether it is working.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,15 +83,6 @@ fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 	var granted by remember { mutableStateOf(BatteryExemption.isGranted(context)) }
 	var persistent by remember { mutableStateOf(settings.persistentNotification) }
 	var startOnBoot by remember { mutableStateOf(settings.startOnBoot) }
-	var stopButton by remember { mutableStateOf(settings.notificationStopButton) }
-	var checkInterval by remember { mutableStateOf(settings.keepAliveCheckMs) }
-	var foreground by remember { mutableStateOf(settings.foregroundWhileSpeaking) }
-	var wakeLock by remember { mutableStateOf(settings.wakeLock) }
-	var tail by remember { mutableStateOf(settings.wakeLockTailMs) }
-	var release by remember { mutableStateOf(settings.releaseEngineAfterS) }
-	var lead by remember { mutableStateOf(settings.speechLeadMs) }
-	var runAhead by remember { mutableStateOf(settings.runAheadOnLongText) }
-	var silence by remember { mutableStateOf(settings.engineSilenceMs) }
 	var tracking by remember { mutableStateOf(settings.trackActions) }
 	var notice by remember { mutableStateOf("") }
 	// Resolved here rather than in the click: the click is not a composition,
@@ -154,18 +152,6 @@ fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 				}
 			)
 			SwitchRow(
-				label = stringResource(R.string.notification_stop_label),
-				checked = stopButton,
-				description = stringResource(R.string.notification_stop_description),
-				onChange = { on ->
-					stopButton = on
-					settings.notificationStopButton = on
-					// The notification is rebuilt by whoever is holding it up,
-					// within the check that runs every few seconds.
-					Tracker.action(settings, "notification stop button ${if (on) "on" else "off"}")
-				}
-			)
-			SwitchRow(
 				label = stringResource(R.string.start_on_boot_label),
 				checked = startOnBoot,
 				description = stringResource(R.string.start_on_boot_description),
@@ -186,23 +172,6 @@ fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 					Tracker.action(settings, "start on boot ${if (on) "on" else "off"}")
 				}
 			)
-			ChoiceButton(
-				title = stringResource(R.string.notification_check_label),
-				shown = stringResource(
-					R.string.battery_value_is,
-					stringResource(R.string.notification_check_label),
-					durationLabel(context.resources, checkInterval)
-				),
-				options = Stability.NOTIFICATION_CHECKS.map { durationLabel(context.resources, it) },
-				chosen = indexOf(checkInterval, Stability.NOTIFICATION_CHECKS),
-				description = stringResource(R.string.notification_check_description),
-				onChoose = { at ->
-					val value = Stability.NOTIFICATION_CHECKS.getOrElse(at) { checkInterval }
-					checkInterval = value
-					settings.keepAliveCheckMs = value
-					Tracker.action(settings, "notification check every ${value}ms")
-				}
-			)
 			ActionRow(
 				label = stringResource(
 					if (ManufacturerScreens.hasOwnScreen()) R.string.battery_manufacturer_open
@@ -214,108 +183,6 @@ fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 					if (!ManufacturerScreens.open(context) && !ManufacturerScreens.appDetails(context)) {
 						notice = noBatteryScreen
 					}
-				}
-			)
-
-			SectionHeading(text = stringResource(R.string.battery_speaking_heading))
-			SwitchRow(
-				label = stringResource(R.string.foreground_while_speaking_label),
-				checked = foreground,
-				description = stringResource(R.string.foreground_while_speaking_description),
-				onChange = { on ->
-					foreground = on
-					settings.foregroundWhileSpeaking = on
-					Tracker.action(settings, "speak in the foreground ${if (on) "on" else "off"}")
-				}
-			)
-			SwitchRow(
-				label = stringResource(R.string.wake_lock_label),
-				checked = wakeLock,
-				description = stringResource(R.string.wake_lock_description),
-				onChange = { on ->
-					wakeLock = on
-					settings.wakeLock = on
-					Tracker.action(settings, "wake lock ${if (on) "on" else "off"}")
-				}
-			)
-			ChoiceButton(
-				title = stringResource(R.string.wake_lock_tail_label),
-				shown = stringResource(
-					R.string.battery_value_is,
-					stringResource(R.string.wake_lock_tail_label),
-					durationLabel(context.resources, tail)
-				),
-				options = Stability.WAKE_LOCK_TAILS.map { durationLabel(context.resources, it) },
-				chosen = indexOf(tail, Stability.WAKE_LOCK_TAILS),
-				description = stringResource(R.string.wake_lock_tail_description),
-				onChoose = { at ->
-					val value = Stability.WAKE_LOCK_TAILS.getOrElse(at) { tail }
-					tail = value
-					settings.wakeLockTailMs = value
-					Tracker.action(settings, "wake lock held for ${value}ms after speaking")
-				}
-			)
-			ChoiceButton(
-				title = stringResource(R.string.speech_lead_label),
-				shown = stringResource(
-					R.string.battery_value_is,
-					stringResource(R.string.speech_lead_label),
-					durationLabel(context.resources, lead)
-				),
-				options = Pacing.LEADS.map { durationLabel(context.resources, it) },
-				chosen = indexOf(lead, Pacing.LEADS),
-				description = stringResource(R.string.speech_lead_description),
-				onChoose = { at ->
-					val value = Pacing.LEADS.getOrElse(at) { lead }
-					lead = value
-					settings.speechLeadMs = value
-					Tracker.action(settings, "speech lead ${value}ms")
-				}
-			)
-			SwitchRow(
-				label = stringResource(R.string.run_ahead_label),
-				checked = runAhead,
-				description = stringResource(R.string.run_ahead_description),
-				onChange = { on ->
-					runAhead = on
-					settings.runAheadOnLongText = on
-					Tracker.action(settings, "run ahead on long text ${if (on) "on" else "off"}")
-				}
-			)
-			ChoiceButton(
-				title = stringResource(R.string.engine_release_label),
-				shown = stringResource(
-					R.string.battery_value_is,
-					stringResource(R.string.engine_release_label),
-					durationLabel(context.resources, release * MILLIS_PER_SECOND, forever = true)
-				),
-				options = Stability.ENGINE_RELEASES.map {
-					durationLabel(context.resources, it * MILLIS_PER_SECOND, forever = true)
-				},
-				chosen = indexOf(release, Stability.ENGINE_RELEASES),
-				description = stringResource(R.string.engine_release_description),
-				onChoose = { at ->
-					val value = Stability.ENGINE_RELEASES.getOrElse(at) { release }
-					release = value
-					settings.releaseEngineAfterS = value
-					Tracker.action(settings, "engine given back after ${value}s idle")
-				}
-			)
-			ChoiceButton(
-				title = stringResource(R.string.engine_silence_label),
-				shown = stringResource(
-					R.string.battery_value_is,
-					stringResource(R.string.engine_silence_label),
-					durationLabel(context.resources, silence)
-				),
-				options = Stability.SILENCES.map { durationLabel(context.resources, it) },
-				chosen = indexOf(silence, Stability.SILENCES),
-				description = stringResource(R.string.engine_silence_description),
-				onChoose = { at ->
-					val value = Stability.SILENCES.getOrElse(at) { silence }
-					silence = value
-					settings.engineSilenceMs = value
-					Tracker.action(settings, "utterance given up after ${value / MILLIS_PER_SECOND}s of silence")
 				}
 			)
 
@@ -367,54 +234,3 @@ private fun ExemptionRow(granted: Boolean, onClick: () -> Unit) {
 		}
 	}
 }
-
-/**
- * A duration in words, for a row that names one.
- *
- * The units are spelled out rather than left as "ms" and "s", because a bare
- * abbreviation is read out as a letter and a word is read out as a word, and
- * every number on this screen is only ever heard. A multiple of a minute is said
- * as minutes for the same reason: ninety seconds is a thing a person has to work
- * out and a minute and a half is not.
- *
- * [forever] is for the settings where nought is not a short wait but no wait at
- * all -- the engine being kept for ever rather than for nought seconds -- and it
- * is a word the row's own meaning needs, so it is a parameter rather than a
- * convention.
- */
-private fun durationLabel(resources: Resources, millis: Int, forever: Boolean = false): String {
-	if (millis == 0) {
-		return resources.getString(if (forever) R.string.battery_forever else R.string.battery_never)
-	}
-	if (millis % (60 * 1000) == 0) {
-		val minutes = millis / (60 * 1000)
-		return resources.getQuantityString(R.plurals.battery_minutes, minutes, minutes)
-	}
-	if (millis % 1000 == 0) {
-		val seconds = millis / 1000
-		return resources.getQuantityString(R.plurals.battery_seconds, seconds, seconds)
-	}
-	return resources.getString(R.string.battery_milliseconds, millis)
-}
-
-/** Which of the offered values a setting stands nearest to. The values are the
- *  ones the screen offers, so the answer is exact for anything set here; a
- *  number that came from another version of the app, or from a preference
- *  written by hand, is rounded to the nearest one rather than shown as a choice
- *  that is not in the list. */
-private fun indexOf(value: Int, options: List<Int>): Int {
-	val exact = options.indexOf(value)
-	if (exact >= 0) return exact
-	var best = 0
-	var bestBy = Int.MAX_VALUE
-	for (at in options.indices) {
-		val by = Math.abs(options[at] - value)
-		if (by < bestBy) {
-			bestBy = by
-			best = at
-		}
-	}
-	return best
-}
-
-private const val MILLIS_PER_SECOND = 1000

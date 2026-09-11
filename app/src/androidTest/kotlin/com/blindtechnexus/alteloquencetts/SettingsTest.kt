@@ -81,40 +81,64 @@ class SettingsTest {
 		assertEquals(Eci.DEFAULT_SPEED, settings.shape(REED)[Eci.VOICE_SPEED])
 	}
 
-	/** The switches on the battery and stability screen are remembered, and
-	 *  each is off until somebody turns it on: a notification or a wake lock
-	 *  nobody asked for would be a surprise, and so would a log of what they
-	 *  never did. The notification check starts at three seconds -- the
-	 *  promise the screen makes -- and a value nobody offered falls back to
-	 *  it rather than running wild. */
+	/** The two switches the battery screen still offers are remembered, and
+	 *  each is off until somebody turns it on: a notification nobody asked for
+	 *  would be a surprise, and so would a log of what they never did. */
 	@Test
-	fun theBatteryAndStabilitySwitchesRememberTheirState() {
+	fun theBatterySwitchesRememberTheirState() {
 		assertFalse("the persistent notification starts on", settings.persistentNotification)
-		assertFalse("speaking in the foreground starts on", settings.foregroundWhileSpeaking)
-		assertFalse("the wake lock starts on", settings.wakeLock)
 		assertFalse("action tracking starts on", settings.trackActions)
+		settings.persistentNotification = true
+		settings.trackActions = true
+		assertTrue(settings.persistentNotification)
+		assertTrue(settings.trackActions)
+	}
+
+	/** The numbers the "While speaking" section used to offer are pinned to
+	 *  the best of them rather than asked for. A fresh install reads the pin
+	 *  straight out of the defaults, and a value left behind by an older
+	 *  build, or written by hand, is taken back by the next instance of the
+	 *  settings rather than obeyed. The notification check starts at three
+	 *  seconds -- the promise the app makes -- and a foreign interval falls
+	 *  back to it, as it always did. */
+	@Test
+	fun theStabilityNumbersAnswerThePinnedBestOfThem() {
+		assertTrue("the wake lock does not start held", settings.wakeLock)
+		assertEquals(5000, settings.wakeLockTailMs)
+		assertEquals(Pacing.DEFAULT_MS, settings.speechLeadMs)
+		assertTrue("the engine does not run ahead on long text", settings.runAheadOnLongText)
+		assertEquals("the engine is given back when it should be kept", 0, settings.releaseEngineAfterS)
+		assertEquals(Settings.DEFAULT_SILENCE_MS, settings.engineSilenceMs)
+		assertFalse("speaking in the foreground starts on", settings.foregroundWhileSpeaking)
+		assertTrue("the notification does not carry its stop button", settings.notificationStopButton)
 		assertEquals(KeepAlive.CHECK_MS.toInt(), settings.keepAliveCheckMs)
 		assertEquals(
 			"the offered intervals moved",
 			listOf(2000, 3000, 5000, 10000),
 			Stability.NOTIFICATION_CHECKS
 		)
-		settings.persistentNotification = true
-		settings.foregroundWhileSpeaking = true
-		settings.wakeLock = true
-		settings.trackActions = true
-		settings.keepAliveCheckMs = 5000
-		assertTrue(settings.persistentNotification)
-		assertTrue(settings.foregroundWhileSpeaking)
-		assertTrue(settings.wakeLock)
-		assertTrue(settings.trackActions)
-		assertEquals(5000, settings.keepAliveCheckMs)
-		settings.keepAliveCheckMs = 12345
+		// What an older build, or a hand in the preferences, leaves behind.
+		settings.wakeLock = false
+		settings.wakeLockTailMs = 60000
+		settings.speechLeadMs = Pacing.MAX_MS
+		settings.runAheadOnLongText = false
+		settings.engineSilenceMs = 300000
+		val again = Settings(InstrumentationRegistry.getInstrumentation().targetContext)
+		assertTrue("the wake lock did not come back", again.wakeLock)
+		assertEquals("the tail did not come back", Settings.PIN_WAKE_LOCK_TAIL_MS, again.wakeLockTailMs)
+		assertEquals("the lead did not come back", Pacing.DEFAULT_MS, again.speechLeadMs)
+		assertTrue("running ahead did not come back", again.runAheadOnLongText)
+		assertEquals("silence did not come back", Settings.DEFAULT_SILENCE_MS, again.engineSilenceMs)
+		again.keepAliveCheckMs = 12345
 		assertEquals(
 			"a foreign interval did not fall back to three seconds",
 			KeepAlive.CHECK_MS.toInt(),
-			settings.keepAliveCheckMs
+			again.keepAliveCheckMs
 		)
+		// The pin and the clock the notification readers check without a
+		// settings instance are one number, or the screen's promise and the
+		// service's wait disagree.
+		assertEquals(KeepAlive.CHECK_MS.toInt(), Settings.PIN_KEEP_ALIVE_CHECK_MS)
 	}
 
 	private fun wipe() {
@@ -122,10 +146,13 @@ class SettingsTest {
 		settings.speed = Eci.DEFAULT_SPEED
 		settings.voice = REED
 		settings.persistentNotification = false
-		settings.foregroundWhileSpeaking = false
-		settings.keepAliveCheckMs = KeepAlive.CHECK_MS.toInt()
-		settings.wakeLock = false
 		settings.trackActions = false
+		// The pinned numbers go back to their pins, whatever a test moved,
+		// by the same means the app uses: an instance sees them and pins
+		// again. It is closed after, because a test that leaves a listener
+		// registered on every wipe is a test that is proving the leak it
+		// keeps talking about.
+		Settings(InstrumentationRegistry.getInstrumentation().targetContext).close()
 	}
 
 	private companion object {

@@ -130,7 +130,7 @@
 	<string name="section_battery">Battery and stability</string>
 	<string name="battery_section_description">Everything this app can do to keep Android from stopping the voice in the background.</string>
 	<string name="battery_open">Battery and stability settings</string>
-	<string name="battery_open_description">The exemption from battery optimization, a persistent notification, a wake lock while speaking, and a log of your actions.</string>
+	<string name="battery_open_description">The exemption from battery optimization, the notification that holds the voice up, and a log of your actions. The numbers that decide how the engine runs while it is speaking are its own, chosen in its code.</string>
 	<string name="battery_screen_description">A screen reader is the last thing that can be allowed to sleep. Each of these makes Android a little more likely to leave the engine running, at a small cost in battery or in noise.</string>
 	<string name="battery_exemption_label">Battery optimization exemption</string>
 	<string name="battery_exemption_granted">Granted</string>
@@ -140,23 +140,16 @@
 	     anything is bound to the engine now, which is the whole of the point of
 	     it: the voice is wanted at the moment nobody has thought to open the app. -->
 	<string name="persistent_notification_label">Persistent notification</string>
-	<string name="persistent_notification_description">Keeps one notification showing all the time, which holds the app in the foreground where Android does not put it to sleep. It stays whether or not the engine is being used, because a voice that has been stopped by the battery optimizer is worth nothing at the moment it is wanted. The app checks every few seconds that the notification is still there and puts it back if anything has taken it away.</string>
-	<string name="notification_stop_label">Stop button in the notification</string>
-	<string name="notification_stop_description">Puts a button on the notification that stops whatever is being said. It is the only control that works while the engine is speaking and the screen is off. The notification is put up again a few seconds after this is changed, which is when the button appears or goes.</string>
+	<string name="persistent_notification_description">Keeps one notification showing all the time, which holds the app in the foreground where Android does not put it to sleep. It stays whether or not the engine is being used, because a voice that has been stopped by the battery optimizer is worth nothing at the moment it is wanted. The app checks every few seconds that the notification is still there and puts it back if anything has taken it away, and the notification carries a button that stops whatever is being said, which is the only control that works while the engine is speaking and the screen is off.</string>
 	<string name="start_on_boot_label">Start again after a restart</string>
 	<string name="start_on_boot_description">Puts the notification back when the phone has been restarted, so that the voice is ready before the app has been opened. The notification is what there is to bring back, so turning this on turns that on too.</string>
-	<string name="notification_check_label">How often the notification is looked for</string>
-	<string name="notification_check_description">How often the app checks that the notification is still there and puts it back if anything has taken it away. More often is safer on phones that clear notifications aggressively, and costs a little more battery.</string>
-	<string name="foreground_while_speaking_label">Speak in the foreground</string>
-	<string name="foreground_while_speaking_description">Holds the engine in the foreground while each utterance is being made, even when the persistent notification is off. The notification is shown when speaking starts and taken away when it ends.</string>
 	<string name="battery_idle_heading">While the phone is idle</string>
-	<string name="battery_speaking_heading">While speaking</string>
 	<string name="battery_fault_heading">For finding a fault</string>
-<!-- The wake lock and the log, which are the two rows here that are not about
-	     Android deciding anything: one holds the processor and the other writes
-	     what was changed, and both are for a fault somebody has to find later. -->
-	<string name="wake_lock_label">Keep the CPU awake while speaking</string>
-	<string name="wake_lock_description">Holds the processor awake while an utterance is being made. On some devices the CPU sleeps mid sentence and the tail of the speech is lost.</string>
+<!-- The log, which is the one row here that is not about Android deciding
+	     anything: it writes what was changed, for a fault somebody has to find
+	     later. The wake lock that used to sit beside it is the engine's own
+	     answer now, held for the length of every utterance and five seconds
+	     over, pinned in Settings rather than offered here. -->
 	<string name="track_actions_label">Track your actions</string>
 	<string name="track_actions_description">Writes what you do on this screen to the system log, so a problem with the engine stopping can be traced back to what was changed.</string>
 	<string name="keep_alive_channel">Engine running</string>
@@ -165,30 +158,6 @@
 	<string name="keep_alive_title">Alt eloquence TTS is running</string>
 	<string name="keep_alive_text">The engine stays in the foreground so the voice keeps working in the background.</string>
 
-<!-- The numbers this screen offers. Nought means two different things, so it is
-	     named twice: no wait at all, and no limit at all. -->
-	<string name="battery_never">Not at all</string>
-	<string name="battery_forever">For ever</string>
-	<string name="battery_milliseconds">%1$d milliseconds</string>
-	<plurals name="battery_seconds">
-		<item quantity="one">%1$d second</item>
-		<item quantity="other">%1$d seconds</item>
-	</plurals>
-	<plurals name="battery_minutes">
-		<item quantity="one">%1$d minute</item>
-		<item quantity="other">%1$d minutes</item>
-	</plurals>
-	<string name="battery_value_is">%1$s (%2$s)</string>
-	<string name="wake_lock_tail_label">Hold the CPU a little longer</string>
-	<string name="wake_lock_tail_description">How long the processor is kept awake after the last of the speech has been handed over. The tail of an utterance is where a device that has decided to sleep catches one, and the wait is silent either way; it costs a little battery and it saves the end of a sentence.</string>
-	<string name="speech_lead_label">How far ahead of the speech</string>
-	<string name="speech_lead_description">The engine makes audio about a hundred times faster than it can be heard, so it is held back to this much ahead of what has been played. A shorter lead loses fewer words when a reader interrupts; a longer one is what lets a paragraph be finished in the moment it was asked for, so that the next thing asked for does not wait behind it. Three hundred milliseconds is what a screen reader wants.</string>
-	<string name="run_ahead_label">Run ahead on long text</string>
-	<string name="run_ahead_description">Lets the engine get four seconds ahead of the speech whenever a message is a paragraph rather than a line, whatever the lead above says. It holds the framework\'s own thread busy for longer, which is what a reader with a queue of items to say minds.</string>
-	<string name="engine_release_label">Give the engine back when idle</string>
-	<string name="engine_release_description">How long an instance of the engine is kept after the last thing it said, before its memory goes back to the phone. An engine that has just been made costs a second or so of the reader\'s patience on the next request for speech; one that is never given back holds tens of megabytes for the length of a day.</string>
-	<string name="engine_silence_label">Give up after the engine goes silent</string>
-	<string name="engine_silence_description">How long the engine may answer with nothing in the middle of an utterance before that utterance is taken to be over. It is the wait that keeps a stuck engine from holding the phone\'s voice still for the rest of the day. A short one cuts an utterance off if the phone is busy; a long one waits out anything.</string>
 	<string name="battery_manufacturer_open">Open this phone\'s background settings</string>
 	<string name="battery_android_open">Open Android\'s battery optimization list</string>
 	<string name="battery_manufacturer_description">Several makers put a screen of their own in front of Android\'s: one that closes background activity or refuses an app its start, and the exemption above does nothing against it. This opens whichever of those this phone has, and Android\'s own list if it has none.</string>

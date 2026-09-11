@@ -89,10 +89,13 @@ class KeepAliveService : Service() {
 	override fun onBind(intent: Intent?): IBinder? = null
 
 	/** Claims the foreground, which is the notification plus the standing the
-	 *  system gives whoever posts it. */
+	 *  system gives whoever posts it. The stop button on it is no longer a
+	 *  choice -- it is the only control that works while the engine speaks and
+	 *  the screen is off -- so the default the setting answers with is the
+	 *  pinned one and the row that asked is gone. */
 	private fun claim(): Boolean = KeepAliveNotification.claim(
 		this,
-		Settings.flag(this, Settings.KEY_NOTIFICATION_STOP, true)
+		Settings.flag(this, Settings.KEY_NOTIFICATION_STOP, Settings.PIN_NOTIFICATION_STOP)
 	)
 
 	private fun stopAndQuit() {

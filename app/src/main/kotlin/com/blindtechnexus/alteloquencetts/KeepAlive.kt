@@ -140,7 +140,7 @@ class KeepAlive(private val service: Service) {
 	}
 
 	private fun stopButton(): Boolean =
-		Settings.flag(service, Settings.KEY_NOTIFICATION_STOP, true)
+		Settings.flag(service, Settings.KEY_NOTIFICATION_STOP, Settings.PIN_NOTIFICATION_STOP)
 
 	companion object {
 		const val TAG = "alteloquencetts"
@@ -150,10 +150,12 @@ class KeepAlive(private val service: Service) {
 		const val CHECK_MS = 3000L
 
 		/** How often the notification is looked for now, in milliseconds:
-		 *  the setting's, or [CHECK_MS] for anything the screen never
-		 *  offered. Read fresh on every check, so a choice made on the
-		 *  battery screen is in force seconds later without restarting
-		 *  anything. Asked through [Settings.number] rather than an
+		 *  the setting's, or [CHECK_MS] for anything the app never offered.
+		 *  The battery screen does not offer a choice any more and [Settings]
+		 *  pins the answer to [CHECK_MS]; the read stays because the setting
+		 *  stays, so a device tuned by hand tunes this clock too. Read fresh
+		 *  on every check, so nothing has to be restarted for a number to
+		 *  take effect. Asked through [Settings.number] rather than an
 		 *  instance, which is what a check that runs for ever does. */
 		fun checkMs(context: Context): Long {
 			val at = Settings.number(context, Settings.KEY_KEEP_ALIVE_CHECK_MS, CHECK_MS.toInt())
