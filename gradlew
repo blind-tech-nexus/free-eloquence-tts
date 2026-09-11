@@ -248,26 +248,4 @@ eval "set -- $(
         tr '\n' ' '
     )" '"$@"'
 
-# ---------------------------------------------------------------------------
-# TEMPORARY (this branch only, to be reverted before merge): the Android build
-# in CI is the only thing that can compile this app, and the Actions log
-# itself is not readable from where the fix has to be made. So the compiler's
-# own lines are handed to the Actions log as workflow commands, which turns
-# each one into a check annotation -- the one channel both ends can see. The
-# build's exit status is preserved exactly, so nothing here changes whether a
-# run is green or red; it only says why.
-if [ -n "$GITHUB_ACTIONS" ]; then
-    DIAG_LOG="${TMPDIR:-/tmp}/gradle-diagnostics.log"
-    DIAG_STATUS="${TMPDIR:-/tmp}/gradle-diagnostics.status"
-    { "$JAVACMD" "$@" 2>&1; echo "$?" > "$DIAG_STATUS"; } | tee "$DIAG_LOG"
-    grep -E '^e: |error:|FAILURE:|What went wrong|^> Task .*FAILED|Caused by:' "$DIAG_LOG" \
-        | cut -c1-500 | head -n 90 | tr -d '\r' | sed -e 's/%/%25/g' \
-        | while IFS= read -r diag_line; do
-            printf '::error::%s\n' "$diag_line"
-          done
-    status="$(cat "$DIAG_STATUS" 2>/dev/null || echo 1)"
-    rm -f "$DIAG_LOG" "$DIAG_STATUS"
-    exit "$status"
-fi
-
 exec "$JAVACMD" "$@"

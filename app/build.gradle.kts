@@ -142,17 +142,6 @@ tasks.named("preBuild") {
 	dependsOn(buildNative)
 }
 
-// TEMPORARY, on this branch only, and to be taken out again: the continuous
-// build assembles the release APK and nothing else, which leaves every test in
-// src/androidTest uncompiled. Those tests need a device to *run*, so a build can
-// never answer them, but it can answer whether 150 test methods still agree with
-// the code they test -- which is the half of the check that costs nothing. Hence
-// hanging the test compile off the release build until the workflow grows a step
-// of its own for it.
-tasks.matching { it.name == "assembleRelease" }.configureEach {
-	dependsOn("compileDebugAndroidTestKotlin")
-}
-
 dependencies {
 	implementation(libs.androidx.core.ktx)
 	implementation(libs.material)
