@@ -62,16 +62,42 @@ object Dictionaries {
 	 * wild are. The engine's own code set is Latin-1, so that is the fallback;
 	 * a file that is valid UTF-8 -- one this app exported, say -- is read as
 	 * UTF-8. Neither way is the text refused.
+	 * Safe for large files: caps at 10 MB.
 	 */
 	fun read(file: File): String {
-		val bytes = runCatching { file.readBytes() }.getOrNull() ?: return ""
-		return decode(bytes)
+		return try {
+			if (!file.exists()) return ""
+			if (file.length() > 10 * 1024 * 1024) {
+				// Cap: read only first 10 MB
+				val bytes = file.inputStream().use { it.readNBytes(10 * 1024 * 1024) }
+				decode(bytes)
+			} else {
+				val bytes = file.readBytes()
+				decode(bytes)
+			}
+		} catch (e: Exception) {
+			""
+		}
 	}
 
 	/** [bytes] decoded as UTF-8 when they are, and as Latin-1 -- the code set
 	 *  the engine and the files in the wild use -- when they are not. Neither
 	 *  way is the text refused. */
-	fun decode(bytes: ByteArray): String = utf8(bytes) ?: String(bytes, Charsets.ISO_8859_1)
+	fun decode(bytes: ByteArray): String = try {
+		utf8(bytes) ?: String(bytes, Charsets.ISO_8859_1)
+	} catch (e: Exception) {
+		try { String(bytes, Charsets.ISO_8859_1) } catch (_: Exception) { "" }
+	}
+
+	/** Decode from InputStream safely, capped at 10 MB. */
+	fun decode(input: java.io.InputStream): String {
+		return try {
+			val bytes = input.readNBytes(10 * 1024 * 1024)
+			decode(bytes)
+		} catch (e: Exception) {
+			""
+		}
+	}
 
 	/** [bytes] as UTF-8, or nothing when they are not UTF-8. */
 	private fun utf8(bytes: ByteArray): String? = try {

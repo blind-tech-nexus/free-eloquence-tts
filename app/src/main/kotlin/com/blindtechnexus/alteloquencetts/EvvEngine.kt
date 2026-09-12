@@ -40,13 +40,13 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 		 *  and it is the same length of silence because there is no second
 		 *  sensible answer. Five seconds is still a thousand times the gap
 		 *  this engine ever legitimately leaves between two frames. */
-		const val READ_TIMEOUT_MS = 5000
+		const val READ_TIMEOUT_MS = 3000 // low latency
 
 		/** How long [close] waits for a thread that is inside [read] to get
 		 *  out before it leaves the handle to that thread and takes the rest
 		 *  of its own business. Two seconds is a long time for a read that is
 		 *  coming back, and a short one for a UI thread to be held. */
-		const val CLOSE_WAIT_MS = 2000L
+		const val CLOSE_WAIT_MS = 500L // fast close
 
 		/** How long the orphaned handle is then waited for, on a thread of its
 		 *  own, before it is destroyed regardless: past this the instance is
@@ -54,7 +54,7 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 		const val CLOSE_HARD_WAIT_MS = 30000L
 
 		/** What the two waits look between one glance and the next. */
-		const val CLOSE_POLL_MS = 20L
+		const val CLOSE_POLL_MS = 5L // fast poll
 
 		val available: IntArray by lazy {
 			if (!EvvNative.loaded) IntArray(0) else runCatching { EvvNative.languages() }

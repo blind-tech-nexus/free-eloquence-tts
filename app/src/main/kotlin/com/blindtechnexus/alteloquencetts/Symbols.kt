@@ -163,9 +163,25 @@ object Symbols {
 	/**
 	 * [text] with the symbols [mode] asks for named or silenced. [custom] is
 	 * the caller's own list and is read only at [CUSTOM].
+	 * In SOME mode, isolated commas are removed so comma is not spoken as word.
 	 */
 	fun apply(text: String, mode: Int, custom: String): String {
-		if (mode == SOME || text.isEmpty()) return text
+		if (text.isEmpty()) return text
+		if (mode == SOME) {
+			// SOME originally left text to engine, but isolated comma would be spoken as "comma"
+			// by engine. Requirement: remove comma from SOME mode, so isolated commas become silence.
+			var hasIsolatedComma = false
+			for (i in text.indices) {
+				if (text[i] == ',' && !attached(text, i)) { hasIsolatedComma = true; break }
+			}
+			if (!hasIsolatedComma) return text
+			val sb = StringBuilder(text.length)
+			for (i in text.indices) {
+				val c = text[i]
+				if (c == ',' && !attached(text, i)) sb.append(' ') else sb.append(c)
+			}
+			return COLLAPSE.replace(sb.toString().trim(), " ")
+		}
 		var relevant = false
 		for (at in text.indices) {
 			if (RELEVANT[text[at].code]) {

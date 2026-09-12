@@ -432,109 +432,84 @@ class EvvTtsService : TextToSpeechService() {
 		}
 	}
 
-	/** Everything that happens once the text is in hand: the settings that are
-	 *  re-sent with every utterance, the road the text goes down, and the
-	 *  samples on their way out. */
 	private fun say(
 		target: EvvEngine,
 		request: SynthesisRequest,
 		callback: SynthesisCallback,
 		s: Settings
 	) {
-		// Re-sent every time rather than once, because it is the one setting
-		// with no way of telling whether something else has moved it.
-		target.setAbbreviations(s.abbreviations)
-		// The rate and pitch a client asks for are scaled onto the voice,
-		// unless the settings say this app's own are to be forced over them: a
-		// screen reader that has set a rate is asking for that rate, and this is
-		// the one place its asking is listened to or not.
-		if (!s.forceRate) target.setRatePercent(request.speechRate)
-		if (!s.forcePitch) target.setPitchPercent(request.pitch)
-		// Volume is the engine's own parameter and no client's number ever
-		// reaches it -- Android applies a client's volume to the stream, after
-		// the speech has left here -- so forcing it is re-asserting this app's
-		// own number on every utterance, the way the abbreviation switch is
-		// re-sent above.
+		try { target.setAbbreviations(s.abbreviations) } catch (_: Exception) {}
+		try {
+			if (!s.forceRate) target.setRatePercent(request.speechRate)
+			if (!s.forcePitch) target.setPitchPercent(request.pitch)
+		} catch (_: Exception) {}
 		if (s.forceVolume) {
-			s.shape(s.voice)[Eci.VOICE_VOLUME]?.let { volume -> target.setVolume(volume) }
+			try { s.shape(s.voice)[Eci.VOICE_VOLUME]?.let { v -> target.setVolume(v) } } catch (_: Exception) {}
 		}
-		// Held in the foreground while this utterance is being made, when that
-		// is asked for and the persistent notification is not already holding
-		// it. It is fixed off: claiming and releasing the foreground around
-		// every utterance is binder traffic on this thread in front of every
-		// first syllable, and a service the system has bound speaks under
-		// that binding's own standing anyway. The persistent notification is
-		// the protection that is held once rather than per utterance.
 		val speakForeground = Stability.FOREGROUND_WHILE_SPEAKING && !s.persistentNotification
-		if (speakForeground) KeepAliveNotification.claim(this, s.notificationStopButton)
+		if (speakForeground) { try { KeepAliveNotification.claim(this, s.notificationStopButton) } catch (_: Exception) {} }
 		val lock = acquireWakeLock()
 		try {
-			val text = TextPipeline.apply(
-				request.charSequenceText?.toString().orEmpty(),
-				s,
-				currentWords()
-			)
-			if (text.isEmpty()) {
+			val rawText = request.charSequenceText?.toString().orEmpty()
+			if (rawText.isEmpty()) {
 				callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
 				callback.done()
 				return
 			}
 			if (stopped) return
-			// The framework is not told an utterance has begun until there are
-			// samples for it. Saying so up front and then being silenced before
-			// the engine has made anything hands the reader a whole start and
-			// finish with no speech in it, and TalkBack reads that as its queue
-			// running dry. So the opening is made lazily, below.
 			val opening = Opening(callback, target.sampleRateHz)
 			val pace = Pace(target.sampleRateHz * BYTES_PER_SAMPLE)
 			val buffer = bufferFor(callback)
-			// Piece by piece, so that asking for silence waits out a piece
-			// rather than the whole message: the engine cannot abandon what it is
-			// saying. Pauses are shortened after the split rather than before
-			// it: the annotation sits in front of the full stop, and a piece
-			// boundary is found by looking at the end of a word.
 			val prosody = Prosody.prefix(s.phrasePrediction)
-			val pieces = TextPieces.pieces(text)
-			// Fixed, for every message long or short: running further ahead
-			// queues speech nobody has heard yet, and the next swipe throws
-			// all of it away. See Pacing.
 			val lead = Pacing.DEFAULT_MS.toLong()
+			val words = currentWords()
+
+			val pieces: List<TextPieces.Piece> = if (rawText.length > 10000) {
+				val rawPieces = TextPieces.pieces(rawText)
+				val processed = ArrayList<TextPieces.Piece>(rawPieces.size)
+				for (rp in rawPieces) {
+					if (stopped) break
+					val pText = try { TextPipeline.apply(rp.text, s, words) } catch (_: Exception) { rp.text }
+					if (pText.isNotBlank()) processed.add(TextPieces.Piece(pText, rp.forced))
+				}
+				processed
+			} else {
+				val text = try { TextPipeline.apply(rawText, s, words) } catch (_: Exception) { rawText }
+				if (text.isEmpty()) {
+					callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
+					callback.done()
+					return
+				}
+				TextPieces.pieces(text)
+			}
+
+			if (pieces.isEmpty()) {
+				callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
+				callback.done()
+				return
+			}
 			val lastIndex = pieces.lastIndex
 			for (at in pieces.indices) {
 				if (stopped) break
 				val piece = pieces[at]
 				val last = at == lastIndex
-				var audio = prosody + Pauses.apply(piece.text, s.pauses, last)
-				// A boundary the text did not ask for is no reason to stop for
-				// four tenths of a second: the pieces of one utterance run on
-				// into each other, so the gap the engine leaves at the end of
-				// one is a pause nobody wrote.
+				var audio = try { prosody + Pauses.apply(piece.text, s.pauses, last) } catch (_: Exception) { prosody + piece.text }
 				if (piece.forced && !last) audio += Pauses.AT_A_BOUNDARY
 				if (!target.speak(audio)) {
-					Log.e(TAG, "the engine refused ${audio.length} characters")
-					// A refusal is the engine saying it will not take this
-					// text, which the framework has to be told rather than
-					// left to wait for.
+					Log.e(TAG, "engine refused ${audio.length} chars")
 					if (opening.began) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
 					return
 				}
 				when (pump(target, callback, pace, opening, buffer, Stability.ENGINE_SILENCE_MS, lead)) {
 					Pump.Next -> Unit
-					Pump.Over -> {
-						remember(pace)
-						finish(callback, opening)
-						return
-					}
-					Pump.Gone -> {
-						remember(pace)
-						return
-					}
+					Pump.Over -> { remember(pace); finish(callback, opening); return }
+					Pump.Gone -> { remember(pace); return }
 				}
 			}
 			remember(pace)
 			finish(callback, opening)
 		} finally {
-			if (speakForeground) KeepAliveNotification.release(this, detach = false)
+			if (speakForeground) { try { KeepAliveNotification.release(this, detach = false) } catch (_: Exception) {} }
 			releaseWakeLock(lock)
 		}
 	}
@@ -557,6 +532,7 @@ class EvvTtsService : TextToSpeechService() {
 	/** What one piece ended with: the engine may go on, the utterance is over,
 	 *  or the framework has stopped taking samples and owes nobody a finish. */
 	private enum class Pump { Next, Over, Gone }
+
 
 	/** Hands one piece's samples on as they arrive, and says what the caller
 	 *  should do next. */
@@ -808,22 +784,13 @@ class EvvTtsService : TextToSpeechService() {
 		/** How much audio may sit ahead of the speech. Fixed: see [Pacing]. */
 		const val LEAD_MS = Pacing.DEFAULT_MS.toLong()
 
-		/** An upper bound a pacing wait used to be slept in, kept so the
-		 *  contract test can still say a slice is shorter than the lead. The
-		 *  wait itself is woken by the stop rather than sliced. */
-		const val SLICE_MS = 5L
+		/** Low latency slice: 1ms for faster interruption. */
+		const val SLICE_MS = 1L
 
-		/** How often, and how many times, the framework is asked again for room.
-		 *  A buffer that will not take another run of samples is nearly always
-		 *  one that is full, and the next moment it is not is the next one to
-		 *  ask in -- so the asking is five milliseconds apart, and a stop
-		 *  landing in the middle of the wait is noticed that much sooner.
-		 *  Four hundred tries is about two seconds of patience, past which
-		 *  the framework is not momentarily full but wedged, and giving the
-		 *  utterance up is righter than holding the synthesis thread -- and
-		 *  every later request for speech -- behind it. */
-		const val DELIVER_TRIES = 400
-		const val DELIVER_WAIT_MS = 5L
+		/** Low latency deliver: 1ms wait, 2000 tries = 2 sec patience, but interruption
+		 *  is noticed within 1ms instead of 5ms. Faster stop response. */
+		const val DELIVER_TRIES = 2000
+		const val DELIVER_WAIT_MS = 1L
 
 		/** The longest an utterance may hold the wake lock before the system
 		 *  takes it back, as a ceiling rather than a course. */

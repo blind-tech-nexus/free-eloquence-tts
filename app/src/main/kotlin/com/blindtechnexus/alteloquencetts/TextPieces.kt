@@ -47,8 +47,9 @@ package com.blindtechnexus.alteloquencetts
 object TextPieces {
 
 	/** How far a piece runs before it ends at whitespace for want of a
-	 *  sentence end. */
-	const val PIECE_CAP = 500
+	 *  sentence end. Reduced to 250 for very low latency interruption:
+	 *  smaller pieces = faster stop, at cost of more engine calls. */
+	const val PIECE_CAP = 250
 
 	/** One piece of text, and whether its end is a place the engine would have
 	 *  paused anyway. [forced] says it is not, which is what earns the

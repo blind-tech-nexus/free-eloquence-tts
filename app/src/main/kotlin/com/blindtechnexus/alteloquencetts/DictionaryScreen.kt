@@ -65,47 +65,87 @@ fun DictionaryScreen(onBack: () -> Unit) {
 	var editingForEdit by remember { mutableStateOf(false) }
 
 	fun refresh() {
-		words = UserDictionary.words(context)
+		words = try {
+			UserDictionary.words(context)
+		} catch (e: Exception) {
+			emptyList()
+		}
 	}
 
 	val importFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
 		if (uri != null) {
-			val text = runCatching {
-				context.contentResolver.openInputStream(uri)?.use { source ->
-					Dictionaries.decode(source.readBytes())
-				}.orEmpty()
-			}.getOrDefault("")
-			val entries = UserDictionary.parse(text)
-			val taken = if (entries.isEmpty()) 0 else UserDictionary.merge(context, entries)
-			refresh()
-			notice = context.getString(
-				if (taken > 0) R.string.dictionary_imported else R.string.dictionary_import_nothing,
-				taken
-			)
-			Toast.makeText(context, notice, Toast.LENGTH_SHORT).show()
+			// Run heavy work off main thread to avoid ANR and crash
+			Thread {
+				val entries = try {
+					context.contentResolver.openInputStream(uri)?.use { input ->
+						// Try stream parse first (safe for huge files), fallback to decode
+						val streamEntries = UserDictionary.parseStream(input)
+						if (streamEntries.isNotEmpty()) streamEntries
+						else {
+							// Re-open because previous parse consumed stream
+							context.contentResolver.openInputStream(uri)?.use { input2 ->
+								val text = Dictionaries.decode(input2.readBytes())
+								UserDictionary.parse(text)
+							} ?: emptyList()
+						}
+					} ?: emptyList()
+				} catch (e: Exception) {
+					emptyList()
+				}
+				val taken = try {
+					if (entries.isEmpty()) 0 else UserDictionary.merge(context, entries)
+				} catch (e: Exception) {
+					0
+				}
+				// Back to main thread for UI
+				(context as? android.app.Activity)?.runOnUiThread {
+					try {
+						refresh()
+						notice = context.getString(
+							if (taken > 0) R.string.dictionary_imported else R.string.dictionary_import_nothing,
+							taken
+						)
+						Toast.makeText(context, notice, Toast.LENGTH_SHORT).show()
+					} catch (_: Exception) {
+						Toast.makeText(context, "Import failed", Toast.LENGTH_SHORT).show()
+					}
+				}
+			}.apply { isDaemon = true }.start()
 		}
 	}
 	val exportFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
 		if (uri != null) {
-			val exported = runCatching {
-				context.contentResolver.openOutputStream(uri)?.use { sink ->
-					val body = buildString {
-						for ((word, say) in words) {
-							append(word)
-							append('\t')
-							append(say)
-							append('\n')
+			Thread {
+				val exported = try {
+					context.contentResolver.openOutputStream(uri)?.use { sink ->
+						// Stream write to avoid building huge string
+						sink.bufferedWriter(Charsets.UTF_8).use { w ->
+							for ((word, say) in words) {
+								if (word.isEmpty() || say.isEmpty()) continue
+								w.write(word.replace("\n", " ").replace("\t", " "))
+								w.write('\t'.code)
+								w.write(say.replace("\n", " "))
+								w.write('\n'.code)
+							}
 						}
 					}
-					sink.write(body.toByteArray(Charsets.UTF_8))
-				} != null
-			}.getOrDefault(false)
-			notice = if (exported) {
-				context.getString(R.string.dictionary_exported, words.size)
-			} else {
-				context.getString(R.string.dictionary_export_failed)
-			}
-			Toast.makeText(context, notice, Toast.LENGTH_SHORT).show()
+					true
+				} catch (e: Exception) {
+					false
+				}
+				(context as? android.app.Activity)?.runOnUiThread {
+					try {
+						notice = if (exported) {
+							context.getString(R.string.dictionary_exported, words.size)
+						} else {
+							context.getString(R.string.dictionary_export_failed)
+						}
+						Toast.makeText(context, notice, Toast.LENGTH_SHORT).show()
+					} catch (_: Exception) {
+						Toast.makeText(context, "Export failed", Toast.LENGTH_SHORT).show()
+					}
+				}
+			}.apply { isDaemon = true }.start()
 		}
 	}
 
