@@ -184,9 +184,9 @@ class EvvPreview(private val language: Int) {
 
 	private companion object {
 		const val TAG = "alteloquencetts"
-		const val CHUNK = 4096
+		const val CHUNK = 1024 // low latency
 		const val BYTES_PER_FRAME = 2
-		const val MARGIN_MS = 750L
-		const val SIP_MS = 20L
+		const val MARGIN_MS = 300L
+		const val SIP_MS = 5L
 	}
 }

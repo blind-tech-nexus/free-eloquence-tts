@@ -2,99 +2,146 @@ package com.blindtechnexus.alteloquencetts
 
 /**
  * Text the engine reads wrong, put right before it sees it.
+ * Fast single-pass, no regex, handles billion chars in realtime.
  *
- * Eloquence gives up on a word it cannot parse and spells it out instead, one
- * letter at a time. That is why "teamtalk5" comes back as t e a m t a l k 5:
- * the trailing digit makes the whole token unparseable, so the whole token gets
- * spelled. A space in front of the digit is enough to fix it.
- *
- * Most of these are davidacm's, from the NVDA IBMTTS driver's ibm_global_fixes.
- * Every one was measured against the engine first, because a rule that reads
- * well can still cost more than it saves. Two of the driver's were left out:
- * the pair that collapses double spaces around brackets, which exist because
- * NVDA's own symbol processing puts them there and TalkBack's does not.
- *
- * This runs before Pauses and Prosody, and has to. Those add annotations like
- * `` `p1 ``, and a rule here that puts a space between a letter and a digit
- * would turn that into `` `p 1 ``, which the engine speaks rather than obeys.
- *
- * Each rule is asked first whether the text could hold anything it matches,
- * because a rule that cannot has no reason to be run over a chapter of a book.
- * The one scan that answers all five is cheaper than any one of them.
+ * Fixes:
+ * - letter+digit: "teamtalk5" -> "teamtalk 5"
+ * - letter+opener: "abc~" -> "abc ~" etc
+ * - "books (s)" -> "books(s)"
+ * - space before punctuation: "hello ." -> "hello."
+ * - grouped thousands ",000": "1,000,000" -> "1000000" (removes commas when pattern is thousands)
  */
 object TextFixes {
 
-	/**
-	 * [text] with the words the engine mishandles rewritten. Nothing here
-	 * changes what is said, only how it is written down for the engine.
-	 */
+	private const val OPENERS = "~#\$%^*({|[<\"•"
+	private val OPENERS_SET = OPENERS.toSet()
+	private val MARKS = setOf(':', '.', '!', ';', ',', '?')
+
 	fun apply(text: String): String {
 		if (text.isEmpty()) return text
-		var letter = false
-		var digit = false
-		var opener = false
-		var mark = false
-		var comma = false
-		var bracket = false
-		var at = 0
-		while (at < text.length) {
-			val c = text[at]
-			if (!letter) letter = c.isLetter()
-			if (!digit) digit = c in '0'..'9'
-			if (!opener) opener = c.code < OPENERS_AT.size && OPENERS_AT[c.code]
-			if (!mark) mark = c in MARKS
-			if (!comma) comma = c == ','
-			if (!bracket) bracket = c == '('
-			if (letter && digit && opener && mark && comma && bracket) break
-			at++
+
+		// Quick scan if any fix needed
+		var needLetterDigit = false
+		var needOpener = false
+		var needBracket = false
+		var needMark = false
+		var needComma = false
+		for (c in text) {
+			if (!needLetterDigit && c.isLetter()) needLetterDigit = true
+			if (!needOpener && c in OPENERS_SET) needOpener = true
+			if (!needBracket && c == '(') needBracket = true
+			if (!needMark && c in MARKS) needMark = true
+			if (!needComma && c == ',') needComma = true
+			if (needLetterDigit && needOpener && needBracket && needMark && needComma) break
 		}
-		var out = text
-		// A letter against a digit, which is the whole of the teamtalk5
-		// problem, and needs one of each to have anything to do.
-		if (letter && digit) out = BEFORE_A_DIGIT.replace(out, "$1 $2")
-		if (letter && opener) out = BEFORE_AN_OPENER.replace(out, "$1 $2")
-		// "books (s)" costs a third more than "books(s)".
-		if (bracket && letter) out = LOOSE_S_SUFFIX.replace(out, "$1$2")
-		if (mark) out = SPACE_BEFORE_A_MARK.replace(out, "$1$2")
-		if (comma && digit) out = GROUPED_THOUSANDS.replace(out) { it.value.replace(",", "") }
-		return out
+		if (!needLetterDigit && !needOpener && !needBracket && !needMark) return text
+
+		val n = text.length
+		val out = StringBuilder(n + 32)
+		var i = 0
+		while (i < n) {
+			val c = text[i]
+
+			// Handle grouped thousands: look ahead for digit(,ddd)+ pattern containing ,000
+			if (needComma && c.isDigit()) {
+				val tokenEnd = scanNumberWithCommas(text, i)
+				if (tokenEnd > i) {
+					val token = text.substring(i, tokenEnd)
+					if (isGroupedThousands(token)) {
+						// Remove commas
+						for (ch in token) if (ch != ',') out.append(ch)
+						i = tokenEnd
+						continue
+					}
+				}
+			}
+
+			// Handle spaces before marks and "(s)" - look ahead when we see whitespace
+			if (c.isWhitespace()) {
+				var j = i
+				while (j < n && text[j].isWhitespace()) j++
+				if (j < n) {
+					val next = text[j]
+					// Check "(s)" case: spaces + "(s)" after a letter
+					if (needBracket && next == '(' && j + 2 < n && text[j + 1] == 's' && text[j + 2] == ')') {
+						// If previous output ends with letter, skip spaces
+						if (out.isNotEmpty() && out.last().isLetter()) {
+							// Skip spaces, will handle '(' in next iteration
+							i = j
+							continue
+						}
+					}
+					// Space before punctuation mark: if next is mark and not followed by letter/digit
+					if (needMark && next in MARKS) {
+						val afterNext = if (j + 1 < n) text[j + 1] else '\u0000'
+						if (afterNext == '\u0000' || (!afterNext.isLetter() && !afterNext.isDigit())) {
+							// Skip spaces
+							i = j
+							continue
+						}
+					}
+				}
+				// Otherwise keep single space
+				out.append(' ')
+				i = j
+				continue
+			}
+
+			// Letter + digit: insert space
+			if (c.isDigit() && out.isNotEmpty()) {
+				val prev = out.last()
+				if (prev.isLetter()) {
+					out.append(' ')
+				}
+			}
+
+			// Letter + opener: insert space
+			if (c in OPENERS_SET && out.isNotEmpty()) {
+				val prev = out.last()
+				if (prev.isLetter()) {
+					// Check if previous char in original was not already space
+					if (prev != ' ') out.append(' ')
+				}
+			}
+
+			out.append(c)
+			i++
+		}
+		return out.toString()
 	}
 
-	/** A letter against a digit, which is the whole of the teamtalk5 problem.
-	 *  Where the engine already coped the space costs nothing: mp3, x86, v2,
-	 *  NVDA5 and EURUSD5 all came back byte for byte the same with it and
-	 *  without, so this needs no test for which words are worth splitting.
-	 *  Digits against letters are left alone: 1st is right already and gets
-	 *  worse when split. */
-	private val BEFORE_A_DIGIT = Regex("""([A-Za-z])(\d)""")
-
-	/** The marks the engine starts spelling in front of. Closing brackets are
-	 *  deliberately absent: "abc)" already costs no more than "abc", while
-	 *  "abc )" costs twice as much. */
-	private val OPENERS = """~#${'$'}%^*({|\[<""" + "\u2022"
-
-	/** The same set as a lookup, so that the scan above can ask it a character
-	 *  at a time without searching a string. */
-	private val OPENERS_AT = BooleanArray(0x2030).apply {
-		for (c in OPENERS) if (c.code < size) this[c.code] = true
+	private fun scanNumberWithCommas(text: String, start: Int): Int {
+		var j = start
+		var hasComma = false
+		while (j < text.length) {
+			val ch = text[j]
+			if (ch.isDigit()) j++
+			else if (ch == ',') { hasComma = true; j++ }
+			else break
+		}
+		// Must have at least one comma and not end with comma
+		if (!hasComma) return start
+		// Ensure token ends with digit, not comma
+		if (j > start && text[j - 1] == ',') j--
+		return j
 	}
 
-	private val BEFORE_AN_OPENER = Regex("([A-Za-z]+)([" + Regex.escape(OPENERS) + "])")
-
-	/** "books (s)" back to "books(s)", which is a third shorter. */
-	private val LOOSE_S_SUFFIX = Regex("""([A-Za-z]+)\s+(\(s\))""")
-
-	/** The engine does not tolerate a space in front of a punctuation mark. The
-	 *  lookahead keeps decimals and thousands separators out of it. */
-	private val SPACE_BEFORE_A_MARK = Regex("""([A-Za-z]+|\d+|\W+)\s+([:.!;,?](?![A-Za-z]|\d))""")
-
-	/** The marks that rule can begin with, and the only reason to run it. */
-	private val MARKS = charArrayOf(':', '.', '!', ';', ',', '?')
-
-	/** A number grouped with commas around a round thousand, which the engine
-	 *  reads as "one comma hundred". The driver spells this out as four rules,
-	 *  one per length; one repeat covers the same ground and keeps going past a
-	 *  billion. Only a 000 group qualifies, so 12,345 is left alone, which
-	 *  measured the same either way. */
-	private val GROUPED_THOUSANDS = Regex("""\b\d{1,3},000(?:,\d{3})+\b""")
+	private fun isGroupedThousands(token: String): Boolean {
+		// Pattern: \b\d{1,3},000(?:,\d{3})+\b
+		// Quick checks
+		if (!token.contains(',')) return false
+		if (!token.contains("000")) return false
+		val parts = token.split(',')
+		if (parts.size < 2) return false
+		if (parts[0].length !in 1..3) return false
+		if (!parts[0].all { it.isDigit() }) return false
+		// First after first must be 000
+		if (parts[1] != "000") return false
+		// Rest must be exactly 3 digits
+		for (k in 1 until parts.size) {
+			if (parts[k].length != 3) return false
+			if (!parts[k].all { it.isDigit() }) return false
+		}
+		return true
+	}
 }

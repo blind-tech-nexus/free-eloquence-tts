@@ -29,14 +29,14 @@ class NumbersTest {
 	@Test
 	fun pairsTakeTwoFromTheRight() {
 		assertEquals("12 34 56", Numbers.apply("123456", Numbers.PAIRS))
-		// An odd run keeps the short group at the front.
-		assertEquals("1 23 45", Numbers.apply("12345", Numbers.PAIRS))
+		// Odd length keeps short group at end (phone style left grouping)
+		assertEquals("12 34 5", Numbers.apply("12345", Numbers.PAIRS))
 	}
 
 	@Test
 	fun tripletsTakeThreeFromTheRight() {
 		assertEquals("123 456", Numbers.apply("123456", Numbers.TRIPLETS))
-		assertEquals("1 234", Numbers.apply("1234", Numbers.TRIPLETS))
+		assertEquals("123 4", Numbers.apply("1234", Numbers.TRIPLETS))
 		assertEquals("123 456 789", Numbers.apply("123456789", Numbers.TRIPLETS))
 	}
 

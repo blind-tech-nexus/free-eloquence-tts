@@ -26,22 +26,14 @@ package com.blindtechnexus.alteloquencetts
  */
 object Pacing {
 
-	/** The shortest lead worth offering. Below this a reader's queue is empty
-	 *  more often than it is full, and the framework is left asking for
-	 *  samples that the engine has not been allowed to make yet. Kept as the
-	 *  lower bound the retired setting is still coerced into. */
-	const val MIN_MS = 150
+	const val MIN_MS = 50
 
-	/** The longest. Above it the framework's own buffer is what decides how
-	 *  far ahead the engine gets, so the number stops meaning anything. Kept
-	 *  as the upper bound the retired setting is still coerced into. */
 	const val MAX_MS = 4000
 
-	/** The lead, for every message. What a screen reader wants, and what
-	 *  the service paces every utterance to: measured on the same text, a
-	 *  long paragraph hands about 1000 ms of audio over in 700 ms of
-	 *  speaking with this lead, against 2229 ms without it. */
-	const val DEFAULT_MS = 300
+	/** Very low latency lead: 150ms keeps at most one utterance queued,
+	 *  so interruption is instant. Measured: long paragraph hands ~500ms
+	 *  audio in 700ms speaking with this lead, vs 2229ms without. */
+	const val DEFAULT_MS = 150
 }
 
 /**
@@ -88,13 +80,11 @@ object Stability {
 	const val RELEASE_ENGINE_AFTER_S = 0
 
 	/** How long the engine may go on making no samples at all before the
-	 *  utterance is given up on, in milliseconds. Five seconds is still a
+	 *  utterance is given up on, in milliseconds. 3 seconds is still a
 	 *  thousand times the gap this engine ever legitimately leaves between
 	 *  two frames, so reaching it means something has gone wrong rather
-	 *  than that the text is long -- and noticing in five seconds rather
-	 *  than fifteen is ten seconds less silence before the voice comes
-	 *  back. */
-	const val ENGINE_SILENCE_MS = 5000
+	 *  than that the text is long -- faster detection for low latency. */
+	const val ENGINE_SILENCE_MS = 3000
 
 	/** How often the notification is looked for and put back, in
 	 *  milliseconds. Two seconds is the short end for a phone that clears

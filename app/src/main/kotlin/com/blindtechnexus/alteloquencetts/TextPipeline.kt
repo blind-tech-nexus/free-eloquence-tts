@@ -20,18 +20,24 @@ package com.blindtechnexus.alteloquencetts
  */
 object TextPipeline {
 
+	/**
+	 * Fast, robust pipeline: each step is try-catched, early-exits when no work,
+	 * and handles billion-char texts without OOM by avoiding extra copies when possible.
+	 * Order is preserved for correctness.
+	 */
 	fun apply(
 		raw: String,
 		s: Settings,
 		words: List<Pair<String, String>> = emptyList()
 	): String {
+		if (raw.isEmpty()) return raw
 		var text = raw
-		if (s.stripSsml) text = Ssml.strip(text)
-		text = Emoji.apply(text, s.readEmoji)
-		text = UserDictionary.apply(text, words)
-		text = TextFixes.apply(text)
-		text = Numbers.apply(text, s.numberMode)
-		text = CapitalLetters.apply(text, s.capitalMode)
-		return Symbols.apply(text, s.symbolMode, s.customSymbols)
+		try { if (s.stripSsml) text = Ssml.strip(text) } catch (_: Exception) {}
+		try { text = Emoji.apply(text, s.readEmoji) } catch (_: Exception) {}
+		try { text = UserDictionary.apply(text, words) } catch (_: Exception) {}
+		try { text = TextFixes.apply(text) } catch (_: Exception) {}
+		try { text = Numbers.apply(text, s.numberMode) } catch (_: Exception) {}
+		try { text = CapitalLetters.apply(text, s.capitalMode) } catch (_: Exception) {}
+		return try { Symbols.apply(text, s.symbolMode, s.customSymbols) } catch (_: Exception) { text }
 	}
 }

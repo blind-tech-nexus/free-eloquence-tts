@@ -3,57 +3,101 @@ package com.blindtechnexus.alteloquencetts
 /**
  * How a run of digits is read, before the engine sees it.
  *
- * The engine has no setting for this, so the choice is made out of text
- * changes: a run of digits is rewritten with spaces in it, and the engine
- * then reads each group as a number of its own. "123456" read as pairs is
- * "12 34 56", which the engine says as "twelve thirty-four fifty-six".
+ * Modes:
+ * - AS_IS: leave numbers to engine, which says "1 trillion 5 billion..." for large numbers
+ * - DIGITS: one digit at a time, e.g. + 9 7 7 8 5 3 6 2 8 2 7
+ * - PAIRS: two at a time, e.g. + 97 79 82 38 04 (zero kept as "0 4")
+ * - TRIPLETS: three at a time
  *
- * The groups are taken from the right, which is how a number is usually
- * broken down: an odd-length run keeps a short group at the front rather
- * than at the end, so "12345" in pairs is "1 23 45" and not "12 34 5".
+ * Groups are taken from the left (phone-number style) so odd length keeps short group at end:
+ * "12345" in pairs is "12 34 5", not "1 23 45". Leading zero groups are expanded to keep zero:
+ * "04" -> "0 4" so zero is spoken.
  *
- * Only runs of the ten ASCII digits are touched. A decimal point, a colon
- * in a time and a thousands separator all split a number into separate
- * runs, and each is then regrouped on its own, so "3.14" in digits is
- * "3 . 1 4" -- still "three point one four" -- and nothing here rewrites
- * the punctuation itself. That is [Symbols]' business.
+ * Only ASCII digits 0-9 are touched. Punctuation splits runs, so "3.14" becomes "3 . 1 4" in digits.
+ * This is a single fast pass, no regex, to handle huge text in realtime.
  */
 object Numbers {
 
-	/** The engine reads numbers its own way. */
 	const val AS_IS = 0
-
-	/** One digit at a time: "1234" is "one two three four". */
 	const val DIGITS = 1
-
-	/** Two digits at a time: "1234" is "twelve thirty-four". */
 	const val PAIRS = 2
-
-	/** Three digits at a time: "123456" is read as "123 456". */
 	const val TRIPLETS = 3
 
-	/** The levels, in the order the settings screen offers them. */
 	val MODES = listOf(AS_IS, DIGITS, PAIRS, TRIPLETS)
 
-	private val DIGIT_RUN = Regex("\\d+")
+	fun apply(text: String, mode: Int): String {
+		if (mode == AS_IS) return text
+		if (text.isEmpty()) return text
 
-	/** [text] with every run of digits regrouped the way [mode] asks for. */
-	fun apply(text: String, mode: Int): String = when (mode) {
-		DIGITS -> DIGIT_RUN.replace(text) { it.value.asIterable().joinToString(" ") }
-		PAIRS -> DIGIT_RUN.replace(text) { group(it.value, 2) }
-		TRIPLETS -> DIGIT_RUN.replace(text) { group(it.value, 3) }
-		else -> text
+		// Quick check: does text contain any digit?
+		var hasDigit = false
+		for (c in text) {
+			if (c in '0'..'9') { hasDigit = true; break }
+		}
+		if (!hasDigit) return text
+
+		// Estimate capacity: digits mode expands roughly 2x
+		val sb = StringBuilder(text.length + (text.length / 2) + 16)
+		var i = 0
+		val n = text.length
+		while (i < n) {
+			val c = text[i]
+			// Handle plus sign followed by digit: "+977" -> "+ 97..."
+			if (c == '+' && i + 1 < n && text[i + 1] in '0'..'9') {
+				sb.append('+')
+				sb.append(' ')
+				i++
+				continue
+			}
+			if (c in '0'..'9') {
+				var j = i
+				while (j < n && text[j] in '0'..'9') j++
+				// run is text[i..j)
+				when (mode) {
+					DIGITS -> {
+						for (k in i until j) {
+							if (k > i) sb.append(' ')
+							sb.append(text[k])
+						}
+					}
+					PAIRS -> {
+						appendGrouped(text, i, j, 2, sb)
+					}
+					TRIPLETS -> {
+						appendGrouped(text, i, j, 3, sb)
+					}
+				}
+				i = j
+			} else {
+				sb.append(c)
+				i++
+			}
+		}
+		return sb.toString()
 	}
 
-	/** [digits] cut into groups of [size], from the right, space separated. */
-	private fun group(digits: String, size: Int): String {
-		val groups = ArrayList<String>(digits.length / size + 1)
-		var end = digits.length
-		while (end > 0) {
-			val start = (end - size).coerceAtLeast(0)
-			groups.add(digits.substring(start, end))
-			end = start
+	private fun appendGrouped(text: String, start: Int, end: Int, groupSize: Int, out: StringBuilder) {
+		var pos = start
+		var firstGroup = true
+		while (pos < end) {
+			val remaining = end - pos
+			val curSize = if (remaining >= groupSize) groupSize else remaining
+			// Check leading zero: if group starts with '0' and size>1, expand to single digits to preserve zero
+			if (curSize > 1 && text[pos] == '0') {
+				// Expand this group into spaced single digits
+				for (k in 0 until curSize) {
+					if (!firstGroup || k > 0) out.append(' ')
+					out.append(text[pos + k])
+					firstGroup = false
+				}
+			} else {
+				if (!firstGroup) out.append(' ')
+				for (k in 0 until curSize) {
+					out.append(text[pos + k])
+				}
+				firstGroup = false
+			}
+			pos += curSize
 		}
-		return groups.asReversed().joinToString(" ")
 	}
 }
