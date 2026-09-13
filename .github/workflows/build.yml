@@ -1,4 +1,4 @@
-name: Build signed APK
+Name: Build signed APK
 
 on:
   push:
@@ -284,7 +284,16 @@ jobs:
           echo
           echo "APK verification completed successfully."
 
+      - name: Upload APK artifact
+        id: upload_artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
       - name: Upload signed APK to Telegram
+        if: always() && steps.upload_artifact.outcome == 'failure'
         shell: bash
         run: |
           set -euo pipefail
@@ -366,4 +375,4 @@ jobs:
           echo "Size:       $(stat -c '%s bytes' "$APK")"
           echo "SHA-256:    $(sha256sum "$APK" | awk '{print $1}')"
           echo
-          echo "Telegram upload: SUCCESS"
+          echo "Artifact upload: SUCCESS"
