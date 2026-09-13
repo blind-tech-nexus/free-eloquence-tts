@@ -18,7 +18,11 @@ jobs:
   build:
     name: Build and verify signed release APK
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Every language module the engine has is linked in, which is nine times
+    # the rules C of the single-language build the number used to cover. The
+    # build itself is around twenty minutes on a standard runner; this is the
+    # ceiling for a bad day rather than a target.
+    timeout-minutes: 120
 
     env:
       JAVA_VERSION: "17"
@@ -283,6 +287,35 @@ jobs:
 
           echo
           echo "APK verification completed successfully."
+
+      - name: Compile the instrumented tests
+        shell: bash
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
+        run: |
+          set -euo pipefail
+
+          # Compiling, not running: the tests are instrumented ones and there
+          # is no device or emulator here, so what this step buys is that a
+          # test which no longer matches the code it tests does not sit in the
+          # tree unread. A test that has never been compiled is a test that
+          # has never been read.
+          echo "Compiling the instrumented test sources..."
+
+          ./gradlew \
+            --no-daemon \
+            --stacktrace \
+            :app:assembleDebugAndroidTest
+
+          echo
+          echo "Instrumented tests compiled:"
+
+          find app/build/outputs/apk/androidTest \
+            -type f \
+            -name "*.apk" \
+            -printf "%p %s bytes\n" \
+            | sort
 
       - name: Upload signed APK to Telegram
         shell: bash

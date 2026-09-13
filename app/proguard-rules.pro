@@ -1,4 +1,4 @@
 # The JNI bridge finds these by name.
--keepclasseswithmembernames class com.blindtechnexus.alteloquencetts.EvvNative {
+-keepclasseswithmembernames class com.blindtechnexus.freeeloquencetts.EvvNative {
 	native <methods>;
 }
