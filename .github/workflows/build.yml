@@ -420,10 +420,24 @@ jobs:
             echo "no app/build/outputs/apk/androidTest directory"
           fi
 
+      # The APK goes on the run whatever becomes of the upload below, because a
+      # channel that can refuse the file is not a place to keep the only copy
+      # of it. Downloadable from the run page for ninety days.
+      - name: Publish the signed APK as an artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-eloquence-tts-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          compression-level: 0
+
       - name: Upload signed APK to Telegram
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          set +e
 
           APK="app/build/outputs/apk/release/app-release.apk"
 
@@ -434,6 +448,37 @@ jobs:
 
           SHA256="$(sha256sum "$APK" | awk '{print $1}')"
           APK_SIZE="$(stat -c "%s" "$APK")"
+          APK_MIB="$(awk -v b="$APK_SIZE" 'BEGIN { printf "%.1f", b / 1048576 }')"
+
+          echo "APK is ${APK_SIZE} bytes (${APK_MIB} MiB), SHA-256 ${SHA256}"
+
+          # A bot talking to the hosted Bot API may post a document of no more
+          # than 50 MB, and the answer to going over is an HTTP 400 with the
+          # reason in the body -- which curl --fail turns into exit 22 and
+          # nothing else. Nine language modules across three ABIs is an APK
+          # that has every chance of being over it, and a build that fails
+          # because the delivery channel is too small is a build that failed
+          # at the last step for a reason that has nothing to do with the app.
+          TELEGRAM_LIMIT=$((50 * 1000 * 1000))
+
+          if [ "$APK_SIZE" -gt "$TELEGRAM_LIMIT" ]; then
+            printf '::warning::APK is %s bytes (%s MiB), over the %s bytes a bot may post to the hosted Bot API. Left on the run as an artefact instead.\n' \
+              "$APK_SIZE" "$APK_MIB" "$TELEGRAM_LIMIT"
+
+            if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GH_TOKEN:-}" ]; then
+              {
+                echo "The release APK built and verified, at **${APK_SIZE} bytes (${APK_MIB} MiB)**."
+                echo
+                echo "That is over the 50 MB a bot may post to the hosted Telegram Bot API, so it was left on the run as an artefact instead of uploaded."
+                echo
+                echo "SHA-256 \`${SHA256}\`"
+              } > /tmp/comment.md
+              gh pr comment "${{ github.event.pull_request.number }}" \
+                --body-file /tmp/comment.md || true
+            fi
+
+            exit 0
+          fi
 
           CAPTION="$(printf '%s\n%s\n%s\n%s\n%s\n%s' \
             "Signed release APK" \
@@ -447,9 +492,11 @@ jobs:
           echo "File size: ${APK_SIZE} bytes"
           echo "SHA-256: ${SHA256}"
 
+          # No --fail: it throws the body away on an HTTP error, and the body is
+          # the only place the API says what it objected to. The answer is read
+          # out of the JSON instead.
           RESPONSE="$(
             curl \
-              --fail \
               --silent \
               --show-error \
               --retry 3 \
@@ -465,18 +512,49 @@ jobs:
 
           echo
           echo "Telegram API response:"
+          printf '%s\n' "$RESPONSE"
 
-          printf '%s\n' "$RESPONSE" | python3 -c '
+          verdict="$(
+            printf '%s' "$RESPONSE" | python3 -c '
           import json
           import sys
 
-          data = json.load(sys.stdin)
+          try:
+              data = json.load(sys.stdin)
+          except Exception:
+              print("the answer was not JSON")
+              raise SystemExit(0)
 
-          print(json.dumps(data, indent=2))
-
-          if data.get("ok") is not True:
-              raise SystemExit("Telegram API returned ok=false")
+          if data.get("ok") is True:
+              print("")
+          else:
+              print("error %s: %s" % (data.get("error_code"), data.get("description")))
           '
+          )"
+
+          if [ -n "$verdict" ]; then
+            printf '::error::Telegram refused the APK (%s bytes, %s MiB): %s\n' \
+              "$APK_SIZE" "$APK_MIB" "$verdict"
+
+            if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GH_TOKEN:-}" ]; then
+              {
+                echo "The release APK built and verified, at ${APK_SIZE} bytes (${APK_MIB} MiB), but the upload to Telegram was refused:"
+                echo
+                echo '```'
+                printf '%s\n' "$verdict"
+                echo '```'
+                echo
+                echo "It is on the run as an artefact."
+              } > /tmp/comment.md
+              gh pr comment "${{ github.event.pull_request.number }}" \
+                --body-file /tmp/comment.md || true
+            fi
+
+            # Refused delivery is not a broken build. The APK is built, signed,
+            # aligned and on the run; failing here would fail the build for the
+            # last step, over a channel, and bury the answer under a red cross.
+            exit 0
+          fi
 
           echo
           echo "APK successfully uploaded to Telegram."
