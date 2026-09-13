@@ -104,7 +104,6 @@ fun SettingsScreen(
 				.padding(bottom = 24.dp)
 		) {
 			LiveNotice(text = notice, horizontal = 16.dp)
-			LanguageSection(state = state, onNotice = { notice = it })
 			VoiceCustomization(state)
 			VoiceBehaviours(state)
 			VoiceQuality(state)
@@ -134,143 +133,82 @@ fun SettingsScreen(
 // ---- the sections ---------------------------------------------------------
 
 /**
- * Which language the engine speaks in.
+ * How the samples are finished before they are heard.
  *
- * The first choice is to let whichever app is asking decide, and it is the
- * default: a screen reader sets a language per utterance and is usually right
- * about it, so an engine that answered everything in one language would read a
- * French name in a sentence of English as though it were English. What the
- * rest of the list is for is an app that asks in a language nobody wants, or
- * asks in none at all.
- *
- * The languages this build cannot speak stay on the list and say so, each in
- * its own row. A language that is simply missing from a list of nineteen is a
- * language nobody can tell the difference between "not here" and "hidden", and
- * on a screen reader the row is the whole of what is heard.
+ * Balanced is the voice as recorded, quietly levelled. Optimized for volume
+ * is the same voice louder everywhere, for a noisy street; optimized for
+ * quality is the cleanest sound it has. Each row carries its own sentence
+ * because a name on its own -- "Balanced" -- does not say balanced against
+ * what, and on a screen reader the row is the whole of what is heard.
  */
 @Composable
-private fun LanguageSection(state: SettingsModel, onNotice: (String) -> Unit) {
-	SectionHeading(text = stringResource(R.string.section_language))
-	SectionText(text = stringResource(R.string.section_language_description))
-	val follow = stringResource(R.string.language_follow)
+private fun OptimizationChoice(state: SettingsModel) {
+	val names = listOf(
+		stringResource(R.string.audio_optimization_balanced),
+		stringResource(R.string.audio_optimization_volume),
+		stringResource(R.string.audio_optimization_quality)
+	)
+	val blurbs = listOf(
+		stringResource(R.string.audio_optimization_balanced_description),
+		stringResource(R.string.audio_optimization_volume_description),
+		stringResource(R.string.audio_optimization_quality_description)
+	)
 	var open by remember { mutableStateOf(false) }
-	val chosen = SettingsModel.indexOf(state.language)
-	Described(description = stringResource(R.string.language_description)) {
+	val chosen = AudioOptimization.clamp(state.audioOptimization)
+	Described(description = stringResource(R.string.audio_optimization_description)) {
 		ValueButton(
 			shown = stringResource(
 				R.string.value_selected,
-				stringResource(R.string.language_label),
-				if (chosen < 0) follow else SettingsModel.LANGUAGES[chosen].name
+				stringResource(R.string.audio_optimization_label),
+				names.getOrElse(chosen) { "" }
 			),
 			onClick = { open = true }
 		)
 	}
 	if (open) {
-		LanguageDialog(
-			state = state,
-			chosen = chosen,
-			follow = follow,
-			onNotice = onNotice,
-			onDismiss = { open = false }
-		)
-	}
-}
-
-/** The list of languages, with the ones this build cannot speak marked and
- *  refusing the tap rather than pretending to take it. */
-@Composable
-private fun LanguageDialog(
-	state: SettingsModel,
-	chosen: Int,
-	follow: String,
-	onNotice: (String) -> Unit,
-	onDismiss: () -> Unit
-) {
-	val unavailable = stringResource(R.string.language_not_in_build)
-	val unavailableNotice = stringResource(R.string.language_not_in_build_notice)
-	AlertDialog(
-		onDismissRequest = onDismiss,
-		title = { Text(text = stringResource(R.string.language_label)) },
-		text = {
-			Column(
-				modifier = Modifier
-					.selectableGroup()
-					.verticalScroll(rememberScrollState())
-			) {
-				Row(
+		AlertDialog(
+			onDismissRequest = { open = false },
+			title = { Text(text = stringResource(R.string.audio_optimization_label)) },
+			text = {
+				Column(
 					modifier = Modifier
-						.fillMaxWidth()
-						.selectable(
-							selected = chosen < 0,
-							onClick = {
-								state.chooseLanguage(0)
-								onDismiss()
-							},
-							role = Role.RadioButton
-						)
-						.padding(vertical = 12.dp),
-					verticalAlignment = Alignment.CenterVertically
+						.selectableGroup()
+						.verticalScroll(rememberScrollState())
 				) {
-					RadioButton(selected = chosen < 0, onClick = null)
-					Column(modifier = Modifier.padding(start = 12.dp)) {
-						Text(
-							text = follow,
-							style = MaterialTheme.typography.bodyLarge
-						)
-						Text(
-							text = stringResource(R.string.language_follow_description),
-							style = MaterialTheme.typography.bodySmall
-						)
-					}
-				}
-				SettingsModel.LANGUAGES.forEachIndexed { index, offered ->
-					val speaks = Eci.speaks(offered)
-					Row(
-						modifier = Modifier
-							.fillMaxWidth()
-							.selectable(
-								selected = index == chosen,
-								onClick = {
-									if (speaks) {
-										state.chooseLanguage(offered.word)
-										onDismiss()
-									} else {
-										// Said out loud and the list left open.
-										// A tap that does nothing and says
-										// nothing is the one thing a screen
-										// must not be.
-										onNotice(unavailableNotice)
-									}
-								},
-								role = Role.RadioButton
-							)
-							.padding(vertical = 12.dp),
-						verticalAlignment = Alignment.CenterVertically
-					) {
-						RadioButton(selected = index == chosen, onClick = null)
-						Column(modifier = Modifier.padding(start = 12.dp)) {
-							Text(
-								text = offered.name,
-								style = MaterialTheme.typography.bodyLarge
-							)
-							if (!speaks) {
+					names.forEachIndexed { index, name ->
+						Row(
+							modifier = Modifier
+								.fillMaxWidth()
+								.selectable(
+									selected = index == chosen,
+									onClick = {
+										state.chooseAudioOptimization(index)
+										open = false
+									},
+									role = Role.RadioButton
+								)
+								.padding(vertical = 12.dp),
+							verticalAlignment = Alignment.CenterVertically
+						) {
+							RadioButton(selected = index == chosen, onClick = null)
+							Column(modifier = Modifier.padding(start = 12.dp)) {
+								Text(text = name, style = MaterialTheme.typography.bodyLarge)
 								Text(
-									text = unavailable,
-									style = MaterialTheme.typography.bodySmall,
-									color = MaterialTheme.colorScheme.error
+									text = blurbs.getOrElse(index) { "" },
+									style = MaterialTheme.typography.bodySmall
 								)
 							}
 						}
 					}
 				}
+			},
+			confirmButton = {
+				TextButton(onClick = { open = false }) {
+					Text(text = stringResource(R.string.cancel))
+				}
 			}
-		},
-		confirmButton = {
-			TextButton(onClick = onDismiss) {
-				Text(text = stringResource(R.string.cancel))
-			}
-		}
-	)
+		)
+	}
 }
 
 /** Which voice speaks, and whether it is a man or a woman. */
@@ -352,6 +290,8 @@ private fun VoiceBehaviours(state: SettingsModel) {
 @Composable
 private fun VoiceQuality(state: SettingsModel) {
 	SectionHeading(text = stringResource(R.string.section_quality))
+	SectionText(text = stringResource(R.string.section_quality_description))
+	OptimizationChoice(state)
 	val rates = SettingsModel.RATES.map { stringResource(R.string.hertz, it) }
 	val chosen = SettingsModel.RATES.indexOf(state.sampleRateHz).coerceAtLeast(0)
 	ChoiceButton(

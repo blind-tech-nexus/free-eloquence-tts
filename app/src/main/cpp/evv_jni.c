@@ -33,12 +33,13 @@
    buffer and hands it over only when it is exactly full, so every FRAME_SAMPLES
    samples is one lock, one copy and one wake-up on the other side. It is also
    how much of the utterance has to be made before the first of it can be heard,
-   which is why it is not merely as big as possible. Measured at eleven
-   thousand and twenty five hertz, four thousand and ninety six samples is a
-   third of a second of speech and rather under four milliseconds of this
-   engine's time, and the round trips the reader and the writer make over one
-   utterance go down fourfold. */
-#define FRAME_SAMPLES 4096
+   and how often a stop is answered, since the abort is only noticed when the
+   engine offers the next buffer. Measured at eleven thousand and twenty five
+   hertz, two thousand and forty eight samples is under a fifth of a second of
+   speech and about two milliseconds of this engine's time, so the first audio
+   and the answer to a swipe both arrive sooner, and the callbacks over one
+   utterance are still in the dozens. */
+#define FRAME_SAMPLES 2048
 #define RING_BYTES    (256 * 1024)
 
 /* How much of a frame one read will carry, and so how big the buffer that
@@ -53,6 +54,14 @@
 /* How many milliseconds the end-of-utterance wait will spend watching for the
    engine to take the work up before it stops waiting for that. */
 #define START_SPINS 200
+
+/* How long speak waits for the previous utterance to leave the engine before
+   it gives up and answers failure. The wait is normally milliseconds -- the
+   worker is either already idle or unwinding an aborted utterance -- so
+   reaching this means the engine is wedged rather than busy, and the caller
+   answers by giving the instance back instead of holding the synthesis thread
+   for the rest of the day. */
+#define SPEAK_IDLE_MS 3000
 
 typedef struct {
 	ECIHand         eci;
@@ -206,12 +215,28 @@ static jboolean finished(instance* in) {
 }
 
 /* Waits for the worker to be out of the engine, which is what makes it safe to
-   put the next utterance in. The lock must not be held. */
-static void wait_until_idle(instance* in) {
+   put the next utterance in. The lock must not be held. Answers 1 when the
+   worker got out and 0 when the wait ran out first, which is the wedged
+   engine the caller then gives back rather than queuing behind for ever. */
+static int wait_until_idle(instance* in, long millis) {
+	struct timespec until;
+
+	clock_gettime(CLOCK_REALTIME, &until);
+	until.tv_sec += millis / 1000;
+	until.tv_nsec += (millis % 1000) * 1000000L;
+	if (until.tv_nsec >= 1000000000L) {
+		until.tv_nsec -= 1000000000L;
+		until.tv_sec += 1;
+	}
 	pthread_mutex_lock(&in->lock);
-	while (in->busy)
-		pthread_cond_wait(&in->work, &in->lock);
+	while (in->busy) {
+		if (pthread_cond_timedwait(&in->work, &in->lock, &until) == ETIMEDOUT) {
+			pthread_mutex_unlock(&in->lock);
+			return 0;
+		}
+	}
 	pthread_mutex_unlock(&in->lock);
+	return 1;
 }
 
 /* Waits on a condition for at so many milliseconds, and answers 1 when it was
@@ -380,7 +405,10 @@ JNIEXPORT jboolean JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_sp
 	n = (*env)->GetArrayLength(env, text);
 	if (n <= 0)
 		return JNI_FALSE;
-	wait_until_idle(in);
+	if (!wait_until_idle(in, SPEAK_IDLE_MS)) {
+		LOGE("the engine never left the previous utterance");
+		return finished(in);
+	}
 	pthread_mutex_lock(&in->lock);
 	in->aborted = 0;
 	in->started = 0;
@@ -630,22 +658,17 @@ JNIEXPORT jint JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_copyVo
 	return in == NULL ? -1 : eciCopyVoice(in->eci, from, to);
 }
 
-JNIEXPORT jintArray JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_languages(JNIEnv* env, jclass cls) {
-	unsigned int found[32];
-	int          n = 0;
-	jintArray    out;
+/* Which of the engine's upsampling methods new converters run on. Ours rather
+   than upstream's: see native/patches/0001-upsample-method-override.patch,
+   which is what declares it. The link fails loudly without that patch, which
+   is the point -- a build that silently kept the default while the settings
+   screen offered a choice would be the worse failure. */
+extern void evv_setUpsampleMethod(int method);
+
+JNIEXPORT void JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_setUpsampleMethod(JNIEnv* env, jclass cls, jint method) {
+	(void)env;
 	(void)cls;
-	if (eciGetAvailableLanguages(NULL, &n) != 0 || n < 1)
-		return (*env)->NewIntArray(env, 0);
-	if (n > 32)
-		n = 32;
-	if (eciGetAvailableLanguages(found, &n) != 0)
-		return (*env)->NewIntArray(env, 0);
-	out = (*env)->NewIntArray(env, n);
-	if (out == NULL)
-		return NULL;
-	(*env)->SetIntArrayRegion(env, out, 0, n, (const jint*)found);
-	return out;
+	evv_setUpsampleMethod((int)method);
 }
 
 JNIEXPORT jstring JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_version(JNIEnv* env, jclass cls) {

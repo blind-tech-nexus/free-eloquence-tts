@@ -14,9 +14,10 @@ No warranty. See LICENSE, and read the part about language data before redistrib
 
 ## What works
 
-* Six languages in a default build -- English (US and UK), Spanish (Spain and Latin America), French (France and Canada), German, Italian and Polish -- and nineteen in the list, of which the rest are offered by name and say out loud that this build cannot speak them. See [Languages](#languages).
+* One language, English (United States), spoken for every utterance whatever locale the caller named -- which is also what keeps a TTS router such as Auto TTS routing here instead of giving up at the probe. See [Language](#language).
 * Eight preset voices: Reed, Shelley, Bobby, Rocko, Glen, Sandy, Grandma, Grandpa. Offered through the Android voice API, so they appear separately.
 * All eight voice parameters: speed, pitch, inflection, head size, roughness, breathiness, volume, gender.
+* Audio optimization above the sample rate: balanced, louder, or cleaner finishing of the samples. See [Audio optimization](#audio-optimization).
 * Speech rate and pitch from the system settings, with a switch to force this app's own over them.
 * Symbol pronunciation: all, most, some, a custom list, or none.
 * Pronunciation dictionaries, and a user dictionary file that is rebuilt on a thread of its own rather than on the one that is about to speak: see [The user dictionary](#the-user-dictionary).
@@ -55,18 +56,17 @@ tests against the app and stops there, which is the half of the check that can b
 done where no device is plugged in -- and it is worth doing, because a test that
 has never been compiled is a test that has never been read.
 
-First build is about four minutes per ABI for one language. A default build links nine modules in, and the rules are the part that grows: `make rules` writes about 81 MB of C across the nine -- 13 MB each for the two English ones, 11 MB for German, about 6 MB each for Spanish, Italian and Polish -- and takes about four and a half minutes on two cores. That cost is paid once per language rather than once per ABI, so the ABIs after the first are the compile and link only. Expect ten to twenty minutes for a clean default build, and use `-Pevvdroid.langs=lang/enus -Pevvdroid.rules=bytecode` while working on the Kotlin.
+First build is about four minutes per ABI. The rules are the part that grows: `make rules` writes the English rules as C -- about 13 MB -- and that cost is paid once rather than once per ABI, so the ABIs after the first are the compile and link only. Expect a few minutes for a clean build, and use `-Pevvdroid.rules=bytecode` while working on the Kotlin.
 
 | property | default | effect |
 | --- | --- | --- |
 | `evvdroid.abis` | `arm64-v8a,armeabi-v7a,x86_64` | which ABIs to build |
 | `evvdroid.rules` | `c` | `bytecode` builds in 30s and runs at under half the speed |
-| `evvdroid.langs` | the nine modules in `app/build.gradle.kts` | language modules to link in |
 | `evvdroid.abiSplits` | `false` | one APK per ABI |
 
 `-Pevvdroid.abis=arm64-v8a -Pevvdroid.rules=bytecode` is the fast loop for working on the Kotlin. Compiled rules are the default because interrupting and restarting costs about a third of what it costs interpreted, and a screen reader interrupts constantly.
 
-A fix to openevv that upstream has not taken yet goes in `native/patches` and is applied at build time. There are none, so the submodule builds as upstream left it.
+A fix to openevv that upstream has not taken yet goes in `native/patches` and is applied at build time. There is one: `0001-upsample-method-override.patch`, which gives the front end's Audio Optimization setting the runtime choice of upsampling method that upstream only offers as a process-wide experiment knob.
 
 ## Screens
 
@@ -76,7 +76,7 @@ Four, in one activity. A screen reader announces the departure and the arrival o
 
 *Main*, which is what the launcher opens: what the app is, then the three things worth doing -- configure the voice, open the system's text-to-speech settings and choose this engine there, read about the app -- each with the reason said before the button that acts on it.
 
-*Eloquence settings*, which is also what the gear beside the engine in the system settings opens, straight to it rather than by way of the main screen. Nine sections, each a heading TalkBack can jump to: language, voice customization, voice behaviors, voice quality, voice dictionary settings, text reading, code reading, other settings, and a voice to test the lot of them on.
+*Eloquence settings*, which is also what the gear beside the engine in the system settings opens, straight to it rather than by way of the main screen. Eight sections, each a heading TalkBack can jump to: voice customization, voice behaviors, voice quality -- audio optimization above the sample rate -- voice dictionary settings, text reading, code reading, other settings, and a voice to test the lot of them on.
 
 *Expansions*, reached from the dictionary section: the abbreviations and expansions of your own, as a list with an add button, an options button on each row, and an import and an export beside them.
 
@@ -158,7 +158,7 @@ Three things are deliberately never replaced at any level that speaks them: the 
 
 ## Voice, phrase prediction, abbreviations
 
-The voice is whichever the settings screen says. A caller that names a voice does not override it, because a client holds on to the Voice object it was given: a screen reader that connected while Reed was selected goes on asking for Reed however many times the setting changes underneath it. The name is still what decides the language.
+The voice is whichever the settings screen says. A caller that names a voice does not override it, because a client holds on to the Voice object it was given: a screen reader that connected while Reed was selected goes on asking for Reed however many times the setting changes underneath it. So the name is not even asked -- and neither is the locale, since there is one language and one instance that is never closed for another. Whatever the caller asked for, in whatever language or under whatever name a TTS router forwarded, is spoken in the voice, which is what keeps a router's request from ever being answered with silence.
 
 Phrase prediction is the engine guessing where the phrase boundaries in a sentence are and shaping the intonation to match. That reads well in prose and gets in the way in a screen reader, where a line is usually a fragment and the guess is wrong, so it is off. It is an annotation rather than a parameter, so it goes out with every utterance.
 
@@ -184,6 +184,8 @@ Synthesis is paced to real time. The engine produces 1.3s of audio in 12 ms and 
 
 A request for silence wakes the wait rather than sitting out the rest of a sleep. Every utterance runs on the framework's one synthesis thread, so whatever the current utterance waits on delays the next element's first syllable; a swipe that landed mid-slice used to wait out the rest of it, and now it does not.
 
+A stop that lands as a piece is being handed over either refuses the piece or aborts it cleanly, never half of each: `speak` asks whether the utterance was stopped under the same lock `stop` takes, so the stop cannot slip between the caller's check and the engine's queueing. Without that fence the slip queues an utterance nobody reads while the next one waits behind it, and that wait is exactly what a fast swipe used to feel like. And the wait for the previous utterance to leave the engine is bounded -- three seconds, where reaching it means the engine is wedged rather than busy -- so the synthesis thread is never held for the rest of the day; the instance is given back instead, and the next utterance opens a fresh one.
+
 ## Updates
 
 The app asks one URL when it starts: [the release channel](https://raw.githubusercontent.com/blind-tech-nexus/remote-data-json/main/alt-eloquence-tts-update.json) -- which keeps the file name it has always had, because a channel that moves is a channel every installed build loses -- a file with two values in it, `version` and `url`. The version is compared with this build's `versionName` and, if they are not the same, a dialog says so in the words "A new version (%s) is available to download" and asks whether to fetch it now. "Later" is not a setting: the same version is not offered again for the rest of that run of the app and is asked about again the next time it opens. `UpdateTest` holds the rules of the answer: that the same version is no update, that a missing or blank value is no update, and that an address that is not https is no update -- the download is an executable, so a plain http address is refused rather than warned about, since a person halfway through a download is not in a position to judge a certificate.
@@ -192,31 +194,19 @@ Nothing is installed by the app. When the bytes are down the file is validated a
 
 The asking is one `HttpURLConnection` and one `JSONObject`, on a thread of its own, with no library. The About screen says what it found whenever it is asked from there, which is the only case in which an answer of "you are up to date" or "nothing could be reached" is worth a sentence; on the way into a launch, silence is the right answer to both.
 
-## Languages
+## Language
 
-The engine's own catalogue has nineteen languages in it. A build carries only the modules it was compiled with, and the two are not the same thing, so the list the settings screen offers is the catalogue and whether any one of them can be spoken is asked of the engine at the moment the question matters -- `Eci.speaks`, which looks at what `eciGetAvailableLanguages` answered and not at what the list claims.
+One: English (United States), engine word `0x00010000`, module `lang/enus`. The build names only it, in `app/build.gradle.kts` and in `native/build-native.sh` alike, and neither is overridable; the app offers no choice anywhere -- not on the settings screen, not in the stored preferences, and not in what the service asks the engine for. Every utterance is synthesised in this language, whatever locale the caller named, which is also what keeps the engine instance open for ever instead of being closed and remade -- at about a second a time -- whenever a screen reader alternates between two languages.
 
-A default build links nine modules in and speaks six languages:
+What the engine is asked about a language is answered honestly for the one voice and generously for the rest. English (United States) in any of its spellings is the voice itself, so it is country-available; any other English is the same voice under another flag, so it is available; and anything else -- another language, nothing at all -- is available too, because the engine speaks every utterance it is given in the voice rather than refusing it. That last answer is what keeps a TTS router such as Auto TTS routing: it probes with the device's locale, and an engine that answers "not supported" to the probe is an engine it never asks to speak, even in English. The voices carry a real `en-US` locale for the same reason -- a voice built on the ISO-3 pair never equals the `Locale.ENGLISH` a router holds -- and any voice name is accepted, since the voice that speaks is the settings screen's and refusing an unknown name refuses nothing but the utterance.
 
-| offered as | module | engine word |
-| --- | --- | --- |
-| English (United States) | `lang/enus` | `0x00010000` |
-| English (United Kingdom) | `lang/engb` | `0x00010001` |
-| Spanish (Spain) | `lang/eses` | `0x00020000` |
-| Spanish (Latin America) | `lang/esus` | `0x00020001` |
-| French (France) | `lang/frfr` | `0x00030000` |
-| French (Canada) | `lang/frca` | `0x00030001` |
-| German | `lang/dede` | `0x00040000` |
-| Italian | `lang/itit` | `0x00050000` |
-| Polish | `lang/plpl` | `0x00110000` |
+## Audio optimization
 
-The rest of the catalogue is in the list by name and says so out loud: Mandarin, Portuguese, Japanese, Finnish, Korean, Cantonese, Dutch, Norwegian, Swedish and Danish. Tapping one of them does not take, and the row says why in the error colour and again when it is tapped, because a button that does nothing and says nothing is the one thing a screen must not be.
+Above the sample rate on the quality section: how the samples are finished before they are heard. One setting, three modes, each a fixed chain rather than knobs. Balanced is the default -- the voice as recorded, quietly levelled. Optimized for volume is the loudest the voice gets, for a noisy street. Optimized for quality is the cleanest sound it has.
 
-Two of the ten deserve a sentence rather than a row. **Japanese** has a module, `lang/jajp`, and is not linked in. Its text is Shift-JIS, EUC-JP and 7-bit JIS, and the bridge to the engine folds to Latin-1 -- `WesternText` has one byte per character and nothing above `0xFF` in it -- so kana and kanji arrive as spaces. openevv's own speech dispatcher excludes Japanese for the same reason. Linking the module in would be a language that opens, says nothing, and reports that it did. **Portuguese, Mandarin and the rest** have no module at all: openevv carries no rules for them, at this commit or upstream, and there is nothing to link.
+Two halves read the same mode. The engine's half is the upsampling method: held samples for volume, which keeps the band loud; true sinc resampling for quality; cubic between the two for balanced. The front end's half runs on the PCM on its way to the framework: a one-pole direct-current blocker, an adaptive gain that rides the level towards the mode's target -- attacking at once, releasing slowly, so a shout stays inside the ceiling and the floor does not pump -- and a soft limiter built on the hyperbolic tangent, which passes small signals and rounds the top into the ceiling instead of clipping it.
 
-The setting itself is off by default and its default is not a compromise. "Let each app decide" is the first row of the dialog and it is what the engine does when nobody has chosen: a screen reader sets a language per utterance and is usually right about it, so an engine that answered every request in one language would read a French name in a sentence of English as though it were English. What the setting is for is the other way round -- an app that asks in a language the listener does not want, or asks in none at all and is given whatever the engine was opened with.
-
-A choice this build cannot honour is passed over rather than honoured wrongly: the service asks the engine, and when the answer is no, the speech goes on in the language the caller asked for.
+Higher rates are honest in quality mode and loud everywhere else, if not in the way the numbers suggest. The engine synthesises at eleven thousand and twenty five hertz whatever the setting says, so the rate only decides what the upsampling carries into the new band: silence in quality mode, a curve through the speech in balanced, a mirror of it in volume. The framework is told the rate the engine actually took -- a refused rate is never adopted -- so what is heard is always at the speed the label says. And the louder modes are audibly louder for real reasons: volume's held upsampling brightens the top band, and any limiter rounding a peak adds harmonics of it. That is the price of loud, and it is priced on purpose.
 
 ## Abbreviations and expansions
 
@@ -267,7 +257,7 @@ The version is what makes that safe rather than merely fast. Without it, a reade
 
 The engine is not slow. A host build of the same C the app ships, on the same single thread the app uses, said 4003 characters of English to 8.5 megabytes of audio -- 386 seconds of speech -- in 0.74 seconds, 520 times real time. So every part of "the engine is slow" that was real was somewhere else, and the four that were found are worth writing down because none of them is where a person reading the code would look first.
 
-**The engine's output buffer was too small.** Samples leave this engine one buffer at a time, and the buffer's size is asked of `eciSetOutputBuffer` in samples: the engine fills it, hands it over on the callback, and only then makes the next. At 1024 samples -- two kilobytes -- a long paragraph is four thousand callbacks, each one a lock, a copy into a malloc, a `SetByteArrayRegion` and a wake-up on the other side, and the same again in reverse for the read. Measured on the same text, going to 4096 samples took the whole utterance from 0.961 s to 0.742 s and the reads from 4156 to 1039; 16384 was faster again, but the first byte of audio arrived 2 milliseconds later and the ring has to be a multiple of the buffer, so four thousand and ninety-six samples is where it stays. The latency cost is one buffer's worth of synthesis and it shows: 12.0 ms to 12.3 ms. What was not worth doing is the reverse, a bigger buffer for a shorter first pause -- the first byte arrives when the *first* buffer is full, so past about a third of a second of speech the wait is heard.
+**The engine's output buffer was too small.** Samples leave this engine one buffer at a time, and the buffer's size is asked of `eciSetOutputBuffer` in samples: the engine fills it, hands it over on the callback, and only then makes the next. At 1024 samples -- two kilobytes -- a long paragraph is four thousand callbacks, each one a lock, a copy into a malloc, a `SetByteArrayRegion` and a wake-up on the other side, and the same again in reverse for the read. The experiment that set the shape went from 1024 to 4096 samples: measured on the same text, the whole utterance went from 0.961 s to 0.742 s and the reads from 4156 to 1039, and 16384 was faster again but the first byte of audio arrived 2 milliseconds later. The frame is now 2048 -- half the wait for the first buffer to fill and, since the abort is only noticed when the engine offers the next buffer, half the wait for a stop to be answered -- at twice the callbacks of 4096, which is still dozens per utterance rather than thousands. The latency cost is one buffer's worth of synthesis: under a fifth of a second of speech at eleven thousand and twenty five hertz, against over a third at 4096.
 
 **A piece boundary was a full stop.** Long text is handed over in pieces, because the engine cannot abandon an utterance and a cancel has to wait for something. Where the text has a sentence end, the piece goes there and it is free -- measured exactly: 482,449 samples whole, the same 482,449 in six pieces. Where it has none within reach, the cut lands on whitespace and the engine puts the pause of a full stop there anyway: 0.39 seconds, measured, every boundary. Text with no full stops in it is the ordinary case for a chapter of a book or a page of a table, and thirty seconds of silence in ten minutes of speech was what "slow" meant. `TextPieces` now marks a cut it had to make as forced and the service ends such a piece with the engine's own `` `p1 `` annotation, which measured 0.15 s for two boundaries instead of 0.78: the pause is not prosody, it is an artefact of where a splitter happened to cut, and it can be taken back out.
 
@@ -275,7 +265,7 @@ The engine is not slow. A host build of the same C the app ships, on the same si
 
 **Everything before the first syllable was done on every utterance.** The text used to be copied through a chain of five passes that each built new strings, the pronunciation dictionary was re-taught per utterance, and the settings were compared field by field. Now the emoji, symbol, fix-up, dictionary and code-set passes each make one scan of the characters and each answer with the original string when they have nothing to change; `WesternText` keeps a table that says whether a character needs work at all, so ordinary English is a copy rather than a lookup per character; a dictionary is reread when its revision has moved and not otherwise; and the settings carry a revision that goes up on any write, so an unchanged configuration is one integer comparison. What the reader waits for is the first frame of audio, which is 12 ms of this engine's time on a desktop build and is the only number in the whole utterance that cannot be shared out over the rest of it.
 
-The engine is also kept between utterances rather than made and thrown away each time -- it is never given back, because making a fresh one costs a second or so before the next first syllable; and one read takes everything the engine has written rather than everything a caller happened to ask for, so a 4096-sample frame crosses the boundary between the two threads in one go whatever the size of the buffer the framework offered.
+The engine is also kept between utterances rather than made and thrown away each time -- it is never given back, because making a fresh one costs a second or so before the next first syllable; and one read takes everything the engine has written rather than everything a caller happened to ask for, so a 2048-sample frame crosses the boundary between the two threads in one go whatever the size of the buffer the framework offered.
 
 Two more that were found while the "while speaking" section was taken out, because slowness between elements is interruption latency rather than synthesis speed and every utterance runs on the framework's one synthesis thread. **The waits a stop has to land in were slept out.** A swipe that arrived mid-slice waited out the rest of it before the next element could start. The wait is woken the moment silence is asked for, so the next first syllable is delayed only by however long the engine takes to drop what it was making. **Long text ran four seconds ahead of the speech.** That queued seconds of audio nobody had heard yet and the next swipe threw all of it away, which is the failure the lead exists to prevent -- so every message is paced to the same three hundred milliseconds now, long or short.
 
@@ -297,6 +287,7 @@ adb -s SERIAL shell getprop ro.product.cpu.abilist
 
 ```
 native/openevv          the engine, a submodule, untouched
+native/patches          the one runtime hookup the front end needs
 native/android.mk       two make targets openevv has no reason to carry
 native/build-native.sh  cross-compiles the engine, links libevvjni.so
 native/tools            drives openevv's own test gate over adb

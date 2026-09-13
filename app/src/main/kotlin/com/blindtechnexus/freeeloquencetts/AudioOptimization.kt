@@ -1,0 +1,233 @@
+package com.blindtechnexus.freeeloquencetts
+
+import kotlin.math.abs
+import kotlin.math.tanh
+
+/**
+ * How the samples are finished before they are handed over.
+ *
+ * The engine makes the voice; this decides how loud and how clean it arrives.
+ * Three modes, one setting, and every one of them is a fixed, documented
+ * chain rather than a pile of knobs:
+ *
+ * Balanced is the default: a light touch that keeps the voice as Eloquence
+ * made it, only sitting it at a healthy level with nothing clipping.
+ *
+ * Optimized for Volume is the loudest this voice gets: the engine's own
+ * upsampling holds every sample instead of filtering the band (see
+ * [Eci.UPSAMPLE_HOLD]), and the level rides up to just under full scale
+ * behind a limiter, so a phone in a noisy pocket is still heard.
+ *
+ * Optimized for Quality is the cleanest: the engine's true resampling (see
+ * [Eci.UPSAMPLE_SINC]), direct current removed, headroom kept, and a soft
+ * ceiling nothing crosses, so what arrives is the speech and only the speech.
+ *
+ * Two halves. The resampling method is the engine's business and travels down
+ * through [EvvEngine.setUpsampleMethod]; the level, the direct-current
+ * removal and the limiting happen here, on the PCM on its way to the
+ * framework, in [AudioOptimizer]. Both halves read the same mode, so the
+ * setting is one choice with one name and not two that can disagree.
+ */
+object AudioOptimization {
+
+	/** The default: clear, honest, and cheap. */
+	const val BALANCED = 0
+
+	/** The loudest: held upsampling and the level ridden high. */
+	const val VOLUME = 1
+
+	/** The cleanest: true resampling, headroom, and a soft ceiling. */
+	const val QUALITY = 2
+
+	val MODES = listOf(BALANCED, VOLUME, QUALITY)
+
+	/** Which of the engine's upsampling methods [mode] runs on. */
+	fun methodFor(mode: Int): Int = when (mode) {
+		VOLUME -> Eci.UPSAMPLE_HOLD
+		QUALITY -> Eci.UPSAMPLE_SINC
+		else -> Eci.UPSAMPLE_CUBIC
+	}
+
+	/**
+	 * Where the level rides, as a fraction of full scale. Volume sits
+	 * nearest the ceiling because that is the whole of what it is for;
+	 * quality sits six decibels down, which is headroom a limiter never
+	 * has to apologise for; balanced sits between the two.
+	 */
+	fun targetPeak(mode: Int): Float = when (mode) {
+		VOLUME -> 0.891f // -1 dBFS.
+		QUALITY -> 0.501f // -6 dBFS.
+		else -> 0.708f // -3 dBFS.
+	}
+
+	/**
+	 * How far the level may be turned up, as a multiplier. Volume is
+	 * allowed the most because a quiet voice in a loud place is the case
+	 * it exists for; quality the least, because turning a noise floor up
+	 * is not making anything better.
+	 */
+	fun maxGain(mode: Int): Float = when (mode) {
+		VOLUME -> 8.0f
+		QUALITY -> 2.0f
+		else -> 4.0f
+	}
+
+	/** How far the level may be turned down, as a multiplier. Only quality
+	 *  ever turns anything down: the other two never make a voice quieter
+	 *  than the engine made it. */
+	fun minGain(mode: Int): Float = when (mode) {
+		QUALITY -> 0.25f
+		else -> 1.0f
+	}
+
+	/**
+	 * What no sample crosses, as a fraction of full scale. Volume kisses
+	 * the ceiling; quality leaves a decibel on the table, which is what
+	 * keeps a true peak inside it after anything downstream resamples.
+	 */
+	fun ceiling(mode: Int): Float = when (mode) {
+		VOLUME -> 0.98f
+		QUALITY -> 0.89f
+		else -> 0.95f
+	}
+
+	/** Anything the setting never offered falls back to the default, rather
+	 *  than running wild or silent. */
+	fun clamp(mode: Int): Int = if (MODES.contains(mode)) mode else BALANCED
+}
+
+/**
+ * One utterance's worth of finishing, applied chunk by chunk.
+ *
+ * The chain, per sample, is three standard stages in a fixed order:
+ *
+ * 1. A one-pole direct-current blocker, so an offset the engine never meant
+ *    does not eat headroom or click at the edges of an utterance.
+ * 2. An adaptive gain that rides the level towards [AudioOptimization.targetPeak],
+ *    attacking at once when the sound gets louder -- which is what keeps a
+ *    sudden shout inside the ceiling -- and releasing slowly when it gets
+ *    quieter, so the floor does not pump.
+ * 3. A soft limiter built on the hyperbolic tangent, which passes small
+ *    signals untouched and rounds the top into the ceiling instead of
+ *    clipping it.
+ *
+ * Stateful, and deliberately so: the blocker and the gain both remember the
+ * chunk before, which is what joins one chunk to the next with no seam. One
+ * instance per utterance, made fresh (or [reset]) when an utterance begins,
+ * so the end of a shout never decides the start of a whisper.
+ *
+ * In place, on 16-bit little-endian mono PCM, answering how many bytes were
+ * processed -- which is [count] rounded down to a whole sample, since a
+ * trailing odd byte is not a sample and is left alone.
+ */
+class AudioOptimizer(mode: Int, sampleRateHz: Int) {
+
+	private val mode = AudioOptimization.clamp(mode)
+
+	private val target = AudioOptimization.targetPeak(this.mode)
+	private val lowest = AudioOptimization.minGain(this.mode)
+	private val highest = AudioOptimization.maxGain(this.mode)
+	private val top = AudioOptimization.ceiling(this.mode)
+
+	/** How quickly the gain comes back up after ducking, per chunk. Slow on
+	 *  purpose: a gain that hurries back up breathes, and breathing is heard.
+	 *  Volume hurries a little, because staying ducked is staying quiet, which
+	 *  is the one thing that mode refuses to do. */
+	private val release: Float = if (this.mode == AudioOptimization.VOLUME) 0.25f else 0.10f
+
+	// Kept for the documentation it carries: the rate this instance runs at.
+	// The chain itself is rate-independent -- a blocker, a gain and a
+	// limiter have no frequency in them -- so this is read by nobody and
+	// serves as the promise that it stays that way.
+	@Suppress("unused")
+	private val rateHz = sampleRateHz.coerceAtLeast(1)
+
+	private var blockedIn = 0.0f
+	private var blockedOut = 0.0f
+	private var gain = 1.0f
+
+	fun reset() {
+		blockedIn = 0.0f
+		blockedOut = 0.0f
+		gain = 1.0f
+	}
+
+	fun process(chunk: ByteArray, count: Int): Int {
+		val samples = count.coerceIn(0, chunk.size) / 2
+		if (samples == 0) return 0
+		// The peak first, over the whole chunk, so the gain for the chunk is
+		// decided by the chunk rather than by the sample under the cursor,
+		// which would duck the middle of a shout and leave its start loud.
+		var peak = 0.0f
+		for (at in 0 until samples) {
+			val low = chunk[at * 2].toInt() and 0xFF
+			val high = chunk[at * 2 + 1].toInt()
+			val signed = (high shl 8) or low
+			val over = abs(signed / 32768.0f)
+			if (over > peak) peak = over
+		}
+		val want = gainFor(peak, target, lowest, highest)
+		// Attack at once, release slowly: see the chain above.
+		gain = if (want < gain) want else gain + (want - gain) * release
+		val applying = gain
+		for (at in 0 until samples) {
+			val low = chunk[at * 2].toInt() and 0xFF
+			val high = chunk[at * 2 + 1].toInt()
+			val signed = (high shl 8) or low
+			var v = signed / 32768.0f
+			// The blocker: y[n] = x[n] - x[n-1] + R * y[n-1], with R a hair
+			// under one. Standard one-pole, flat everywhere but the very
+			// bottom, where it falls steeply to nothing.
+			val out = v - blockedIn + BLOCKER_R * blockedOut
+			blockedIn = v
+			blockedOut = out
+			v = out * applying
+			// The limiter: the ceiling times the hyperbolic tangent of the
+			// signal over the ceiling. Linear for small signals, round at
+			// the top, and nothing crosses.
+			val limited = top * tanh((v / top).toDouble()).toFloat()
+			val back = (limited * 32768.0f).toInt().coerceIn(-32768, 32767)
+			chunk[at * 2] = (back and 0xFF).toByte()
+			chunk[at * 2 + 1] = ((back shr 8) and 0xFF).toByte()
+		}
+		return samples * 2
+	}
+
+	companion object {
+		/** The blocker's pole. 0.995 at eleven thousand hertz is three
+		 *  decibels down at nine hertz: everything a voice carries passes,
+		 *  and a steady offset does not. */
+		const val BLOCKER_R = 0.995f
+
+		/**
+		 * The gain that puts [peak] at [target], inside [minGain] and
+		 * [maxGain]. Silence wants no gain at all, which is one rather
+		 * than infinity: turning nothing up is how a noise floor becomes
+		 * a hiss.
+		 */
+		fun gainFor(peak: Float, target: Float, minGain: Float, maxGain: Float): Float {
+			if (peak <= 1e-6f) return 1.0f
+			return (target / peak).coerceIn(minGain, maxGain)
+		}
+
+		/**
+		 * [v] through the limiter alone, for whoever wants the curve
+		 * without the chain. Answers inside [-ceiling, ceiling], always.
+		 */
+		fun softClip(v: Float, ceiling: Float): Float =
+			ceiling * tanh((v / ceiling).toDouble()).toFloat()
+
+		/**
+		 * The peak of [samples], as a fraction of full scale. Pure, so a
+		 * test can hold it without an instance.
+		 */
+		fun peakOf(samples: ShortArray): Float {
+			var peak = 0.0f
+			for (s in samples) {
+				val over = abs(s / 32768.0f)
+				if (over > peak) peak = over
+			}
+			return peak
+		}
+	}
+}

@@ -22,6 +22,11 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 	var sampleRateHz: Int = Eci.sampleRateHz(1)
 		private set
 
+	/** The upsampling method in force on this instance, or -1 when nothing
+	 *  has named one yet. The engine's own default answers until then, which
+	 *  keeps a bare instance -- the tests' -- exactly as it always was. */
+	private var upsampleMethod = -1
+
 	/** What the voice was set to before Android's rate and pitch were scaled
 	 *  onto it, so that a rate of 100% is the voice as it stands rather than
 	 *  whatever the last utterance left behind. */
@@ -56,18 +61,13 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 		/** What the two waits look between one glance and the next. */
 		const val CLOSE_POLL_MS = 5L // fast poll
 
-		val available: IntArray by lazy {
-			if (!EvvNative.loaded) IntArray(0) else runCatching { EvvNative.languages() }
-				.onFailure { Log.e(TAG, "cannot ask for languages", it) }
-				.getOrDefault(IntArray(0))
-		}
-
 		val version: String by lazy {
 			if (!EvvNative.loaded) "" else runCatching { EvvNative.version() }.getOrDefault("")
 		}
 
-		/** Makes an instance speaking [language], which is one of the words
-		 *  eciGetAvailableLanguages answered with and nothing else. */
+		/** Makes an instance speaking [language], which is [Eci.ENGLISH_US]:
+		 *  the build carries that one module and the engine opens nothing
+		 *  else. */
 		fun open(language: Int): EvvEngine? {
 			if (!EvvNative.loaded) {
 				Log.e(TAG, "the native library did not load", EvvNative.loadError)
@@ -97,8 +97,31 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 	fun setSampleRate(hz: Int) = synchronized(guard) {
 		if (closed) return
 		val index = Eci.sampleRateIndex(hz)
-		EvvNative.setParam(handle, Eci.PARAM_SAMPLE_RATE, index)
-		sampleRateHz = Eci.sampleRateHz(index)
+		// Adopted only when the engine took it. eciSetParam answers -1 on a
+		// refusal, and a rate the framework is told about that the engine is
+		// not synthesising at is the wrong speed under the right label.
+		if (EvvNative.setParam(handle, Eci.PARAM_SAMPLE_RATE, index) != -1) {
+			sampleRateHz = Eci.sampleRateHz(index)
+		}
+	}
+
+	/** Which of the engine's upsampling methods this instance runs on: one of
+	 *  the [Eci.UPSAMPLE_HOLD], [Eci.UPSAMPLE_LINEAR], [Eci.UPSAMPLE_CUBIC] or
+	 *  [Eci.UPSAMPLE_SINC] values. Read the [AudioOptimization] mode it came
+	 *  from for why one is louder and another cleaner. A no-op when nothing
+	 *  moved, so calling it per utterance costs one comparison. */
+	fun setUpsampleMethod(method: Int) = synchronized(guard) {
+		if (closed || method == upsampleMethod) return
+		EvvNative.setUpsampleMethod(method)
+		// The method is read when a converter is built, so the converter is
+		// rebuilt now -- by re-setting the rate it already has -- and the new
+		// method is in force on the next piece rather than on the next run.
+		// The call is recorded only when the rebuild took: a refused rebuild
+		// would otherwise read back as done while the old method still runs,
+		// and the retry that a fresh utterance brings would be skipped.
+		if (EvvNative.setParam(handle, Eci.PARAM_SAMPLE_RATE, Eci.sampleRateIndex(sampleRateHz)) != -1) {
+			upsampleMethod = method
+		}
 	}
 
 	fun setAnnotations(on: Boolean) = synchronized(guard) {
@@ -208,9 +231,18 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 		if (!closed) EvvNative.forgetDictionaries(handle)
 	}
 
-	/** Queues [text] and starts the engine. The samples come out of [read]. */
-	fun speak(text: String): Boolean = synchronized(guard) {
-		if (closed) false else EvvNative.speak(handle, WesternText.encode(text))
+	/**
+	 * Queues [text] and starts the engine. The samples come out of [read].
+	 *
+	 * [isStopped] is asked under the same lock [stop] takes, so a stop that
+	 * lands as a piece is being handed over either refuses the piece or aborts
+	 * it cleanly -- never half of each. Without that fence the stop slips
+	 * between the caller's check and the engine's queueing, which is an
+	 * utterance nobody reads while the next one queues behind it, and that
+	 * wait is exactly what a fast swipe used to feel like.
+	 */
+	fun speak(text: String, isStopped: () -> Boolean = { false }): Boolean = synchronized(guard) {
+		if (closed || isStopped()) false else EvvNative.speak(handle, WesternText.encode(text))
 	}
 
 	/**

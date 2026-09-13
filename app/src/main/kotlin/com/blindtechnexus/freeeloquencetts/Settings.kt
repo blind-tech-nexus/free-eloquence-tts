@@ -62,6 +62,13 @@ class Settings(context: Context) {
 		get() = prefs.getInt(KEY_SAMPLE_RATE, DEFAULT_SAMPLE_RATE)
 		set(value) = prefs.edit().putInt(KEY_SAMPLE_RATE, value).apply()
 
+	/** How the samples are finished before they are handed over. One of the
+	 *  [AudioOptimization] modes, and not a voice's business: it is the
+	 *  level and the cleanliness of the sound, not the voice itself. */
+	var audioOptimization: Int
+		get() = AudioOptimization.clamp(prefs.getInt(KEY_AUDIO_OPTIMIZATION, AudioOptimization.BALANCED))
+		set(value) = prefs.edit().putInt(KEY_AUDIO_OPTIMIZATION, AudioOptimization.clamp(value)).apply()
+
 	/** The abbreviation dictionary. Off by default: it expands what it takes
 	 *  for an abbreviation whether that was wanted or not. */
 	var abbreviations: Boolean
@@ -91,42 +98,6 @@ class Settings(context: Context) {
 	var capitalMode: Int
 		get() = prefs.getInt(KEY_CAPITAL_MODE, CapitalLetters.NONE).coerceIn(CapitalLetters.NONE, CapitalLetters.PITCH)
 		set(value) = prefs.edit().putInt(KEY_CAPITAL_MODE, value.coerceIn(CapitalLetters.NONE, CapitalLetters.PITCH)).apply()
-
-	// ---- the language ----------------------------------------------------
-
-	/**
-	 * Which language the engine speaks in, as one of the engine's own language
-	 * words -- see [Eci.LANGUAGES] -- or nought for "whichever app is asking
-	 * decides".
-	 *
-	 * Nought is the default and is not a compromise. A screen reader sets a
-	 * language per utterance and is usually right about it, so an engine that
-	 * answered every request in one language would be an engine that reads a
-	 * French name in a sentence of English as though it were English. What
-	 * this is for is the case the other way round: an app that asks in a
-	 * language the listener does not want, or asks in none at all and is given
-	 * whatever the engine was opened with.
-	 *
-	 * Whether the engine in this build can actually speak it is asked of the
-	 * engine, in [EvvTtsService], and not here: a build made with a shorter
-	 * `-Pevvdroid.langs` than the default has fewer modules in it, and the
-	 * service is the one place that can ask what is there. A choice this build
-	 * cannot honour is passed over rather than honoured wrongly, and the speech
-	 * goes on in the language the caller asked for.
-	 */
-	var language: Int
-		get() {
-			val stored = prefs.getInt(KEY_LANGUAGE, 0)
-			// A word the app has no name for is a word a build without this
-			// setting wrote, or a hand-edited one. Either way it is not a
-			// choice, and answering with it would be answering with a language
-			// the settings screen cannot show.
-			return if (stored != 0 && Eci.offeredFor(stored) == null) 0 else stored
-		}
-		set(value) = prefs.edit().putInt(
-			KEY_LANGUAGE,
-			if (value != 0 && Eci.offeredFor(value) == null) 0 else value
-		).apply()
 
 	// ---- substitutions of the user's own ---------------------------------
 
@@ -437,6 +408,7 @@ class Settings(context: Context) {
 	companion object {
 		const val KEY_VOICE = "voice_preset"
 		const val KEY_SAMPLE_RATE = "sample_rate_hz"
+		const val KEY_AUDIO_OPTIMIZATION = "audio_optimization"
 		const val KEY_ABBREVIATIONS = "abbreviations"
 		const val KEY_SPEED = "speed"
 		const val KEY_PAUSES = "pauses"
@@ -450,7 +422,6 @@ class Settings(context: Context) {
 		const val KEY_NUMBER_MODE = "number_mode"
 		const val KEY_STRIP_SSML = "strip_ssml"
 		const val KEY_CAPITAL_MODE = "capital_mode"
-		const val KEY_LANGUAGE = "language_word"
 		const val KEY_EXPAND_ABBREVIATIONS = "expand_abbreviations"
 		const val KEY_CODE_MODE = "code_mode"
 		const val KEY_CODE_CAMEL = "code_camel_case"

@@ -9,9 +9,17 @@
 	<string name="welcome_title">Welcome to Free eloquence TTS</string>
 	<string name="welcome_alternative">Free alternative to paid eloquence TTS.</string>
 	<string name="welcome_free">Free to use. No payment needed.</string>
-	<string name="welcome_solution">8 voices, 6 languages, code reading, spelling, and custom dictionaries.</string>
 	<string name="welcome_permissions">Needs 2 permissions: notifications and battery exemption. Battery exemption keeps voice working when phone is idle.</string>
 	<string name="welcome_about">Read about the app from main screen.</string>
+	<string name="welcome_features">What you get</string>
+	<string name="welcome_voices">8 classic voices</string>
+	<string name="welcome_voices_description">Reed, Shelley, Bobby, Rocko, Glen, Sandy, Grandma and Grandpa, each tunable.</string>
+	<string name="welcome_code">Code reading</string>
+	<string name="welcome_code_description">Speaks camelCase, operators and indentation the way programmers hear them.</string>
+	<string name="welcome_spelling">Spelling and symbols</string>
+	<string name="welcome_spelling_description">Spells words out and reads punctuation and emoji on request.</string>
+	<string name="welcome_dictionaries">Custom dictionaries</string>
+	<string name="welcome_dictionaries_description">Teach the voice your names and abbreviations.</string>
 	<string name="welcome_continue">Continue</string>
 
 	<!-- Main -->
@@ -35,15 +43,6 @@
 
 	<!-- Eloquence settings -->
 	<string name="settings_title">Voice settings</string>
-
-	<string name="section_language">Language</string>
-	<string name="section_language_description">Pick the language the voice speaks in.</string>
-	<string name="language_label">Language</string>
-	<string name="language_description">Which language the voice speaks in. Default lets each app decide.</string>
-	<string name="language_follow">Let each app decide</string>
-	<string name="language_follow_description">Speak in the language the app asks for. Best for screen readers.</string>
-	<string name="language_not_in_build">Not in this build</string>
-	<string name="language_not_in_build_notice">That language is not in this build, so the voice cannot speak it.</string>
 
 	<string name="section_voice">Voice</string>
 	<string name="section_voice_description">Pick voice and gender.</string>
@@ -80,6 +79,15 @@
 	<string name="volume_description">How loud the voice is.</string>
 
 	<string name="section_quality">Quality</string>
+	<string name="section_quality_description">How the voice sounds: which finishing it gets, and at which sample rate.</string>
+	<string name="audio_optimization_label">Audio optimization</string>
+	<string name="audio_optimization_description">How the samples are finished before they are heard: balanced, louder, or cleaner.</string>
+	<string name="audio_optimization_balanced">Balanced</string>
+	<string name="audio_optimization_balanced_description">The voice as recorded, quietly levelled.</string>
+	<string name="audio_optimization_volume">Optimized for volume</string>
+	<string name="audio_optimization_volume_description">Louder everywhere, for a noisy street.</string>
+	<string name="audio_optimization_quality">Optimized for quality</string>
+	<string name="audio_optimization_quality_description">The cleanest sound this voice has.</string>
 	<string name="sample_rate_label">Sample rate</string>
 	<string name="sample_rate_description">Higher is clearer but uses more battery.</string>
 

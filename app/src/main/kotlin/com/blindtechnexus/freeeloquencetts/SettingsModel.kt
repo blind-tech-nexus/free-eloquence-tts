@@ -19,15 +19,10 @@ class SettingsModel(context: Context) {
 	private val app = context.applicationContext
 	private val settings = Settings(app)
 
-	/** The engine the sample is spoken on. A var rather than a val because it
-	 *  speaks the language that was chosen, and choosing another one means
-	 *  another instance: the language is fixed when an instance is opened and
-	 *  nothing about it can be changed afterwards. */
-	private var preview: EvvPreview? =
-		previewLanguage(settings.language).takeIf { it != 0 }?.let { EvvPreview(it) }
-
-	var language by mutableStateOf(settings.language)
-		private set
+	/** The engine the sample is spoken on. There is one language, so one
+	 *  instance opened once, and nothing about it can be changed afterwards
+	 *  except the voice. */
+	private val preview: EvvPreview = EvvPreview()
 
 	var voice by mutableStateOf(settings.voice)
 		private set
@@ -68,6 +63,9 @@ class SettingsModel(context: Context) {
 	var sampleRateHz by mutableStateOf(settings.sampleRateHz)
 		private set
 
+	var audioOptimization by mutableStateOf(settings.audioOptimization)
+		private set
+
 	var pauses by mutableStateOf(settings.pauses)
 		private set
 
@@ -106,7 +104,7 @@ class SettingsModel(context: Context) {
 	val gender: Int get() = shape[Eci.VOICE_GENDER] ?: 0
 
 	init {
-		preview?.open {
+		preview.open {
 			// A voice's own settings are what the sliders start at, and only
 			// the engine knows them.
 			if (!settings.shapeIsCustom(settings.voice)) adoptVoice()
@@ -115,40 +113,16 @@ class SettingsModel(context: Context) {
 	}
 
 	fun stopSpeaking() {
-		preview?.stopSpeaking()
+		preview.stopSpeaking()
 	}
 
 	fun close() {
-		preview?.close()
+		preview.close()
 	}
 
 	fun percentOf(param: Int): Int = Eci.toPercent(param, shape[param] ?: 0)
 
 	// ---- what the screen changes -----------------------------------------
-
-	/**
-	 * Which language the engine speaks in.
-	 *
-	 * The sample moves with it, which means the engine behind the sample is
-	 * given back and another one opened -- the language an instance speaks is
-	 * fixed when it is opened, so there is nothing to be done but make a new
-	 * one. That is a second of work on a thread of its own and it is worth it:
-	 * a language choice that cannot be heard is a choice that has to be made
-	 * blind, on the strength of a name in a list.
-	 */
-	fun chooseLanguage(word: Int) {
-		if (language == word) return
-		language = word
-		settings.language = word
-		val wanted = previewLanguage(settings.language)
-		val previous = preview
-		preview = if (wanted == 0) null else EvvPreview(wanted)
-		previous?.close()
-		preview?.open {
-			shape.clear()
-			shape.putAll(settings.shape(settings.voice))
-		}
-	}
 
 	fun chooseVoice(which: Int) {
 		voice = which
@@ -293,6 +267,11 @@ class SettingsModel(context: Context) {
 		settings.sampleRateHz = hz
 	}
 
+	fun chooseAudioOptimization(mode: Int) {
+		audioOptimization = mode
+		settings.audioOptimization = mode
+	}
+
 	// ---- hearing it ------------------------------------------------------
 
 	/** Nothing here speaks by itself. Every setting is in force the moment it
@@ -311,11 +290,11 @@ class SettingsModel(context: Context) {
 		)
 		val said = Prosody.prefix(settings.phrasePrediction) +
 			Pauses.apply(text, settings.pauses, true)
-		preview?.say(said, voice, settings.shape(voice), sampleRateHz, settings.abbreviations)
+		preview.say(said, voice, settings.shape(voice), sampleRateHz, settings.abbreviations, settings.audioOptimization)
 	}
 
 	private fun adoptVoice() {
-		val own = preview?.presetShape(settings.voice) ?: return
+		val own = preview.presetShape(settings.voice)
 		if (own.isEmpty()) return
 		// Everything but the speed, which stays where the listener put it.
 		// Glen and Sandy ship at 70 where the rest are 50, so taking the
@@ -326,23 +305,5 @@ class SettingsModel(context: Context) {
 	companion object {
 		val RATES: List<Int> = Eci.SAMPLE_RATES.sorted()
 
-		/** The languages the screen offers, which is every one of them, and
-		 *  the answer to which of them this build can speak is asked of the
-		 *  engine rather than assumed. See [Eci.LANGUAGES]. */
-		val LANGUAGES: List<Eci.Offered> = Eci.LANGUAGES
-
-		/** Which of [LANGUAGES] is in force, or -1 for "whichever app is
-		 *  asking decides", which is the first thing the screen offers. */
-		fun indexOf(word: Int): Int =
-			if (word == 0) -1 else LANGUAGES.indexOfFirst { it.words.any { candidate -> candidate == word } }
-
-		/** The language to open the preview in: the one chosen when this build
-		 *  can speak it, and otherwise the first one it has. */
-		private fun previewLanguage(word: Int): Int {
-			val available = EvvEngine.available
-			if (available.isEmpty()) return 0
-			if (word != 0 && available.contains(word)) return word
-			return available[0]
-		}
 	}
 }

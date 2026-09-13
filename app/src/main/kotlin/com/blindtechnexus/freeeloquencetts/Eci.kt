@@ -29,10 +29,6 @@ object Eci {
 	const val LAST_PRESET = 8
 	const val SCRATCH_VOICE = 9
 
-	/** The bit that says the text handed over is UTF-16 rather than bytes. It
-	 *  travels in the language word, not in a setting of its own. */
-	const val UNICODE_CODE_SET = 0x800
-
 	const val NUM_VOICE_PARAMS = 8
 
 	/** The volumes a dictionary set holds. The fourth, the extended main
@@ -104,123 +100,38 @@ object Eci {
 		"Reed", "Shelley", "Bobby", "Rocko", "Glen", "Sandy", "Grandma", "Grandpa"
 	)
 
-	/** One language the settings screen offers.
+	/**
+	 * The one language this app speaks: English (United States).
 	 *
-	 *  [words] is every engine language word the language has here, the one to
-	 *  use first of them, and empty for a language this build carries no
-	 *  module for. [LOCALES] is what the engine answers with; this is what a
-	 *  person is offered, which is a longer list on purpose -- see
-	 *  [LANGUAGES]. */
-	class Offered(val name: String, val words: List<Int>) {
+	 * The engine this is built on can be compiled with several languages, but
+	 * this build carries exactly one module -- `LANGS` in the build script
+	 * names only lang/enus, and not overridably -- and the app offers exactly
+	 * one voice in it. There is no
+	 * language setting anywhere: not on the settings screen, not in the stored
+	 * preferences, and not in what the service asks the engine for. Every
+	 * utterance is synthesised in this language, whatever locale the caller
+	 * named, which is also what keeps the engine instance open for ever
+	 * instead of being closed and remade -- at about a second a time --
+	 * whenever a screen reader alternates between two languages.
+	 */
+	const val ENGLISH_US = 0x00010000
 
-		/** The engine word to ask for, or nought when this build cannot speak
-		 *  it. Nought is also what "whichever app is asking decides" is stored
-		 *  as, and the two are the same thing to the engine: there is no
-		 *  language nought, so the word is only ever used after a check that
-		 *  it is not. */
-		val word: Int get() = words.firstOrNull() ?: 0
-
-		val speaks: Boolean get() = words.isNotEmpty()
-	}
+	/** The ISO-3 language and country English (United States) answers to,
+	 *  which is what Android asks about. */
+	const val ISO3_LANGUAGE = "eng"
+	const val ISO3_COUNTRY = "USA"
 
 	/**
-	 * Every language the settings screen offers, in the order it offers them.
-	 *
-	 * Sixteen languages, which is the list this engine set out to cover, and
-	 * nineteen entries because three of them have more than one dialect in the
-	 * engine and each dialect is a choice of its own.
-	 *
-	 * Only some of them can be spoken. The engine is a rebuild of the languages
-	 * IBM shipped and IBM shipped nine, so Mandarin, Portuguese, Finnish,
-	 * Korean, Cantonese, Dutch, Norwegian, Swedish and Danish have no module to
-	 * be spoken in at all. Japanese does have one and it is left out of this
-	 * build deliberately: its text is Shift-JIS, EUC-JP or one of three
-	 * seven-bit JIS sets, and [WesternText] can only hand the engine Latin-1,
-	 * so offering it would be offering a language that gets mis-read rather
-	 * than mis-spoken. The reason is written down at `evvdroid.langs` in the
-	 * build script, which is where the module is dropped.
-	 *
-	 * They are all still listed. A language a person is looking for and cannot
-	 * find is a language they cannot tell the difference between "not here" and
-	 * "hidden", and the entry for one this build cannot speak says so in its
-	 * own label rather than in a sentence nobody reads -- which matters most on
-	 * a screen reader, where the label is the whole of what is heard.
+	 * How the engine raises its own eleven thousand and twenty five hertz to a
+	 * higher rate. These are the CVT_* values from the engine's
+	 * src/eci/sound/eci_pcm.h, and [EvvNative.setUpsampleMethod] carries one
+	 * of them down. See [AudioOptimization] for which mode uses which, and why
+	 * the choice is audible: the engine's true bandwidth never changes, so the
+	 * method is what decides what the new band carries -- a mirror of the
+	 * speech, a curve through it, or nothing at all.
 	 */
-	val LANGUAGES: List<Offered> = listOf(
-		Offered("English (United States)", listOf(0x00010000)),
-		Offered("English (United Kingdom)", listOf(0x00010001)),
-		Offered("Spanish (Spain)", listOf(0x00020000)),
-		Offered("Spanish (Latin America)", listOf(0x00020001)),
-		Offered("French (France)", listOf(0x00030000)),
-		Offered("French (Canada)", listOf(0x00030001)),
-		Offered("German", listOf(0x00040000)),
-		Offered("Italian", listOf(0x00050000)),
-		Offered("Mandarin", emptyList()),
-		Offered("Portuguese", emptyList()),
-		Offered("Japanese", emptyList()),
-		Offered("Finnish", emptyList()),
-		Offered("Korean", emptyList()),
-		Offered("Cantonese", emptyList()),
-		Offered("Dutch", emptyList()),
-		Offered("Norwegian", emptyList()),
-		Offered("Swedish", emptyList()),
-		Offered("Danish", emptyList()),
-		Offered("Polish", listOf(0x00110000))
-	)
-
-	/** Whether the engine in this build can speak [offered].
-	 *
-	 *  Asked of the engine rather than of the list, because the list is what
-	 *  the app offers and the modules linked into the binary are what the
-	 *  engine has, and the two are allowed to differ: `evvdroid.langs` is a
-	 *  build property, and a build made with a shorter one has fewer languages
-	 *  in it and the same screen to offer them from. */
-	fun speaks(offered: Offered): Boolean =
-		offered.words.any { word -> EvvEngine.available.contains(word) }
-
-	/** The entry [word] belongs to, or nought when it is not one of ours. */
-	fun offeredFor(word: Int): Offered? {
-		val base = baseLanguage(word)
-		return LANGUAGES.firstOrNull { entry -> entry.words.any { it == base } }
-	}
-
-	/** A language word is the family in the top half, the code set in the third
-	 *  byte and the dialect in the bottom one. */
-	fun family(language: Int): Int = language and 0xFFFF0000.toInt()
-
-	fun baseLanguage(language: Int): Int = language and UNICODE_CODE_SET.inv()
-
-	private val LOCALES = mapOf(
-		0x00010000 to Triple("eng", "USA", ""),
-		0x00010001 to Triple("eng", "GBR", ""),
-		0x00020000 to Triple("spa", "ESP", ""),
-		0x00020001 to Triple("spa", "MEX", ""),
-		0x00030000 to Triple("fra", "FRA", ""),
-		0x00030001 to Triple("fra", "CAN", ""),
-		0x00040000 to Triple("deu", "DEU", ""),
-		0x00050000 to Triple("ita", "ITA", ""),
-		0x00060000 to Triple("cmn", "CHN", ""),
-		0x00060001 to Triple("cmn", "TWN", ""),
-		0x00070000 to Triple("por", "BRA", ""),
-		0x00080000 to Triple("jpn", "JPN", ""),
-		0x00090000 to Triple("fin", "FIN", ""),
-		0x000a0000 to Triple("kor", "KOR", ""),
-		0x000b0000 to Triple("yue", "CHN", ""),
-		0x000b0001 to Triple("yue", "HKG", ""),
-		0x000c0000 to Triple("nld", "NLD", ""),
-		0x000d0000 to Triple("nor", "NOR", ""),
-		0x000e0000 to Triple("swe", "SWE", ""),
-		0x000f0000 to Triple("dan", "DNK", ""),
-		0x00110000 to Triple("pol", "POL", "")
-	)
-
-	/** The ISO-3 language and country an engine language answers to, which is
-	 *  what Android asks about. */
-	fun localeOf(language: Int): Triple<String, String, String>? =
-		LOCALES[baseLanguage(language)]
-
-	fun displayName(language: Int): String {
-		val loc = localeOf(language) ?: return "0x%08x".format(language)
-		return java.util.Locale(loc.first, loc.second).getDisplayName(java.util.Locale.getDefault())
-	}
+	const val UPSAMPLE_HOLD = 0
+	const val UPSAMPLE_LINEAR = 2
+	const val UPSAMPLE_CUBIC = 3
+	const val UPSAMPLE_SINC = 4
 }
