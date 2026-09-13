@@ -1,6 +1,6 @@
-# Alt eloquence TTS
+# Free eloquence TTS
 
-Alt eloquence TTS is a free alternative Eloquence text-to-speech engine for Android and Wear OS.
+Free eloquence TTS is a free alternative Eloquence text-to-speech engine for Android and Wear OS.
 
 The speech comes from [openevv](https://github.com/Mudb0y/openevv), a C rebuild of IBM's Embedded ViaVoice. This repo cross-compiles that engine for Android, wraps it in JNI, and puts a `TextToSpeechService` around it. openevv is a submodule and is not edited in place.
 
@@ -14,12 +14,16 @@ No warranty. See LICENSE, and read the part about language data before redistrib
 
 ## What works
 
-* US English.
+* Six languages in a default build -- English (US and UK), Spanish (Spain and Latin America), French (France and Canada), German, Italian and Polish -- and nineteen in the list, of which the rest are offered by name and say out loud that this build cannot speak them. See [Languages](#languages).
 * Eight preset voices: Reed, Shelley, Bobby, Rocko, Glen, Sandy, Grandma, Grandpa. Offered through the Android voice API, so they appear separately.
 * All eight voice parameters: speed, pitch, inflection, head size, roughness, breathiness, volume, gender.
 * Speech rate and pitch from the system settings, with a switch to force this app's own over them.
 * Symbol pronunciation: all, most, some, a custom list, or none.
-* Pronunciation dictionaries, and a user dictionary file.
+* Pronunciation dictionaries, and a user dictionary file that is rebuilt on a thread of its own rather than on the one that is about to speak: see [The user dictionary](#the-user-dictionary).
+* Abbreviations and expansions of your own, with a choice of how each one is matched: see [Expansions](#abbreviations-and-expansions).
+* Code reading: camelCase and snake_case names taken apart, operators and brackets named, indentation counted, file paths and addresses said as themselves. Seven switches under one: see [Reading source code](#reading-source-code).
+* Spelling a word out, letter by letter or in the NATO phonetic alphabet, either always or only for a word written in capitals.
+* A document is spoken from its first sentence rather than from its last: see [A long text is streamed](#a-long-text-is-streamed).
 * A notification that keeps the engine in the foreground whether or not anything is bound to it, a stop button on it, and the same after a restart for whoever wants it: see [Keeping the voice alive](#keeping-the-voice-alive-when-nothing-is-speaking).
 * An update channel, checked in the background on every launch, that ends at Android's own installer: see [Updates](#updates).
 * Android 6 and later. arm64-v8a, armeabi-v7a, x86_64.
@@ -28,7 +32,7 @@ No warranty. See LICENSE, and read the part about language data before redistrib
 
 ## Turning it on
 
-TalkBack settings, Text-to-speech settings, Preferred engine, Alt eloquence TTS. The gear next to it opens the voice settings.
+TalkBack settings, Text-to-speech settings, Preferred engine, Free eloquence TTS. The gear next to it opens the voice settings.
 
 ## Turning it off
 
@@ -51,13 +55,13 @@ tests against the app and stops there, which is the half of the check that can b
 done where no device is plugged in -- and it is worth doing, because a test that
 has never been compiled is a test that has never been read.
 
-First build is about four minutes per ABI. Most of that is the engine writing the language rules out of text with Python and decompiling them into roughly 13 MB of C, which is per language rather than per ABI, so only the first ABI pays for it.
+First build is about four minutes per ABI for one language. A default build links nine modules in, and the rules are the part that grows: `make rules` writes about 81 MB of C across the nine -- 13 MB each for the two English ones, 11 MB for German, about 6 MB each for Spanish, Italian and Polish -- and takes about four and a half minutes on two cores. That cost is paid once per language rather than once per ABI, so the ABIs after the first are the compile and link only. Expect ten to twenty minutes for a clean default build, and use `-Pevvdroid.langs=lang/enus -Pevvdroid.rules=bytecode` while working on the Kotlin.
 
 | property | default | effect |
 | --- | --- | --- |
 | `evvdroid.abis` | `arm64-v8a,armeabi-v7a,x86_64` | which ABIs to build |
 | `evvdroid.rules` | `c` | `bytecode` builds in 30s and runs at under half the speed |
-| `evvdroid.langs` | `lang/enus` | language modules to link in |
+| `evvdroid.langs` | the nine modules in `app/build.gradle.kts` | language modules to link in |
 | `evvdroid.abiSplits` | `false` | one APK per ABI |
 
 `-Pevvdroid.abis=arm64-v8a -Pevvdroid.rules=bytecode` is the fast loop for working on the Kotlin. Compiled rules are the default because interrupting and restarting costs about a third of what it costs interpreted, and a screen reader interrupts constantly.
@@ -72,7 +76,11 @@ Four, in one activity. A screen reader announces the departure and the arrival o
 
 *Main*, which is what the launcher opens: what the app is, then the three things worth doing -- configure the voice, open the system's text-to-speech settings and choose this engine there, read about the app -- each with the reason said before the button that acts on it.
 
-*Eloquence settings*, which is also what the gear beside the engine in the system settings opens, straight to it rather than by way of the main screen. Six sections, each a heading TalkBack can jump to: voice customization, voice behaviors, voice quality, voice dictionary settings, other settings, and a voice to test the lot of them on.
+*Eloquence settings*, which is also what the gear beside the engine in the system settings opens, straight to it rather than by way of the main screen. Nine sections, each a heading TalkBack can jump to: language, voice customization, voice behaviors, voice quality, voice dictionary settings, text reading, code reading, other settings, and a voice to test the lot of them on.
+
+*Expansions*, reached from the dictionary section: the abbreviations and expansions of your own, as a list with an add button, an options button on each row, and an import and an export beside them.
+
+*Dictionary*, reached the same way: the words the engine is to say differently from how they are spelled.
 
 *About us*: what the app is, who made it -- Sujan Rai, with the Blind Tech Nexus team -- and three ways to reach them, as buttons rather than as addresses to copy down. WhatsApp on [wa.me/9779708340992](https://wa.me/9779708340992) for bugs, feedback and feature requests, the Telegram channel on [t.me/blindtechnexus](https://t.me/blindtechnexus) for update broadcasts and the rest, and blindtechvisionary@gmail.com for an answer that can be relied on, with the address and a subject already filled in. Each asks by link first and then by the app's own scheme, and a link that nothing on the device can follow says so out loud rather than doing nothing at all. WhatsApp is asked three ways rather than two: `wa.me` is the address WhatsApp hands out, `api.whatsapp.com/send?phone=` is what `wa.me` redirects to and is the one that works on a browser that will not follow the redirect, and `whatsapp://send?phone=` is for a device with the app and no browser. The address this used to name, `w.me`, is the short form of a signed-in desktop session and answers a phone with a page saying it cannot be loaded there, which is what the button labelled "Contact on WhatsApp" arrived at. The `<queries>` block in the manifest names the messaging apps for the same reason: Android 11 and later answer "nothing is installed" to an app that has not said what it is looking for, and a scheme that cannot be resolved is a button that does nothing.
 
@@ -100,7 +108,7 @@ Below the number, one paragraph says what is in force now -- whether the app's o
 
 ## Settings
 
-Launcher icon, or the gear beside the engine in the text-to-speech settings. The six sections above, top to bottom: the voice and its gender, the seven numeric parameters each behind a button that opens it in a dialog of its own, the sample rate, the dictionary manager and the abbreviation switch that belongs with it, pauses, symbol pronunciation, phrase prediction and putting a voice back as it shipped, and a sample to hear the lot of them on. Nothing speaks on its own: a setting takes effect when you set it, and "Speak a sample" is how you hear it. "Stop the sample" is there as well, because the preview plays into an AudioTrack of its own and nothing else stops it.
+Launcher icon, or the gear beside the engine in the text-to-speech settings. The nine sections above, top to bottom: the voice and its gender, the seven numeric parameters each behind a button that opens it in a dialog of its own, the sample rate, the dictionary manager and the abbreviation switch that belongs with it, pauses, symbol pronunciation, phrase prediction and putting a voice back as it shipped, and a sample to hear the lot of them on. Nothing speaks on its own: a setting takes effect when you set it, and "Speak a sample" is how you hear it. "Stop the sample" is there as well, because the preview plays into an AudioTrack of its own and nothing else stops it.
 
 A setting that is a choice is a button that carries its own value -- "Voice (Reed) selected" -- and the state description says "Click to change", so a screen reader hears the setting, its value and the action in one stop. The seven numeric parameters are buttons too ("Set voice rate" and its like) that open a dialog with the setting's name for a title, the bar, and Save and Cancel. Nothing is changed until Save, so a look inside a setting costs nothing.
 
@@ -178,11 +186,82 @@ A request for silence wakes the wait rather than sitting out the rest of a sleep
 
 ## Updates
 
-The app asks one URL when it starts: [the release channel](https://raw.githubusercontent.com/blind-tech-nexus/remote-data-json/main/alt-eloquence-tts-update.json), a file with two values in it, `version` and `url`. The version is compared with this build's `versionName` and, if they are not the same, a dialog says so in the words "A new version (%s) is available to download" and asks whether to fetch it now. "Later" is not a setting: the same version is not offered again for the rest of that run of the app and is asked about again the next time it opens. `UpdateTest` holds the rules of the answer: that the same version is no update, that a missing or blank value is no update, and that an address that is not https is no update -- the download is an executable, so a plain http address is refused rather than warned about, since a person halfway through a download is not in a position to judge a certificate.
+The app asks one URL when it starts: [the release channel](https://raw.githubusercontent.com/blind-tech-nexus/remote-data-json/main/alt-eloquence-tts-update.json) -- which keeps the file name it has always had, because a channel that moves is a channel every installed build loses -- a file with two values in it, `version` and `url`. The version is compared with this build's `versionName` and, if they are not the same, a dialog says so in the words "A new version (%s) is available to download" and asks whether to fetch it now. "Later" is not a setting: the same version is not offered again for the rest of that run of the app and is asked about again the next time it opens. `UpdateTest` holds the rules of the answer: that the same version is no update, that a missing or blank value is no update, and that an address that is not https is no update -- the download is an executable, so a plain http address is refused rather than warned about, since a person halfway through a download is not in a position to judge a certificate.
 
 Nothing is installed by the app. When the bytes are down the file is validated as a package by the package manager, and the installer is asked with a one-read grant on a content URI into the cache. On Android 8 and later that needs this app to have been allowed to install apps at all, which is not the app's to grant: the allowance is asked for on the system's screen, and the file waits in the cache until it has been given. The dialog while bytes are arriving says how many have arrived, in megabytes, and has a button that breaks the read off and deletes the partial file; the bar under the number is for whoever can see it, and nothing that has to be heard depends on it.
 
 The asking is one `HttpURLConnection` and one `JSONObject`, on a thread of its own, with no library. The About screen says what it found whenever it is asked from there, which is the only case in which an answer of "you are up to date" or "nothing could be reached" is worth a sentence; on the way into a launch, silence is the right answer to both.
+
+## Languages
+
+The engine's own catalogue has nineteen languages in it. A build carries only the modules it was compiled with, and the two are not the same thing, so the list the settings screen offers is the catalogue and whether any one of them can be spoken is asked of the engine at the moment the question matters -- `Eci.speaks`, which looks at what `eciGetAvailableLanguages` answered and not at what the list claims.
+
+A default build links nine modules in and speaks six languages:
+
+| offered as | module | engine word |
+| --- | --- | --- |
+| English (United States) | `lang/enus` | `0x00010000` |
+| English (United Kingdom) | `lang/engb` | `0x00010001` |
+| Spanish (Spain) | `lang/eses` | `0x00020000` |
+| Spanish (Latin America) | `lang/esus` | `0x00020001` |
+| French (France) | `lang/frfr` | `0x00030000` |
+| French (Canada) | `lang/frca` | `0x00030001` |
+| German | `lang/dede` | `0x00040000` |
+| Italian | `lang/itit` | `0x00050000` |
+| Polish | `lang/plpl` | `0x00110000` |
+
+The rest of the catalogue is in the list by name and says so out loud: Mandarin, Portuguese, Japanese, Finnish, Korean, Cantonese, Dutch, Norwegian, Swedish and Danish. Tapping one of them does not take, and the row says why in the error colour and again when it is tapped, because a button that does nothing and says nothing is the one thing a screen must not be.
+
+Two of the ten deserve a sentence rather than a row. **Japanese** has a module, `lang/jajp`, and is not linked in. Its text is Shift-JIS, EUC-JP and 7-bit JIS, and the bridge to the engine folds to Latin-1 -- `WesternText` has one byte per character and nothing above `0xFF` in it -- so kana and kanji arrive as spaces. openevv's own speech dispatcher excludes Japanese for the same reason. Linking the module in would be a language that opens, says nothing, and reports that it did. **Portuguese, Mandarin and the rest** have no module at all: openevv carries no rules for them, at this commit or upstream, and there is nothing to link.
+
+The setting itself is off by default and its default is not a compromise. "Let each app decide" is the first row of the dialog and it is what the engine does when nobody has chosen: a screen reader sets a language per utterance and is usually right about it, so an engine that answered every request in one language would read a French name in a sentence of English as though it were English. What the setting is for is the other way round -- an app that asks in a language the listener does not want, or asks in none at all and is given whatever the engine was opened with.
+
+A choice this build cannot honour is passed over rather than honoured wrongly: the service asks the engine, and when the answer is no, the speech goes on in the language the caller asked for.
+
+## Abbreviations and expansions
+
+The engine has an abbreviation dictionary of its own, and the switch for it is on the dictionary section where it has always been. This is the other one, and it is yours.
+
+Every entry has four parts, and each is a choice rather than a convention:
+
+* **The key** -- what is written. A single word or a phrase; `st`, `Dr`, `new york`.
+* **What to say instead of it.**
+* **How it is matched.** *Whole word* is the default and is what `st` wants, so that a street is expanded and the first three letters of "street" are not. *From the start of a word* is what `Dr` wants. *Anywhere* is what a placeholder in a template wants, and it is the only one of the three that will match inside a longer word, which is why it is not the default.
+* **Whether case is kept.** Off by default, so `DOJ`, `Doj` and `doj` are all the same entry. Turned on, only the spelling that was written matches -- which is the setting that makes a case-sensitive identifier readable without making ordinary prose case-sensitive too.
+
+The list is kept in `abbreviations.dic` beside the user dictionary, as four tab-separated columns, and it imports and exports in that same shape, so a list can be shared between two phones or kept in version control. An entry with the same key and the same matching replaces the one that was there rather than standing next to it.
+
+Matching is one pass over the text against a trie of the keys, and the longest key that matches at a position wins -- `str` as "string" rather than `st` as "street" followed by a stray "r". That is one pass however many entries there are, which is what makes a list of a few hundred cost nothing.
+
+## Reading source code
+
+A synthesiser that reads source code as prose says `getElementById` as one word, `!=` as "bang equals" if it is lucky, and a brace as a silence. Seven switches, under one that turns the whole of it on and is off by default:
+
+* **camelCase** -- `getElementById` as "get element by id". A run of capitals is one word, so `parseHTTPResponse` is "parse http response" and not "parse h t t p response"; and `HTTP` on its own is a word and is not taken apart at all, because taking it apart would spell it.
+* **snake_case** -- `my_total_count` as "my total count".
+* **Operators** -- named, and met as the whole of themselves: `!==` is "bang double equals" and not "bang" followed by "double equals". Longest first, which is the whole of the rule.
+* **Brackets and marks** -- braces, brackets, parentheses, the semicolon, the colon, the comma, the dot, `@`, `#`, `$` and the backtick, each with a name.
+* **Indentation** -- counted rather than spoken: a line that opens with whitespace says "indent 4" and then its own text. A tab is one and a space is one, because that is a count of the characters and not a guess at the width of somebody's editor.
+* **File paths** -- `/home/user/notes.txt` as "path home slash user slash notes dot txt". Two shapes are taken and both are narrow: one that starts where a path has to -- a slash, a tilde, a dot slash, a drive letter -- and one that is relative and carries a file name, so `src/main/App.kt` is a path and `and/or` is not. Saying "slash" in the middle of a sentence because two words happened to be joined would be worse than the silence.
+* **Addresses** -- `https://www.example.com/a/b` as "url example dot com slash a slash b". The scheme is a name and the dots in a host are not sentence ends, and those are the two things the engine gets wrong about an address.
+
+They run in that order, paths and addresses before the operators, because an address is one thing that the operator pass would otherwise take apart mark by mark. What a pass that puts spaces around the things it names owes the text back is put back rather than trimmed: the indentation pass runs last and reads the whitespace at the start of a line, so a leading space that was in the text has to still be there when it does.
+
+## A long text is streamed
+
+Long text is handed to the engine in pieces, because the engine cannot abandon an utterance and a cancel has to wait for something. What it used to do first was cut the text into every piece it had and put every one of them through the pipeline, and only then ask for the first syllable. A chapter is a few thousand pieces, so the wait before the first sound grew with the length of what was being read -- and a person who swiped away two seconds later had paid for the whole chapter and heard one sentence.
+
+The pieces are a sequence now, and a piece is rewritten when the utterance reaches it. The first syllable is one piece of work behind the request rather than one document behind it, and a piece is a couple of hundred characters whatever the document it came out of is. `StreamingPipelineTest` holds both halves of the claim: that the pieces are the same pieces in the same order saying the same thing, and that asking for the first two of them costs two of them rather than all of them.
+
+Below ten thousand characters -- a couple of pages -- the single pass is still taken. It is cheaper there than the per-piece calls, and it cuts the rewritten text rather than the caller's, which is the better of the two: the pipeline can move a character, and a cut made before it runs is a cut made against text that is about to change.
+
+## The user dictionary
+
+A dictionary of two hundred thousand words is a trie that takes a moment to build, and building it on the thread that is about to speak is a moment in front of a first syllable. So it is not built there.
+
+The file carries a version beside it, in `words.dic.ver`, and every write moves the number on. A write hands the rebuild to a thread of its own -- one of them, daemon, named `evv-dictionary` -- and the utterance that follows compares one integer against the one its trie was built from. A match is the trie it already has, which is the ordinary case by a wide margin, because a write happens once and is spoken from a thousand times. A mismatch waits on a rebuild that was started before the utterance was, and is usually finished already.
+
+The version is what makes that safe rather than merely fast. Without it, a reader on the synthesis thread and a writer on another are racing over one file and the reader has no way to know it lost. With it, the trie and the number it was built from are published together under one lock, so a reader sees a pair that goes together or an older pair, and never a trie from one list against the version of another.
 
 ## Speed
 

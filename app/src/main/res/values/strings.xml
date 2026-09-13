@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<string name="app_name">Alt eloquence TTS</string>
-	<string name="engine_name">Alt eloquence TTS</string>
+	<string name="app_name">Free eloquence TTS</string>
+	<string name="engine_name">Free eloquence TTS</string>
 
 	<string name="go_back">Go back</string>
 
 	<!-- Welcome -->
-	<string name="welcome_title">Welcome to Alt eloquence TTS</string>
+	<string name="welcome_title">Welcome to Free eloquence TTS</string>
 	<string name="welcome_alternative">Free alternative to paid eloquence TTS.</string>
 	<string name="welcome_free">Free to use. No payment needed.</string>
-	<string name="welcome_solution">8 voices, all voice settings, and custom dictionaries.</string>
+	<string name="welcome_solution">8 voices, 6 languages, code reading, spelling, and custom dictionaries.</string>
 	<string name="welcome_permissions">Needs 2 permissions: notifications and battery exemption. Battery exemption keeps voice working when phone is idle.</string>
 	<string name="welcome_about">Read about the app from main screen.</string>
 	<string name="welcome_continue">Continue</string>
@@ -30,11 +30,20 @@
 	<string name="battery_later">Not now</string>
 
 	<string name="default_tts_title">Not the default TTS</string>
-	<string name="default_tts_message">Choose Alt eloquence TTS as default TTS in system settings.</string>
+	<string name="default_tts_message">Choose Free eloquence TTS as default TTS in system settings.</string>
 	<string name="set_as_default">Open system TTS settings</string>
 
 	<!-- Eloquence settings -->
 	<string name="settings_title">Voice settings</string>
+
+	<string name="section_language">Language</string>
+	<string name="section_language_description">Pick the language the voice speaks in.</string>
+	<string name="language_label">Language</string>
+	<string name="language_description">Which language the voice speaks in. Default lets each app decide.</string>
+	<string name="language_follow">Let each app decide</string>
+	<string name="language_follow_description">Speak in the language the app asks for. Best for screen readers.</string>
+	<string name="language_not_in_build">Not in this build</string>
+	<string name="language_not_in_build_notice">That language is not in this build, so the voice cannot speak it.</string>
 
 	<string name="section_voice">Voice</string>
 	<string name="section_voice_description">Pick voice and gender.</string>
@@ -98,6 +107,41 @@
 	<string name="dictionary_export_failed">Could not write file.</string>
 	<string name="abbreviations_label">Say abbreviations</string>
 	<string name="abbreviations_description">Say abbreviations as full words. Off by default.</string>
+	<string name="expansions_description">Write your own short forms and what to say instead. Not the same as the words above: these replace text, and you choose where in a sentence they match.</string>
+	<string name="expansions_manager">My short forms</string>
+	<string name="expansions_manager_description">Manage custom abbreviations and expansions.</string>
+	<string name="expand_abbreviations_label">Expand my short forms</string>
+	<string name="expand_abbreviations_description">Say the full text you wrote instead of the short form.</string>
+	<string name="expansions_screen_description">Tap a short form to edit or delete it.</string>
+	<string name="expansions_add">Add short form</string>
+	<string name="expansions_edit">Edit</string>
+	<string name="expansions_delete">Delete</string>
+	<string name="expansions_choice">What to do?</string>
+	<string name="expansions_import">Import file</string>
+	<string name="expansions_export">Export file</string>
+	<string name="expansions_export_name">free-eloquence-short-forms.txt</string>
+	<string name="expansions_empty">No short forms yet. Add one or import a file.</string>
+	<string name="expansions_key_hint">Short form</string>
+	<string name="expansions_say_hint">Say as</string>
+	<string name="expansions_row">%1$s, said as %2$s, %3$s, %4$s</string>
+	<string name="expansions_any_capitals">any capital letters</string>
+	<string name="expansions_exact_capitals">exact capital letters</string>
+	<string name="expansions_match_description">Where in a sentence the short form matches.</string>
+	<string name="expansions_match_whole">Whole word</string>
+	<string name="expansions_match_whole_description">Only when it stands on its own. Street is not st.</string>
+	<string name="expansions_match_starts">Start of a word</string>
+	<string name="expansions_match_starts_description">At the front of a word, which is where a short form usually is.</string>
+	<string name="expansions_match_anywhere">Anywhere</string>
+	<string name="expansions_match_anywhere_description">Inside any word. Use for a sign of your own.</string>
+	<string name="expansions_case_label">Any capital letters</string>
+	<string name="expansions_case_description">Match however it was typed. Turn off to match only the exact capital letters.</string>
+	<string name="expansions_added">Added %1$s.</string>
+	<string name="expansions_deleted">Deleted %1$s.</string>
+	<string name="expansions_updated">Updated %1$s.</string>
+	<string name="expansions_imported">Imported %1$d short forms.</string>
+	<string name="expansions_import_nothing">No valid short forms in file.</string>
+	<string name="expansions_exported">Exported %1$d short forms.</string>
+	<string name="expansions_export_failed">Could not write file.</string>
 
 	<string name="section_text">Reading</string>
 	<string name="number_mode_label">Numbers</string>
@@ -115,6 +159,33 @@
 	<string name="capital_pitch">High pitch</string>
 	<string name="ssml_label">Remove tags</string>
 	<string name="ssml_description">Remove SSML tags so they are not spoken.</string>
+	<string name="spelling_label">Spelling</string>
+	<string name="spelling_description">Say text letter by letter, on its own or in the phonetic alphabet.</string>
+	<string name="spelling_off">Normal</string>
+	<string name="spelling_letters">Spell letters</string>
+	<string name="spelling_nato">Phonetic alphabet</string>
+	<string name="spelling_capitals">Spell capital words</string>
+	<string name="spelling_capitals_nato">Capital words, phonetic</string>
+
+	<string name="section_code">Code reading</string>
+	<string name="section_code_description">Say source code as code. Each part is a switch of its own.</string>
+	<string name="code_mode_label">Read code</string>
+	<string name="code_mode_description">Master switch. Turn on to say code as code instead of as prose.</string>
+	<string name="code_camel_label">Split camelCase</string>
+	<string name="code_camel_description">Say getElementById as get element by id.</string>
+	<string name="code_snake_label">Split snake_case</string>
+	<string name="code_snake_description">Say my_total_count as my total count.</string>
+	<string name="code_operators_label">Say operators</string>
+	<string name="code_operators_description">Say equals, not equals, arrow and the rest by name.</string>
+	<string name="code_braces_label">Say braces and marks</string>
+	<string name="code_braces_description">Say brace, bracket, paren, semicolon and the rest by name.</string>
+	<string name="code_indent_label">Say indentation</string>
+	<string name="code_indent_description">Say how far in each line is. Useful for Python, noise elsewhere.</string>
+	<string name="code_paths_label">Say file paths</string>
+	<string name="code_paths_description">Say a file path as slash and dot instead of skipping them.</string>
+	<string name="code_urls_label">Say web addresses</string>
+	<string name="code_urls_description">Say url, then the address with dot and slash named.</string>
+
 	<string name="intonation_pauses_label">Phrase pauses</string>
 	<string name="intonation_pauses_description">Add pauses between phrases.</string>
 
@@ -147,7 +218,7 @@
 	<string name="keep_alive_channel">Voice running</string>
 	<string name="keep_alive_channel_description">Shows voice is running. Stop button stops speech.</string>
 	<string name="keep_alive_stop">Stop</string>
-	<string name="keep_alive_title">Alt eloquence TTS running</string>
+	<string name="keep_alive_title">Free eloquence TTS running</string>
 	<string name="keep_alive_text">Voice stays on in background.</string>
 
 	<string name="battery_never">Never</string>
@@ -228,7 +299,7 @@
 	<string name="about_telegram_action">Telegram channel</string>
 	<string name="about_contact_email">Email for fast reply.</string>
 	<string name="about_email_action">Email</string>
-	<string name="about_email_subject">Alt eloquence TTS</string>
+	<string name="about_email_subject">Free eloquence TTS</string>
 	<string name="about_build_heading">Version</string>
 	<string name="about_version">Version %1$s.</string>
 	<string name="about_unavailable">Cannot open %1$s on this device.</string>
