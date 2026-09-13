@@ -185,6 +185,11 @@ jobs:
           ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
         run: |
           set -uo pipefail
+          # GitHub runs a bash step as `bash -eo pipefail`, so -e is already on
+          # and a failing pipeline ends the script where it stands. Turning it
+          # off is what lets the exit status be read and the reason published;
+          # the status is carried to the end of the step by hand instead.
+          set +e
 
           echo "Starting Gradle release build..."
 
@@ -335,6 +340,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -uo pipefail
+          # GitHub runs a bash step as `bash -eo pipefail`, so -e is already on
+          # and a failing pipeline ends the script where it stands. Turning it
+          # off is what lets the exit status be read and the reason published;
+          # the status is carried to the end of the step by hand instead.
+          set +e
 
           # Compiling, not running: the tests are instrumented ones and there
           # is no device or emulator here, so what this step buys is that a
@@ -508,6 +518,11 @@ jobs:
     env:
       ANDROID_PLATFORM: "android-36"
       ANDROID_BUILD_TOOLS: "36.0.0"
+      # Named by ndkVersion in app/build.gradle.kts. Nothing here compiles C,
+      # but the build script asks for this version by name and an Android build
+      # that cannot find the one it asked for is a build that stops before it
+      # gets to the Kotlin, which is the only thing this job is here to check.
+      ANDROID_NDK_VERSION: "26.1.10909125"
 
     steps:
       - name: Checkout source
@@ -533,7 +548,8 @@ jobs:
           sdkmanager \
             "platform-tools" \
             "platforms;${ANDROID_PLATFORM}" \
-            "build-tools;${ANDROID_BUILD_TOOLS}"
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "ndk;${ANDROID_NDK_VERSION}"
 
       - name: Compile
         shell: bash
@@ -541,6 +557,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -uo pipefail
+          # GitHub runs a bash step as `bash -eo pipefail`, so -e is already on
+          # and a failing pipeline ends the script where it stands. Turning it
+          # off is what lets the exit status be read and the reason published;
+          # the status is carried to the end of the step by hand instead.
+          set +e
 
           chmod +x ./gradlew
 
