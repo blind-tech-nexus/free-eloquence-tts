@@ -30,12 +30,11 @@ class EngineTest {
 
 	@Test
 	fun theBuildHasALanguage() {
-		val langs = EvvEngine.available
-		assertTrue("no language module is linked in", langs.isNotEmpty())
-		assertTrue(
-			"US English is missing, found ${langs.joinToString { "0x%08x".format(it) }}",
-			langs.contains(ENGLISH)
-		)
+		// One language, opened by its word: an instance that opens is the
+		// module linked in, and anything else is the build missing it.
+		val e = EvvEngine.open(Eci.ENGLISH_US)
+		assertNotNull("US English would not open", e)
+		e?.close()
 	}
 
 	@Test

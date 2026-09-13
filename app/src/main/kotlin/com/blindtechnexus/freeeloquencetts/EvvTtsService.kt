@@ -118,16 +118,6 @@ class EvvTtsService : TextToSpeechService() {
 
 	private var keepAlive: KeepAlive? = null
 
-	/** Every voice name this build offers, to the language and preset behind
-	 *  it. A caller names a voice on every utterance, and rebuilding the
-	 *  names to answer would be string building for a question whose answer
-	 *  never changes. */
-	private var voiceIndex: Map<String, Pair<Int, Int>> = emptyMap()
-
-	private val matchLock = Any()
-	private var matchKey: String? = null
-	private var matchValue: Pair<Int, Int>? = null
-
 	private val main = Handler(Looper.getMainLooper())
 
 	/** Gives a suspect engine instance back, so that the next utterance opens a
@@ -155,7 +145,6 @@ class EvvTtsService : TextToSpeechService() {
 		instance = this
 		val made = Settings(this)
 		settings = made
-		voiceIndex = buildVoiceIndex()
 		keepAlive = KeepAlive(this)
 		keepAlive?.sync(made.persistentNotification)
 		warmUp()
@@ -186,189 +175,132 @@ class EvvTtsService : TextToSpeechService() {
 	 * of the first utterance it is a second of silence before "charging" or
 	 * "unread message", which is exactly the wait that reads as a slow engine.
 	 *
-	 * A language nobody has asked for is a wasted instance, so this opens the
-	 * one that will be wanted first: the one chosen on the settings screen when
-	 * one was chosen, and otherwise the one the build was made with, which is
-	 * the same one a caller with no language of its own would be given. The
-	 * service replaces it if a caller asks for another. It runs on a thread of
+	 * There is one language and so one instance, the one every utterance
+	 * speaks in, so a warm one is never wasted. It runs on a thread of
 	 * its own for the same reason it is worth doing at all: the system is
 	 * waiting to bind this service, and every tenth of a second spent here is a
 	 * tenth of a second before the phone will speak at all.
 	 */
 	private fun warmUp() {
-		val available = EvvEngine.available
-		if (available.isEmpty()) return
-		val language = forcedLanguage() ?: available[0]
+		if (!EvvNative.loaded) return
 		Thread({
 			if (!alive) return@Thread
 			substitutions()
 			synchronized(engineLock) {
 				if (!alive || speaking.get() > 0) return@synchronized
-				val made = ensureEngineLocked(language) ?: return@synchronized
+				val made = ensureEngineLocked() ?: return@synchronized
 				settings?.let { applySettings(made, it) }
 			}
 		}, "evv-warm").also { it.isDaemon = true }.start()
 	}
 
-	/**
-	 * The language this app was told to speak in, and nought when it was not.
-	 *
-	 * Two refusals rather than one. Nought in the setting means nobody chose,
-	 * and the caller's own language stands. A word the engine here cannot speak
-	 * -- a build made with a shorter list of languages than the default, say --
-	 * is passed over for the same reason: honouring it would mean opening an
-	 * instance that cannot be opened, and the answer to that is silence rather
-	 * than a voice in some other language.
-	 */
-	private fun forcedLanguage(): Int? {
-		val wanted = settings?.language ?: return null
-		if (wanted == 0) return null
-		return wanted.takeIf { word -> EvvEngine.available.contains(word) }
-	}
-
 	// ---- languages -------------------------------------------------------
 
-	private fun matchLanguage(lang: String?, country: String?): Pair<Int, Int>? {
-		val key = "${lang.orEmpty()}|${country.orEmpty()}"
-		synchronized(matchLock) {
-			if (key == matchKey) return matchValue
-			val found = matchLanguageNow(lang, country)
-			matchKey = key
-			matchValue = found
-			return found
+	/**
+	 * What this engine answers when it is asked about a language.
+	 *
+	 * One voice, honestly advertised. English (United States) in any of its
+	 * spellings is the voice itself, so it is country-available; any other
+	 * English is the same voice under another flag, so it is available; and
+	 * anything else -- another language, nothing at all -- is available too,
+	 * because the engine speaks every utterance it is given in the voice
+	 * rather than refusing it. That last answer is what keeps a TTS router
+	 * such as Auto TTS routing: it probes with the device's locale, and an
+	 * engine that answers "not supported" to the probe is an engine it never
+	 * asks to speak, even in English. Answering available and then speaking
+	 * is the behaviour to advertise, and it is this behaviour.
+	 */
+	private fun availabilityOf(lang: String?, country: String?): Int {
+		if (isEnglish(lang)) {
+			return if (isUnitedStates(country)) TextToSpeech.LANG_COUNTRY_AVAILABLE
+			else TextToSpeech.LANG_AVAILABLE
 		}
+		return TextToSpeech.LANG_AVAILABLE
 	}
 
-	private fun matchLanguageNow(lang: String?, country: String?): Pair<Int, Int>? {
-		if (lang.isNullOrEmpty()) return null
-		val wantLang = normalise(lang)
-		val wantCountry = country?.takeIf { it.isNotEmpty() }?.let { normaliseCountry(it) }
-		var byLanguage: Int? = null
-		for (candidate in EvvEngine.available) {
-			val loc = Eci.localeOf(candidate) ?: continue
-			if (!loc.first.equals(wantLang, ignoreCase = true)) continue
-			if (wantCountry != null && loc.second.equals(wantCountry, ignoreCase = true)) {
-				return candidate to TextToSpeech.LANG_COUNTRY_AVAILABLE
-			}
-			if (byLanguage == null) byLanguage = candidate
-		}
-		return byLanguage?.let { it to TextToSpeech.LANG_AVAILABLE }
-	}
+	private fun isEnglish(lang: String?): Boolean =
+		lang != null && (lang.equals("eng", ignoreCase = true) || lang.equals("en", ignoreCase = true))
 
-	private fun normalise(lang: String): String =
-		runCatching { Locale(lang).isO3Language }.getOrNull()?.takeIf { it.isNotEmpty() } ?: lang
+	private fun isUnitedStates(country: String?): Boolean =
+		country != null && (country.equals("USA", ignoreCase = true) || country.equals("US", ignoreCase = true))
 
-	private fun normaliseCountry(country: String): String =
-		runCatching { Locale("", country).isO3Country }.getOrNull()?.takeIf { it.isNotEmpty() } ?: country
-
-	override fun onIsLanguageAvailable(lang: String?, country: String?, variant: String?): Int {
-		val found = matchLanguage(lang, country) ?: return TextToSpeech.LANG_NOT_SUPPORTED
-		return found.second
-	}
+	override fun onIsLanguageAvailable(lang: String?, country: String?, variant: String?): Int =
+		availabilityOf(lang, country)
 
 	override fun onLoadLanguage(lang: String?, country: String?, variant: String?): Int {
-		val found = matchLanguage(lang, country) ?: return TextToSpeech.LANG_NOT_SUPPORTED
-		val made = synchronized(engineLock) { ensureEngineLocked(found.first) }
+		val made = synchronized(engineLock) { ensureEngineLocked() }
 		if (made == null) return TextToSpeech.LANG_NOT_SUPPORTED
-		return found.second
+		return availabilityOf(lang, country)
 	}
 
-	override fun onGetLanguage(): Array<String> {
-		// The language this app was told to speak in is the one it is speaking
-		// in, whatever instance happens to be open: an instance is replaced by
-		// the next utterance that wants another, and a caller asking what
-		// language it will be answered in is asking about the choice and not
-		// about which instance is warm.
-		val language = forcedLanguage()
-			?: engine?.language
-			?: EvvEngine.available.firstOrNull()
-			?: return arrayOf("eng", "USA", "")
-		val loc = Eci.localeOf(language) ?: return arrayOf("eng", "USA", "")
-		return arrayOf(loc.first, loc.second, loc.third)
-	}
+	override fun onGetLanguage(): Array<String> = arrayOf(Eci.ISO3_LANGUAGE, Eci.ISO3_COUNTRY, "")
 
 	// ---- voices ----------------------------------------------------------
 
-	private fun voiceName(language: Int, preset: Int): String {
-		val loc = Eci.localeOf(language) ?: return "evv-$preset"
-		return "${loc.first}-${loc.second}-${Eci.PRESET_NAMES[preset]}"
-	}
+	/**
+	 * The name of [preset] as callers know it. The form is the one this engine
+	 * has always used -- eng-USA-Reed -- because callers keep the name they
+	 * were given, and a renamed voice is a voice a screen reader that
+	 * connected yesterday can no longer ask for by name.
+	 */
+	private fun voiceName(preset: Int): String =
+		"${Eci.ISO3_LANGUAGE}-${Eci.ISO3_COUNTRY}-${Eci.PRESET_NAMES[preset]}"
 
 	override fun onGetVoices(): MutableList<Voice> {
-		val out = ArrayList<Voice>()
-		for (language in EvvEngine.available) {
-			val loc = Eci.localeOf(language) ?: continue
-			val locale = Locale(loc.first, loc.second)
-			for (preset in Eci.PRESET_NAMES.indices) {
-				out.add(
-					Voice(
-						voiceName(language, preset),
-						locale,
-						Voice.QUALITY_NORMAL,
-						Voice.LATENCY_VERY_LOW,
-						false,
-						emptySet()
-					)
+		// The locale is a real one -- en-US, not the ISO-3 pair -- because
+		// that is what a Voice carries and what callers compare against. A
+		// voice built on Locale("eng", "USA") never equals the Locale.ENGLISH
+		// a router holds, which is one of the reasons a router never routed
+		// here.
+		val locale = Locale("en", "US")
+		val out = ArrayList<Voice>(Eci.PRESET_NAMES.size)
+		for (preset in Eci.PRESET_NAMES.indices) {
+			out.add(
+				Voice(
+					voiceName(preset),
+					locale,
+					Voice.QUALITY_NORMAL,
+					Voice.LATENCY_VERY_LOW,
+					false,
+					emptySet()
 				)
-			}
+			)
 		}
 		return out
 	}
 
-	private fun findVoice(name: String?): Pair<Int, Int>? {
-		if (name.isNullOrEmpty()) return null
-		voiceIndex[name]?.let { return it }
-		// The index is built in onCreate; a service created before the native
-		// library finished loading answers from the loop instead, rather than
-		// refusing a voice it has.
-		for (language in EvvEngine.available) {
-			for (preset in Eci.PRESET_NAMES.indices) {
-				if (voiceName(language, preset) == name) return language to preset
-			}
-		}
-		return null
-	}
-
-	private fun buildVoiceIndex(): Map<String, Pair<Int, Int>> {
-		val index = LinkedHashMap<String, Pair<Int, Int>>()
-		for (language in EvvEngine.available) {
-			for (preset in Eci.PRESET_NAMES.indices) {
-				index[voiceName(language, preset)] = language to preset
-			}
-		}
-		return index
-	}
-
+	/**
+	 * Any name is a good name. The voice that speaks is the settings screen's,
+	 * not the caller's -- a caller holds the Voice it was given however long
+	 * the setting moves underneath it -- so refusing an unknown name refuses
+	 * nothing but the utterance, and a TTS router forwarding one of its own
+	 * names is exactly the caller that must not be refused.
+	 */
 	override fun onIsValidVoiceName(name: String?): Int =
-		if (findVoice(name) != null) TextToSpeech.SUCCESS else TextToSpeech.ERROR
+		if (name.isNullOrEmpty()) TextToSpeech.ERROR else TextToSpeech.SUCCESS
 
 	override fun onLoadVoice(name: String?): Int {
-		val found = findVoice(name) ?: return TextToSpeech.ERROR
-		val made = synchronized(engineLock) { ensureEngineLocked(found.first) }
+		if (name.isNullOrEmpty()) return TextToSpeech.ERROR
+		val made = synchronized(engineLock) { ensureEngineLocked() }
 		if (made == null) return TextToSpeech.ERROR
 		return TextToSpeech.SUCCESS
 	}
 
-	override fun onGetDefaultVoiceNameFor(lang: String?, country: String?, variant: String?): String? {
-		val found = matchLanguage(lang, country) ?: return null
-		return voiceName(found.first, settings?.voice ?: 0)
-	}
+	override fun onGetDefaultVoiceNameFor(lang: String?, country: String?, variant: String?): String =
+		voiceName((settings?.voice ?: 0).coerceIn(Eci.PRESET_NAMES.indices))
 
 	// ---- speaking --------------------------------------------------------
 
 	/**
 	 * The instance to speak in, made if it is not there.
 	 *
-	 * The caller holds [engineLock]. A caller that has been asked for a second
-	 * language has the first one closed first, which is the one moment the
-	 * engine's memory is worth more than the next few milliseconds of waiting
-	 * for it.
+	 * The caller holds [engineLock]. There is one language and so one
+	 * instance, kept for ever: making a new one costs a second or so before
+	 * the next first syllable, and nothing here ever asks for another.
 	 */
-	private fun ensureEngineLocked(language: Int): EvvEngine? {
-		val held = engine
-		if (held != null && held.language == language) return held
-		held?.close()
-		val made = EvvEngine.open(language)
+	private fun ensureEngineLocked(): EvvEngine? {
+		engine?.let { return it }
+		val made = EvvEngine.open(Eci.ENGLISH_US)
 		engine = made
 		if (made != null) settings?.let { applySettings(made, it) }
 		return made
@@ -376,6 +308,7 @@ class EvvTtsService : TextToSpeechService() {
 
 	private fun applySettings(target: EvvEngine, s: Settings) {
 		target.setSampleRate(s.sampleRateHz)
+		target.setUpsampleMethod(AudioOptimization.methodFor(s.audioOptimization))
 		target.setAbbreviations(s.abbreviations)
 		target.applyVoice(s.voice, s.shape(s.voice))
 		appliedRevision = s.revision
@@ -449,29 +382,19 @@ class EvvTtsService : TextToSpeechService() {
 			// battery screen is in force the next time anything is spoken.
 			keepAlive?.sync(s.persistentNotification)
 			// The voice is whichever the settings screen says, not whichever the
-			// caller named, so the name only decides the language. It is asked
-			// first: a caller that set a voice and then speaks with an empty or
-			// foreign locale -- automation apps and TTS routers do -- has still
-			// named the language. Failing that, the locale decides it; failing
-			// both, the first language the engine has is better than silence,
-			// which is what refusing a router's nameless request used to give.
-			//
-			// Ahead of all three is the language chosen on the settings screen,
-			// when one was chosen and this build can speak it. That is the same
-			// shape as the switches that force this app's rate, pitch and volume
-			// over a caller's, and it is off until somebody turns it on.
-			val wanted = findVoice(request.voiceName)
-			val found = matchLanguage(request.language, request.country)
-			val language = forcedLanguage()
-				?: wanted?.first
-				?: found?.first
-				?: EvvEngine.available.firstOrNull()
-			if (language == null) {
+			// caller named: a caller holds the Voice it was given however many
+			// times the setting moves underneath it. So the name is not even
+			// asked -- neither is the locale, since there is one language and
+			// one instance that is never closed for another. Whatever the
+			// caller asked for, in whatever language or under whatever name a
+			// TTS router forwarded, is spoken in the voice, which is what keeps
+			// a router's request from ever being answered with silence.
+			if (!EvvNative.loaded) {
 				callback.error(TextToSpeech.ERROR_NOT_INSTALLED_YET)
 				return
 			}
 			val target = synchronized(engineLock) {
-				val made = ensureEngineLocked(language)
+				val made = ensureEngineLocked()
 				if (made != null && s.revision != appliedRevision) applySettings(made, s)
 				made
 			}
@@ -568,6 +491,11 @@ class EvvTtsService : TextToSpeechService() {
 				callback.done()
 				return
 			}
+			// The level of this utterance, made once for it. The optimizer
+			// carries the utterance's own loudness from piece to piece, which
+			// is what keeps the voice even from the first piece to the last
+			// instead of swelling as it finds its feet on every one.
+			val optimizer = AudioOptimizer(s.audioOptimization, target.sampleRateHz)
 			while (!stopped) {
 				val piece = held ?: break
 				val next = try {
@@ -578,12 +506,26 @@ class EvvTtsService : TextToSpeechService() {
 				val last = next == null
 				var audio = try { prosody + Pauses.apply(piece.text, s.pauses, last) } catch (_: Exception) { prosody + piece.text }
 				if (piece.forced && !last) audio += Pauses.AT_A_BOUNDARY
-				if (!target.speak(audio)) {
+				// Asked again here, after the text work above, because a stop
+				// lands in milliseconds and the work takes them: handing a
+				// doomed piece over queues an utterance nobody reads while the
+				// next one waits behind it. The fence inside speak() closes
+				// what is left of the window.
+				if (stopped) break
+				if (!target.speak(audio, isStopped = { stopped })) {
+					// A stopped utterance owes the framework nothing: done()
+					// here would report a cut utterance as heard out. A refusal
+					// anything else explains -- the engine wedged, the text
+					// refused -- is answered by giving the instance back, so
+					// the next utterance opens a fresh one instead of queuing
+					// behind whatever went wrong.
+					if (stopped) return
 					Log.e(TAG, "engine refused ${audio.length} chars")
+					engineIsSuspect = true
 					if (opening.began) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
 					return
 				}
-				when (pump(target, callback, pace, opening, buffer, Stability.ENGINE_SILENCE_MS, lead)) {
+				when (pump(target, callback, pace, opening, buffer, optimizer, Stability.ENGINE_SILENCE_MS, lead)) {
 					Pump.Next -> Unit
 					Pump.Over -> { remember(pace); finish(callback, opening); return }
 					Pump.Gone -> { remember(pace); return }
@@ -626,6 +568,7 @@ class EvvTtsService : TextToSpeechService() {
 		pace: Pace,
 		opening: Opening,
 		buffer: ByteArray,
+		optimizer: AudioOptimizer,
 		silenceMs: Int,
 		leadMs: Long
 	): Pump {
@@ -654,6 +597,11 @@ class EvvTtsService : TextToSpeechService() {
 				return Pump.Over
 			}
 			if (n <= 0) return Pump.Next
+			// Finished in place before anything hears it: the offset is lifted
+			// out, the level is made even and the peaks that would clip are
+			// rounded rather than cut. In Balanced it is nearly a no-op, which
+			// is the point -- a clean recording should pass through untouched.
+			optimizer.process(buffer, n)
 			if (!opening.open()) {
 				target.stop()
 				return Pump.Gone

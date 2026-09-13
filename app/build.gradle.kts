@@ -10,23 +10,11 @@ plugins {
 val abis = (findProperty("evvdroid.abis") as String? ?: "arm64-v8a,armeabi-v7a,x86_64")
 	.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 val rulesForm = findProperty("evvdroid.rules") as String? ?: "c"
-// Every language module the engine has that this app's own text encoder can
-// feed. The list is the one openevv calls its release configuration, minus
-// lang/jajp: Japanese is lifted and it speaks, but its text is Shift-JIS,
-// EUC-JP or one of three seven-bit JIS sets and never UTF-8, so the Latin-1
-// bytes [WesternText] hands the engine would be mis-read as the code set it
-// is not. A language the engine cannot be handed correctly is worse than one
-// it does not have, so it is not linked and cannot be advertised.
-// See [Eci.LANGUAGES] for what the app then offers out of this.
-val defaultLanguages = listOf(
-	"lang/enus", "lang/engb",
-	"lang/dede",
-	"lang/eses", "lang/esus",
-	"lang/frfr", "lang/frca",
-	"lang/itit",
-	"lang/plpl"
-).joinToString(" ")
-val languages = findProperty("evvdroid.langs") as String? ?: defaultLanguages
+// The one language module this app speaks: English (United States). Not a
+// property on purpose -- the app above has no second language anywhere in it,
+// so a module linked here beyond enus would be weight the APK carries and
+// nothing can speak in. See [Eci.ENGLISH_US].
+val languages = "lang/enus"
 val nativeOut = layout.buildDirectory.dir("native/jniLibs")
 
 // The engine is built by its own Makefile rather than by CMake, because that
@@ -43,8 +31,8 @@ val buildNative by tasks.registering(Exec::class) {
 	// next one succeeds. What decides the output is the submodule's commit, the
 	// patches laid on it, and the files named here. Editing native/openevv by
 	// hand wants --rerun-tasks. The patches are a file tree rather than a
-	// directory because there are none at the moment, and git does not carry an
-	// empty one.
+	// directory, so the set is what is there -- one, at the moment -- and a
+	// patch added or changed is a rebuild.
 	inputs.files(rootProject.fileTree("native/patches"))
 	inputs.file(rootProject.layout.projectDirectory.file("native/android.mk"))
 	inputs.file(rootProject.layout.projectDirectory.file(".gitmodules"))
@@ -165,6 +153,7 @@ dependencies {
 	implementation(platform(libs.compose.bom))
 	implementation(libs.compose.ui)
 	implementation(libs.compose.material3)
+	implementation(libs.compose.material.icons.core)
 
 	androidTestImplementation(libs.junit)
 	androidTestImplementation(libs.androidx.test.junit)

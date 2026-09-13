@@ -13,7 +13,7 @@ class PreviewTest {
 
 	@Test
 	fun theSampleReachesTheAudioTrack() {
-		val preview = EvvPreview(ENGLISH)
+		val preview = EvvPreview()
 		try {
 			preview.say("Testing one two three.", 0, emptyMap(), 11025)
 			val until = System.currentTimeMillis() + WAIT_MS
@@ -36,7 +36,7 @@ class PreviewTest {
 	 */
 	@Test
 	fun theEndOfTheSampleIsHeard() {
-		val preview = EvvPreview(ENGLISH)
+		val preview = EvvPreview()
 		try {
 			preview.say(
 				"This is a test of the current voice, and the end of it matters.",
@@ -53,7 +53,6 @@ class PreviewTest {
 	}
 
 	private companion object {
-		const val ENGLISH = 0x00010000
 		const val WAIT_MS = 15000
 	}
 }

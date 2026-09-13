@@ -58,7 +58,13 @@ internal object EvvNative {
 
 	external fun forgetDictionaries(handle: Long)
 
-	external fun languages(): IntArray
-
 	external fun version(): String
+
+	/** Which of the engine's upsampling methods new converters run on: one of
+	 *  the [Eci.UPSAMPLE_HOLD], [Eci.UPSAMPLE_LINEAR], [Eci.UPSAMPLE_CUBIC] or
+	 *  [Eci.UPSAMPLE_SINC] values. Process-wide and read when a converter is
+	 *  (re)built, so whoever calls this re-sets the sample rate straight after
+	 *  -- see [EvvEngine.setUpsampleMethod] -- which rebuilds the converter and
+	 *  puts the new method in force at once instead of on the next restart. */
+	external fun setUpsampleMethod(method: Int)
 }

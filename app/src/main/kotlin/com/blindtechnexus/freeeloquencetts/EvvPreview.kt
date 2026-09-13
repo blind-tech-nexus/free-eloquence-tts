@@ -20,7 +20,7 @@ import android.util.Log
  * Everything runs on one background thread, so a preview asked for while
  * another is speaking replaces it rather than overlapping.
  */
-class EvvPreview(private val language: Int) {
+class EvvPreview() {
 
 	private val thread = HandlerThread("evv-preview").apply { start() }
 	private val work = Handler(thread.looper)
@@ -60,15 +60,22 @@ class EvvPreview(private val language: Int) {
 
 	fun open(then: (() -> Unit)? = null) {
 		work.post {
-			if (engine == null) engine = EvvEngine.open(language)
+			if (engine == null) engine = EvvEngine.open(Eci.ENGLISH_US)
 			then?.let { Handler(android.os.Looper.getMainLooper()).post(it) }
 		}
 	}
 
 	/** Says [text] in [voice] with [shape] on it, stopping whatever was being
-	 *  said. [abbreviations] is the same switch the service reads, so the
-	 *  sample hears what a caller hears. */
-	fun say(text: String, voice: Int, shape: Map<Int, Int>, rateHz: Int, abbreviations: Boolean = false) {
+	 *  said. [abbreviations] and [optimization] are the same switches the
+	 *  service reads, so the sample hears what a caller hears. */
+	fun say(
+		text: String,
+		voice: Int,
+		shape: Map<Int, Int>,
+		rateHz: Int,
+		abbreviations: Boolean = false,
+		optimization: Int = AudioOptimization.BALANCED
+	) {
 		// Whatever is being said stops first, and the turn this utterance
 		// belongs to is taken after that -- stopping is what moves the count
 		// on, so reading it first would leave this utterance holding a number
@@ -77,19 +84,20 @@ class EvvPreview(private val language: Int) {
 		val mine = generation
 		work.post {
 			if (mine != generation) return@post
-			val e = engine ?: EvvEngine.open(language)?.also { engine = it } ?: return@post
+			val e = engine ?: EvvEngine.open(Eci.ENGLISH_US)?.also { engine = it } ?: return@post
 			e.setSampleRate(rateHz)
+			e.setUpsampleMethod(AudioOptimization.methodFor(optimization))
 			e.setAbbreviations(abbreviations)
 			e.applyVoice(voice, shape)
-			if (!e.speak(text)) {
-				Log.e(TAG, "the engine refused the sample")
+			if (!e.speak(text, isStopped = { mine != generation })) {
+				if (mine == generation) Log.e(TAG, "the engine refused the sample")
 				return@post
 			}
-			play(e, mine)
+			play(e, mine, AudioOptimizer(optimization, e.sampleRateHz))
 		}
 	}
 
-	private fun play(e: EvvEngine, mine: Int) {
+	private fun play(e: EvvEngine, mine: Int, optimizer: AudioOptimizer) {
 		playing = true
 		drained = false
 		val rate = e.sampleRateHz
@@ -121,6 +129,7 @@ class EvvPreview(private val language: Int) {
 		while (mine == generation) {
 			val n = e.read(buffer)
 			if (n <= 0) break
+			optimizer.process(buffer, n)
 			var at = 0
 			while (at < n && mine == generation) {
 				val wrote = t.write(buffer, at, n - at)

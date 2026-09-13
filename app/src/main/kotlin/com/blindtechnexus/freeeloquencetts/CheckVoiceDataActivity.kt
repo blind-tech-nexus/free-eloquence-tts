@@ -7,17 +7,14 @@ import android.speech.tts.TextToSpeech
 
 /**
  * What Android asks before it will use the engine. Everything is in the APK,
- * so every language the build has is already there and none is missing.
+ * so the one voice is already there and nothing is missing.
  */
 class CheckVoiceDataActivity : Activity() {
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		val available = ArrayList<String>()
-		for (language in EvvEngine.available) {
-			val loc = Eci.localeOf(language) ?: continue
-			available.add("${loc.first}-${loc.second}")
-		}
+		if (EvvNative.loaded) available.add("${Eci.ISO3_LANGUAGE}-${Eci.ISO3_COUNTRY}")
 		val result = Intent().apply {
 			putStringArrayListExtra(TextToSpeech.Engine.EXTRA_AVAILABLE_VOICES, available)
 			putStringArrayListExtra(TextToSpeech.Engine.EXTRA_UNAVAILABLE_VOICES, ArrayList())

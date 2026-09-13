@@ -16,7 +16,11 @@ engine="$here/openevv"
 ABIS=${ABIS:-"arm64-v8a armeabi-v7a x86_64"}
 API=${API:-21}
 RULES=${RULES:-c}
-LANGS=${LANGS:-lang/enus}
+# The one language module this app speaks: English (United States). Not
+# overridable on purpose -- the front end above has no second language
+# anywhere in it, so a module built here beyond enus would be weight the
+# APK carries and nothing can speak in.
+LANGS="lang/enus"
 OUT=${OUT:-"$root/app/build/native/jniLibs"}
 JOBS=${JOBS:-$(nproc 2>/dev/null || echo 4)}
 
