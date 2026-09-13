@@ -170,6 +170,17 @@ dependencies {
 	androidTestImplementation(libs.androidx.test.junit)
 	androidTestImplementation(libs.androidx.test.runner)
 	androidTestImplementation(libs.androidx.test.core)
+	// The bill of materials a second and a third time. It is what supplies the
+	// version to the versionless compose coordinates above, and a configuration
+	// carries only the constraints declared on it and on the ones it extends --
+	// neither androidTestImplementation nor debugImplementation extends
+	// implementation. Without this the two coordinates below have no version to
+	// resolve to, and the answer is "Could not find
+	// androidx.compose.ui:ui-test-junit4:." with nothing after the last colon
+	// rather than a missing library. It went unnoticed because no build here
+	// compiled the androidTest sources until one did.
+	androidTestImplementation(platform(libs.compose.bom))
 	androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+	debugImplementation(platform(libs.compose.bom))
 	debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

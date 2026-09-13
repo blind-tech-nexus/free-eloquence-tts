@@ -575,10 +575,19 @@ jobs:
           status="${PIPESTATUS[0]}"
 
           if [ "$status" -ne 0 ]; then
-            while IFS= read -r line; do
-              printf '::error::%s\n' \
-                "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
-            done < <(tail -120 compile.log)
+            # A check run shows ten annotations and no more, and the last ten
+            # lines of a Gradle failure are stack frames. The lines that say
+            # what went wrong are sent first and the tail fills what is left.
+            publish() {
+              while IFS= read -r line; do
+                printf '::error::%s\n' \
+                  "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+              done
+            }
+
+            grep -E '(^|[^A-Za-z])(e: |error: )|FAILURE:|Could not|What went wrong|Execution failed|Caused by:|FAILED' \
+              compile.log | head -8 | publish
+            tail -20 compile.log | publish
 
             if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GH_TOKEN:-}" ]; then
               {
