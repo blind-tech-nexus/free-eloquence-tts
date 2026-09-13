@@ -423,15 +423,19 @@ jobs:
       # The APK goes on the run whatever becomes of the upload below, because a
       # channel that can refuse the file is not a place to keep the only copy
       # of it. Downloadable from the run page for ninety days.
-      - name: Publish the signed APK as an artefact
+      - name: Upload APK artifact
+        id: upload_artifact
         uses: actions/upload-artifact@v4
         with:
-          name: free-eloquence-tts-release-apk
+          name: app-release
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
-          compression-level: 0
 
+      # Telegram is the fallback rather than the channel, and only when the
+      # artefact did not make it: a bot may post no more than 50 MB and nine
+      # language modules across three ABIs is an APK that may well be over it.
       - name: Upload signed APK to Telegram
+        if: always() && steps.upload_artifact.outcome == 'failure'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -580,7 +584,7 @@ jobs:
           echo "Size:       $(stat -c '%s bytes' "$APK")"
           echo "SHA-256:    $(sha256sum "$APK" | awk '{print $1}')"
           echo
-          echo "Telegram upload: SUCCESS"
+          echo "Artifact upload: SUCCESS"
 
   # Compiling is the check that does not need a phone, and it does not need the
   # engine either: the Kotlin is compiled against the JNI declarations, not
