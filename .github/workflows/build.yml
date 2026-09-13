@@ -180,15 +180,50 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
           ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
 
           echo "Starting Gradle release build..."
 
+          # The log goes to a file as well as to the console, because on a
+          # failure the console is twenty minutes of --info output and the
+          # compiler's answer is two lines inside it.
           ./gradlew \
             --no-daemon \
             --stacktrace \
             --info \
-            :app:assembleRelease
+            :app:assembleRelease 2>&1 | tee build.log
+
+          status="${PIPESTATUS[0]}"
+
+          if [ "$status" -ne 0 ]; then
+            # Republish what actually went wrong as check annotations, so the
+            # reason is readable from the API rather than from a log that has
+            # to be downloaded whole.
+            grep -E '^(e: |w: .*(error|unresolved)|error: |FAILURE:|What went wrong|Execution failed|Caused by:|> Task .* FAILED|\* Where:|\* What went wrong)' \
+              build.log \
+              | head -80 \
+              | while IFS= read -r line; do
+                  printf '::error::%s\n' \
+                    "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+                done
+
+            {
+              echo "### Release build failed"
+              echo
+              echo '```'
+              grep -E '^(e: |error: |FAILURE:|What went wrong|Execution failed|Caused by:|> Task .* FAILED)' \
+                build.log | head -60
+              echo '```'
+              echo
+              echo "#### last 120 lines"
+              echo
+              echo '```'
+              tail -120 build.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            exit "$status"
+          fi
 
           echo
           echo "Gradle build completed."
@@ -294,7 +329,7 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
           ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
 
           # Compiling, not running: the tests are instrumented ones and there
           # is no device or emulator here, so what this step buys is that a
@@ -306,7 +341,30 @@ jobs:
           ./gradlew \
             --no-daemon \
             --stacktrace \
-            :app:assembleDebugAndroidTest
+            :app:assembleDebugAndroidTest 2>&1 | tee tests.log
+
+          status="${PIPESTATUS[0]}"
+
+          if [ "$status" -ne 0 ]; then
+            grep -E '^(e: |error: |FAILURE:|What went wrong|Execution failed|Caused by:|> Task .* FAILED)' \
+              tests.log \
+              | head -80 \
+              | while IFS= read -r line; do
+                  printf '::error::%s\n' \
+                    "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+                done
+
+            {
+              echo "### Instrumented tests did not compile"
+              echo
+              echo '```'
+              grep -E '^(e: |error: |FAILURE:|What went wrong|Execution failed|Caused by:|> Task .* FAILED)' \
+                tests.log | head -60
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            exit "$status"
+          fi
 
           echo
           echo "Instrumented tests compiled:"

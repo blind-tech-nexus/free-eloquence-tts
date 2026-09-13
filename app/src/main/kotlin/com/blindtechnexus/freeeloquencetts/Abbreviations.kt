@@ -356,11 +356,17 @@ object Abbreviations {
 			return if (changed) out.toString() else text
 		}
 
-		/** The longest entry starting at [from] whose own rule about what may
-		 *  stand beside it holds. The longest rather than the first, because
-		 *  "st" and "str" on the same list are two entries and the one that was
-		 *  written longer is the one that was meant. */
-		private fun longest(text: String, from: Int): Entry? {
+		/**
+		 * The longest entry starting at [from] whose own rule about what may
+		 * stand beside it holds, and how much of the text it took.
+		 *
+		 * The longest rather than the first, because "st" and "str" on the same
+		 * list are two entries and the one that was written longer is the one
+		 * that was meant. The length comes back with it rather than being
+		 * worked out from the key again by the caller, because the walk is the
+		 * only place that knows where the match actually stopped.
+		 */
+		private fun longest(text: String, from: Int): Pair<Entry, Int>? {
 			val before = from == 0 || !isWordChar(text[from - 1])
 			var node = root
 			var best: Entry? = null
@@ -385,7 +391,8 @@ object Abbreviations {
 					}
 				}
 			}
-			return best
+			val winner = best ?: return null
+			return winner to bestLength
 		}
 
 		private fun matchesCase(text: String, from: Int, to: Int, key: String): Boolean {
