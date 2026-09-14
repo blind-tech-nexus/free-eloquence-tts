@@ -195,22 +195,26 @@ class EvvEngine private constructor(@Volatile private var handle: Long, val lang
 		}
 	}
 
-	fun setAnnotations(on: Boolean) = synchronized(guard) {
-		if (closed) return
-		try {
-			EvvNative.setParam(handle, Eci.PARAM_INPUT_TYPE, if (on) 1 else 0)
-		} catch (_: Throwable) {
+	fun setAnnotations(on: Boolean) {
+		synchronized(guard) {
+			if (closed) return@synchronized
+			try {
+				EvvNative.setParam(handle, Eci.PARAM_INPUT_TYPE, if (on) 1 else 0)
+			} catch (_: Throwable) {
+			}
 		}
 	}
 
 	/** The abbreviation dictionary, which is what eciDictionary switches.
 	 *  Nought turns it on: that is the engine's own sense of the setting and
 	 *  not a mistake here. */
-	fun setAbbreviations(on: Boolean) = synchronized(guard) {
-		if (closed) return
-		try {
-			EvvNative.setParam(handle, Eci.PARAM_DICTIONARY, if (on) 0 else 1)
-		} catch (_: Throwable) {
+	fun setAbbreviations(on: Boolean) {
+		synchronized(guard) {
+			if (closed) return@synchronized
+			try {
+				EvvNative.setParam(handle, Eci.PARAM_DICTIONARY, if (on) 0 else 1)
+			} catch (_: Throwable) {
+			}
 		}
 	}
 
@@ -256,38 +260,40 @@ class EvvEngine private constructor(@Volatile private var handle: Long, val lang
 	 * her own shape laid under the listener's, so she is herself until
 	 * somebody tunes her and keeps the tuning afterwards.
 	 */
-	fun applyVoice(index: Int, shape: Map<Int, Int> = emptyMap()) = synchronized(guard) {
-		if (closed) return
-		try {
-			val preset = if (index == Eci.LUNA_INDEX) Eci.LUNA_BASE_PRESET
-			else (index + Eci.FIRST_PRESET).coerceIn(Eci.FIRST_PRESET, Eci.LAST_PRESET)
-			EvvNative.copyVoice(handle, preset, Eci.SCRATCH_VOICE)
-			if (index == Eci.LUNA_INDEX) {
-				for ((param, value) in Eci.LUNA_SHAPE) {
-					if (param == Eci.VOICE_SPEED) continue
+	fun applyVoice(index: Int, shape: Map<Int, Int> = emptyMap()) {
+		synchronized(guard) {
+			if (closed) return@synchronized
+			try {
+				val preset = if (index == Eci.LUNA_INDEX) Eci.LUNA_BASE_PRESET
+				else (index + Eci.FIRST_PRESET).coerceIn(Eci.FIRST_PRESET, Eci.LAST_PRESET)
+				EvvNative.copyVoice(handle, preset, Eci.SCRATCH_VOICE)
+				if (index == Eci.LUNA_INDEX) {
+					for ((param, value) in Eci.LUNA_SHAPE) {
+						if (param == Eci.VOICE_SPEED) continue
+						EvvNative.setVoiceParam(handle, Eci.SCRATCH_VOICE, param, Eci.clampVoice(param, value))
+					}
+				}
+				// The preset's own speed is not kept. Two of the eight ship faster than
+				// the rest, so leaving it would make changing voice change the pace.
+				EvvNative.setVoiceParam(
+					handle, Eci.SCRATCH_VOICE, Eci.VOICE_SPEED,
+					shape[Eci.VOICE_SPEED] ?: Eci.DEFAULT_SPEED
+				)
+				for ((param, value) in shape) {
 					EvvNative.setVoiceParam(handle, Eci.SCRATCH_VOICE, param, Eci.clampVoice(param, value))
 				}
+				EvvNative.copyVoice(handle, Eci.SCRATCH_VOICE, Eci.VOICE_CURRENT)
+				baseSpeed = EvvNative.getVoiceParam(handle, Eci.VOICE_CURRENT, Eci.VOICE_SPEED)
+				basePitch = EvvNative.getVoiceParam(handle, Eci.VOICE_CURRENT, Eci.VOICE_PITCH_BASELINE)
+				currentRate = -1
+				currentPitch = -1
+			} catch (_: Throwable) {
+				// A voice that would not apply leaves the one before it in
+				// force. The utterance still speaks -- in the wrong voice,
+				// which is what the log is for -- rather than taking the
+				// service down with it.
+				Log.e(TAG, "the voice would not apply")
 			}
-			// The preset's own speed is not kept. Two of the eight ship faster than
-			// the rest, so leaving it would make changing voice change the pace.
-			EvvNative.setVoiceParam(
-				handle, Eci.SCRATCH_VOICE, Eci.VOICE_SPEED,
-				shape[Eci.VOICE_SPEED] ?: Eci.DEFAULT_SPEED
-			)
-			for ((param, value) in shape) {
-				EvvNative.setVoiceParam(handle, Eci.SCRATCH_VOICE, param, Eci.clampVoice(param, value))
-			}
-			EvvNative.copyVoice(handle, Eci.SCRATCH_VOICE, Eci.VOICE_CURRENT)
-			baseSpeed = EvvNative.getVoiceParam(handle, Eci.VOICE_CURRENT, Eci.VOICE_SPEED)
-			basePitch = EvvNative.getVoiceParam(handle, Eci.VOICE_CURRENT, Eci.VOICE_PITCH_BASELINE)
-			currentRate = -1
-			currentPitch = -1
-		} catch (_: Throwable) {
-			// A voice that would not apply leaves the one before it in
-			// force. The utterance still speaks -- in the wrong voice,
-			// which is what the log is for -- rather than taking the
-			// service down with it.
-			Log.e(TAG, "the voice would not apply")
 		}
 	}
 
@@ -323,13 +329,15 @@ class EvvEngine private constructor(@Volatile private var handle: Long, val lang
 	 *  volume to the stream after the speech has left the engine -- so this is
 	 *  the whole of what forcing the volume can be: re-asserting this app's
 	 *  own number each time, the way [setAbbreviations] is re-sent. */
-	fun setVolume(value: Int) = synchronized(guard) {
-		if (closed) return
-		try {
-			EvvNative.setVoiceParam(
-				handle, Eci.VOICE_CURRENT, Eci.VOICE_VOLUME, Eci.clampVoice(Eci.VOICE_VOLUME, value)
-			)
-		} catch (_: Throwable) {
+	fun setVolume(value: Int) {
+		synchronized(guard) {
+			if (closed) return@synchronized
+			try {
+				EvvNative.setVoiceParam(
+					handle, Eci.VOICE_CURRENT, Eci.VOICE_VOLUME, Eci.clampVoice(Eci.VOICE_VOLUME, value)
+				)
+			} catch (_: Throwable) {
+			}
 		}
 	}
 
