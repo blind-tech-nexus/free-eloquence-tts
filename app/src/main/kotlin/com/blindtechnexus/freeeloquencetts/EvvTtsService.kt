@@ -127,15 +127,29 @@ class EvvTtsService : TextToSpeechService() {
 	 *  quiet in the middle of. */
 	private val closeIdle = Runnable {
 		if (speaking.get() > 0) return@Runnable
-		synchronized(engineLock) {
-			if (speaking.get() > 0) return@synchronized
+		val held = synchronized(engineLock) {
+			if (speaking.get() > 0) return@synchronized null
 			val held = engine
 			engine = null
 			appliedRevision = -1
-			if (held != null) {
-				held.close()
+			held
+		}
+		// Off this thread, which is the main one. Closing an instance waits
+		// for its reader to come out and for its worker to leave the engine,
+		// which is milliseconds for a healthy one and the whole of the
+		// bounded wait for a wedged one -- and a main thread held for
+		// seconds is an app the system kills for not responding, which is
+		// how giving back a quiet engine became a crash. The next utterance
+		// opens a fresh one either way, since the instance is already
+		// detached above.
+		if (held != null) {
+			Thread({
+				try {
+					held.close()
+				} catch (_: Throwable) {
+				}
 				Log.i(TAG, "the quiet engine was given back; the next utterance opens a fresh one")
-			}
+			}, "evv-give-back").also { it.isDaemon = true }.start()
 		}
 	}
 
@@ -157,9 +171,24 @@ class EvvTtsService : TextToSpeechService() {
 		main.removeCallbacks(closeIdle)
 		keepAlive?.release()
 		keepAlive = null
-		val held = engine
-		engine = null
-		held?.close()
+		val held = synchronized(engineLock) {
+			val held = engine
+			engine = null
+			appliedRevision = -1
+			held
+		}
+		// On a thread of its own, for the same reason as above: this runs
+		// on the main thread, and a wedged engine must not hold it. The
+		// process is going away in any case, so a close that never finishes
+		// costs nothing -- the system reclaims the native instance with it.
+		if (held != null) {
+			Thread({
+				try {
+					held.close()
+				} catch (_: Throwable) {
+				}
+			}, "evv-destroy").also { it.isDaemon = true }.start()
+		}
 		releaseWakeLock(wakeLock)
 		wakeLock = null
 		releaseWakeLock(tailLock)
@@ -228,7 +257,14 @@ class EvvTtsService : TextToSpeechService() {
 		availabilityOf(lang, country)
 
 	override fun onLoadLanguage(lang: String?, country: String?, variant: String?): Int {
-		val made = synchronized(engineLock) { ensureEngineLocked() }
+		// Never throws: this runs on a binder thread, and an exception here
+		// is a dead call rather than an answered one. Whatever went wrong,
+		// the language question still has its honest answer below.
+		val made = try {
+			synchronized(engineLock) { ensureEngineLocked() }
+		} catch (_: Throwable) {
+			null
+		}
 		if (made == null) return TextToSpeech.LANG_NOT_SUPPORTED
 		return availabilityOf(lang, country)
 	}
@@ -255,16 +291,22 @@ class EvvTtsService : TextToSpeechService() {
 		val locale = Locale("en", "US")
 		val out = ArrayList<Voice>(Eci.PRESET_NAMES.size)
 		for (preset in Eci.PRESET_NAMES.indices) {
-			out.add(
-				Voice(
-					voiceName(preset),
-					locale,
-					Voice.QUALITY_NORMAL,
-					Voice.LATENCY_VERY_LOW,
-					false,
-					emptySet()
+			try {
+				out.add(
+					Voice(
+						voiceName(preset),
+						locale,
+						Voice.QUALITY_NORMAL,
+						Voice.LATENCY_VERY_LOW,
+						false,
+						emptySet()
+					)
 				)
-			)
+			} catch (_: Throwable) {
+				// One voice that would not build is one voice missing, not
+				// a call that died. The engine still speaks in the settings
+				// screen's voice whatever the list holds.
+			}
 		}
 		return out
 	}
@@ -281,13 +323,20 @@ class EvvTtsService : TextToSpeechService() {
 
 	override fun onLoadVoice(name: String?): Int {
 		if (name.isNullOrEmpty()) return TextToSpeech.ERROR
-		val made = synchronized(engineLock) { ensureEngineLocked() }
+		val made = try {
+			synchronized(engineLock) { ensureEngineLocked() }
+		} catch (_: Throwable) {
+			null
+		}
 		if (made == null) return TextToSpeech.ERROR
 		return TextToSpeech.SUCCESS
 	}
 
-	override fun onGetDefaultVoiceNameFor(lang: String?, country: String?, variant: String?): String =
+	override fun onGetDefaultVoiceNameFor(lang: String?, country: String?, variant: String?): String = try {
 		voiceName((settings?.voice ?: 0).coerceIn(Eci.PRESET_NAMES.indices))
+	} catch (_: Throwable) {
+		voiceName(0)
+	}
 
 	// ---- speaking --------------------------------------------------------
 
@@ -300,17 +349,40 @@ class EvvTtsService : TextToSpeechService() {
 	 */
 	private fun ensureEngineLocked(): EvvEngine? {
 		engine?.let { return it }
-		val made = EvvEngine.open(Eci.ENGLISH_US)
+		val made = try {
+			EvvEngine.open(Eci.ENGLISH_US)
+		} catch (_: Throwable) {
+			null
+		}
 		engine = made
-		if (made != null) settings?.let { applySettings(made, it) }
+		if (made != null) {
+			try {
+				settings?.let { applySettings(made, it) }
+			} catch (_: Throwable) {
+				// The engine stands with whatever it had; the utterance
+				// still speaks rather than being refused for a setting.
+			}
+		}
 		return made
 	}
 
 	private fun applySettings(target: EvvEngine, s: Settings) {
-		target.setSampleRate(s.sampleRateHz)
-		target.setUpsampleMethod(AudioOptimization.methodFor(s.audioOptimization))
-		target.setAbbreviations(s.abbreviations)
-		target.applyVoice(s.voice, s.shape(s.voice))
+		try {
+			target.setSampleRate(s.sampleRateHz)
+		} catch (_: Throwable) {
+		}
+		try {
+			target.setUpsampleMethod(AudioOptimization.methodFor(s.audioOptimization))
+		} catch (_: Throwable) {
+		}
+		try {
+			target.setAbbreviations(s.abbreviations)
+		} catch (_: Throwable) {
+		}
+		try {
+			target.applyVoice(s.voice, s.shape(s.voice))
+		} catch (_: Throwable) {
+		}
 		appliedRevision = s.revision
 	}
 
@@ -372,7 +444,10 @@ class EvvTtsService : TextToSpeechService() {
 		synchronized(gate) { stopped = false }
 		val s = settings
 		if (s == null) {
-			callback.error(TextToSpeech.ERROR_SERVICE)
+			try {
+				callback.error(TextToSpeech.ERROR_SERVICE)
+			} catch (_: Throwable) {
+			}
 			return
 		}
 		speaking.incrementAndGet()
@@ -390,16 +465,26 @@ class EvvTtsService : TextToSpeechService() {
 			// TTS router forwarded, is spoken in the voice, which is what keeps
 			// a router's request from ever being answered with silence.
 			if (!EvvNative.loaded) {
-				callback.error(TextToSpeech.ERROR_NOT_INSTALLED_YET)
+				try {
+					callback.error(TextToSpeech.ERROR_NOT_INSTALLED_YET)
+				} catch (_: Throwable) {
+				}
 				return
 			}
-			val target = synchronized(engineLock) {
-				val made = ensureEngineLocked()
-				if (made != null && s.revision != appliedRevision) applySettings(made, s)
-				made
+			val target = try {
+				synchronized(engineLock) {
+					val made = ensureEngineLocked()
+					if (made != null && s.revision != appliedRevision) applySettings(made, s)
+					made
+				}
+			} catch (_: Throwable) {
+				null
 			}
 			if (target == null) {
-				callback.error(TextToSpeech.ERROR_SERVICE)
+				try {
+					callback.error(TextToSpeech.ERROR_SERVICE)
+				} catch (_: Throwable) {
+				}
 				return
 			}
 			try {
@@ -439,12 +524,16 @@ class EvvTtsService : TextToSpeechService() {
 		if (speakForeground) { try { KeepAliveNotification.claim(this, s.notificationStopButton) } catch (_: Exception) {} }
 		val lock = acquireWakeLock()
 		try {
-			val rawText = styledText(request, s)
-			if (rawText.isEmpty()) {
+		val rawText = styledText(request, s)
+		if (rawText.isEmpty()) {
+			try {
 				callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
 				callback.done()
-				return
+			} catch (_: Throwable) {
+				// The framework is gone; there is nobody left to answer.
 			}
+			return
+		}
 			if (stopped) return
 			val opening = Opening(callback, target.sampleRateHz)
 			val pace = Pace(target.sampleRateHz * BYTES_PER_SAMPLE)
@@ -485,12 +574,15 @@ class EvvTtsService : TextToSpeechService() {
 					} else {
 						val text = try {
 							TextPipeline.apply(rawText, s, replacements.words, replacements.abbreviations)
-						} catch (_: Exception) {
+						} catch (_: Throwable) {
 							rawText
 						}
 						if (text.isEmpty()) {
-							callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
-							callback.done()
+							try {
+								callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
+								callback.done()
+							} catch (_: Throwable) {
+							}
 							return
 						}
 						TextPieces.pieceSequence(text)
@@ -506,12 +598,15 @@ class EvvTtsService : TextToSpeechService() {
 				val iterator = stream.iterator()
 				var held: TextPieces.Piece? = try {
 					if (iterator.hasNext()) iterator.next() else null
-				} catch (broken: Exception) {
+				} catch (broken: Throwable) {
 					null
 				}
 				if (held == null) {
-					callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
-					callback.done()
+					try {
+						callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
+						callback.done()
+					} catch (_: Throwable) {
+					}
 					return
 				}
 				// The level of this utterance, made once for it. The optimizer
@@ -528,11 +623,11 @@ class EvvTtsService : TextToSpeechService() {
 					val piece = held ?: break
 					val next = try {
 						if (iterator.hasNext()) iterator.next() else null
-					} catch (broken: Exception) {
+					} catch (broken: Throwable) {
 						null
 					}
 					val last = next == null
-					var audio = try { prosody + Pauses.apply(piece.text, s.pauses, last) } catch (_: Exception) { prosody + piece.text }
+					var audio = try { prosody + Pauses.apply(piece.text, s.pauses, last) } catch (_: Throwable) { prosody + piece.text }
 					if (piece.forced && !last) audio += Pauses.AT_A_BOUNDARY
 					// A piece that carries nothing to say -- whitespace, say,
 					// or pauses the settings annotated onto nothing -- is not
@@ -560,13 +655,28 @@ class EvvTtsService : TextToSpeechService() {
 							if (stopped) return
 							Log.e(TAG, "engine refused ${audio.length} chars")
 							engineIsSuspect = true
-							if (opening.began) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
+							try {
+								if (opening.began) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
+							} catch (_: Throwable) {
+							}
 							return
 						}
 						when (pump(target, callback, pace, opening, buffer, optimizer, Stability.ENGINE_SILENCE_MS, lead)) {
 							Pump.Next -> Unit
 							Pump.Over -> { remember(pace); finish(callback, opening); return }
-							Pump.Gone -> { remember(pace); return }
+							// Gone while still wanted is a framework that stopped
+							// taking samples without asking for silence -- a dead
+							// binder, a torn-down callback. Returning with no
+							// finish would leave the caller waiting for ever on
+							// an utterance that is never coming, which is what
+							// reads as "it just stopped synthesizing"; the
+							// utterance is finished instead, and the call below
+							// swallows the framework being past answering.
+							Pump.Gone -> {
+								remember(pace)
+								if (!stopped) finish(callback, opening)
+								return
+							}
 						}
 						failures = 0
 					} catch (failed: Throwable) {
@@ -642,10 +752,20 @@ class EvvTtsService : TextToSpeechService() {
 	 * such as AutoTTS asked here.
 	 */
 	private fun finish(callback: SynthesisCallback, opening: Opening) {
+		// Every call guarded: the framework end of the callback can die at
+		// any moment -- a caller gone, a binder torn down -- and a dead
+		// framework throwing back is not an engine fault and must not read
+		// as one. Nothing here throws, whatever the callback does.
 		if (opening.began) {
-			callback.done()
+			try {
+				callback.done()
+			} catch (_: Throwable) {
+			}
 		} else if (!stopped) {
-			if (opening.open()) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
+			try {
+				if (opening.open()) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
+			} catch (_: Throwable) {
+			}
 		}
 	}
 
@@ -724,7 +844,16 @@ class EvvTtsService : TextToSpeechService() {
 	private fun deliver(callback: SynthesisCallback, buffer: ByteArray, n: Int): Boolean {
 		var tries = 0
 		while (!stopped) {
-			if (callback.audioAvailable(buffer, 0, n) == TextToSpeech.SUCCESS) return true
+			val took = try {
+				callback.audioAvailable(buffer, 0, n)
+			} catch (_: Throwable) {
+				// A dead framework answers by throwing rather than by
+				// refusing. Counted as a refusal, like any other: the wait
+				// below notices a stop at once, and past the last try the
+				// utterance is finished as gone rather than retried for ever.
+				TextToSpeech.ERROR
+			}
+			if (took == TextToSpeech.SUCCESS) return true
 			if (++tries >= DELIVER_TRIES) return false
 			if (!waitUpTo(DELIVER_WAIT_MS)) return false
 		}
@@ -750,21 +879,25 @@ class EvvTtsService : TextToSpeechService() {
 			main.post(closeIdle)
 		}
 		if (Stability.WAKE_LOCK && Stability.WAKE_LOCK_TAIL_MS > 0) {
-			val held = tailLock
-			if (held == null) {
-				val made = wakeLockManager?.newWakeLock(
-					PowerManager.PARTIAL_WAKE_LOCK, "$TAG:wake:tail"
-				)?.apply {
-					setReferenceCounted(false)
-					// The timeout is the release. A lock the system takes back
-					// at the end of the wait is a lock that cannot be forgotten
-					// because the next utterance never came.
-					runCatching { acquire(Stability.WAKE_LOCK_TAIL_MS.toLong()) }
+			try {
+				val held = tailLock
+				if (held == null) {
+					val made = wakeLockManager?.newWakeLock(
+						PowerManager.PARTIAL_WAKE_LOCK, "$TAG:wake:tail"
+					)?.apply {
+						setReferenceCounted(false)
+						// The timeout is the release. A lock the system takes back
+						// at the end of the wait is a lock that cannot be forgotten
+						// because the next utterance never came.
+						runCatching { acquire(Stability.WAKE_LOCK_TAIL_MS.toLong()) }
+					}
+					tailLock = made
+				} else {
+					runCatching { if (held.isHeld) held.release() }
+					runCatching { held.acquire(Stability.WAKE_LOCK_TAIL_MS.toLong()) }
 				}
-				tailLock = made
-			} else {
-				runCatching { if (held.isHeld) held.release() }
-				runCatching { held.acquire(Stability.WAKE_LOCK_TAIL_MS.toLong()) }
+			} catch (_: Throwable) {
+				// The CPU stays as it was; the utterance is over either way.
 			}
 		}
 		val after = Stability.RELEASE_ENGINE_AFTER_S
@@ -783,17 +916,29 @@ class EvvTtsService : TextToSpeechService() {
 	private fun acquireWakeLock(): PowerManager.WakeLock? {
 		if (!Stability.WAKE_LOCK) return null
 		val held = wakeLock
-		if (held != null && held.isHeld) return held
-		val made = wakeLockManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG:wake")?.apply {
-			setReferenceCounted(false)
-			acquire(WAKELOCK_TIMEOUT_MS)
+		if (held != null) {
+			try {
+				if (held.isHeld) return held
+			} catch (_: Throwable) {
+			}
+		}
+		val made = try {
+			wakeLockManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG:wake")?.apply {
+				setReferenceCounted(false)
+				runCatching { acquire(WAKELOCK_TIMEOUT_MS) }
+			}
+		} catch (_: Throwable) {
+			null
 		}
 		wakeLock = made
 		return made
 	}
 
 	private fun releaseWakeLock(lock: PowerManager.WakeLock?) {
-		lock?.takeIf { it.isHeld }?.let { runCatching { it.release() } }
+		try {
+			if (lock != null && lock.isHeld) lock.release()
+		} catch (_: Throwable) {
+		}
 	}
 
 	/**
@@ -848,7 +993,11 @@ class EvvTtsService : TextToSpeechService() {
 	/** The buffer the framework asked for, reused when the size has not
 	 *  moved, so a swipe through a list does not allocate one per item. */
 	private fun bufferFor(callback: SynthesisCallback): ByteArray {
-		val want = callback.maxBufferSize.coerceIn(MIN_CHUNK, MAX_CHUNK)
+		val want = try {
+			callback.maxBufferSize
+		} catch (_: Throwable) {
+			DEFAULT_CHUNK
+		}.coerceIn(MIN_CHUNK, MAX_CHUNK)
 		val held = chunk
 		if (held != null && held.size == want) return held
 		return ByteArray(want).also { chunk = it }
@@ -863,7 +1012,11 @@ class EvvTtsService : TextToSpeechService() {
 
 		fun open(): Boolean {
 			if (began) return true
-			began = callback.start(rateHz, AudioFormat.ENCODING_PCM_16BIT, 1) == TextToSpeech.SUCCESS
+			began = try {
+				callback.start(rateHz, AudioFormat.ENCODING_PCM_16BIT, 1) == TextToSpeech.SUCCESS
+			} catch (_: Throwable) {
+				false
+			}
 			return began
 		}
 	}
@@ -902,6 +1055,7 @@ class EvvTtsService : TextToSpeechService() {
 		const val TAG = "freeeloquencetts"
 		const val MIN_CHUNK = 1024
 		const val MAX_CHUNK = 65536
+		const val DEFAULT_CHUNK = 4096
 		const val BYTES_PER_SAMPLE = 2
 
 		/** How long a text has to be before it goes through the pipeline a

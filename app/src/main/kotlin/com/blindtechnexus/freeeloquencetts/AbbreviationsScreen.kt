@@ -94,9 +94,12 @@ fun AbbreviationsScreen(onBack: () -> Unit) {
 						// A file that parsed to nothing is either empty or in
 						// a form the stream reader refused; asking again
 						// through the text reader is cheap and answers the
-						// question rather than leaving it.
+						// question rather than leaving it. Capped, not whole:
+						// reading the entire file in would hand a hostile or
+						// mistaken multi-gigabyte pick to the allocator, and
+						// an out-of-memory on this thread is the app gone.
 						resolver.openInputStream(uri)?.use { again ->
-							Abbreviations.parse(Dictionaries.decode(again.readBytes()))
+							Abbreviations.parse(Dictionaries.decode(again))
 						} ?: emptyList()
 					}
 				} ?: emptyList()

@@ -388,4 +388,10 @@
 	<string name="audio_saved">Saved.</string>
 	<string name="audio_save_failed">Could not save file.</string>
 	<string name="audio_file_name">eloquence-audio.wav</string>
+	<string name="audio_play">Play audio</string>
+	<string name="audio_pause">Pause</string>
+	<string name="audio_replay">Replay</string>
+	<string name="audio_play_failed">Could not play audio.</string>
+	<string name="dictionary_search_hint">Search words or files</string>
+	<string name="dictionary_search_words">%1$d words</string>
 </resources>

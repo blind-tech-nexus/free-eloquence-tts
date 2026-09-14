@@ -84,13 +84,34 @@ class EvvPreview() {
 		val mine = generation
 		work.post {
 			if (mine != generation) return@post
-			val e = engine ?: EvvEngine.open(Eci.ENGLISH_US)?.also { engine = it } ?: return@post
-			e.setSampleRate(rateHz)
-			e.setUpsampleMethod(AudioOptimization.methodFor(optimization))
-			e.setAbbreviations(abbreviations)
-			e.applyVoice(voice, shape)
+			val e = try {
+				engine ?: EvvEngine.open(Eci.ENGLISH_US)?.also { engine = it } ?: return@post
+			} catch (_: Throwable) {
+				return@post
+			}
+			try {
+				e.setSampleRate(rateHz)
+				e.setUpsampleMethod(AudioOptimization.methodFor(optimization))
+				e.setAbbreviations(abbreviations)
+				e.applyVoice(voice, shape)
+			} catch (_: Throwable) {
+			}
 			if (!e.speak(text, isStopped = { mine != generation })) {
-				if (mine == generation) Log.e(TAG, "the engine refused the sample")
+				if (mine == generation) {
+					Log.e(TAG, "the engine refused the sample")
+					// A refusal nothing explains is a wedged instance, and
+					// this preview keeps its engine for ever -- so the
+					// instance is given back here, and the next sample opens
+					// a fresh one instead of queuing behind whatever went
+					// wrong. The service does the same after an utterance
+					// its engine went quiet in; this is the preview's half
+					// of that promise.
+					try {
+						e.close()
+					} catch (_: Throwable) {
+					}
+					if (engine === e) engine = null
+				}
 				return@post
 			}
 			play(e, mine, AudioOptimizer(optimization, e.sampleRateHz))
@@ -100,60 +121,100 @@ class EvvPreview() {
 	private fun play(e: EvvEngine, mine: Int, optimizer: AudioOptimizer) {
 		playing = true
 		drained = false
-		val rate = e.sampleRateHz
-		val minimum = AudioTrack.getMinBufferSize(
-			rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT
-		)
-		val size = if (minimum > 0) maxOf(minimum, CHUNK * 4) else CHUNK * 4
-		val t = AudioTrack.Builder()
-			.setAudioAttributes(
-				AudioAttributes.Builder()
-					.setUsage(AudioAttributes.USAGE_ASSISTANT)
-					.setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-					.build()
-			)
-			.setAudioFormat(
-				AudioFormat.Builder()
-					.setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-					.setSampleRate(rate)
-					.setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-					.build()
-			)
-			.setBufferSizeInBytes(size)
-			.setTransferMode(AudioTrack.MODE_STREAM)
-			.build()
-		track = t
-		t.play()
-		val buffer = ByteArray(CHUNK)
-		var written = 0L
-		while (mine == generation) {
-			val n = e.read(buffer)
-			if (n <= 0) break
-			optimizer.process(buffer, n)
-			var at = 0
-			while (at < n && mine == generation) {
-				val wrote = t.write(buffer, at, n - at)
-				if (wrote <= 0) break
-				at += wrote
-				bytesPlayed += wrote
-				written += wrote / BYTES_PER_FRAME
+		// Everything below runs on the preview's own thread, where an
+		// exception is not a failed sample but a dead thread -- and a dead
+		// thread with an uncaught exception is a dead process. The audio
+		// device is the part that throws: building the track, starting it,
+		// and writing to it can all refuse on a phone whose audio is
+		// otherwise held, so every one of them is guarded and the track is
+		// always released. A sample that cannot be heard is silence, not a
+		// crash.
+		var t: AudioTrack? = null
+		try {
+			val rate = e.sampleRateHz
+			val minimum = try {
+				AudioTrack.getMinBufferSize(
+					rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT
+				)
+			} catch (_: Throwable) {
+				0
 			}
+			val size = if (minimum > 0) maxOf(minimum, CHUNK * 4) else CHUNK * 4
+			t = try {
+				AudioTrack.Builder()
+					.setAudioAttributes(
+						AudioAttributes.Builder()
+							.setUsage(AudioAttributes.USAGE_ASSISTANT)
+							.setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+							.build()
+					)
+					.setAudioFormat(
+						AudioFormat.Builder()
+							.setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+							.setSampleRate(rate)
+							.setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+							.build()
+					)
+					.setBufferSizeInBytes(size)
+					.setTransferMode(AudioTrack.MODE_STREAM)
+					.build()
+			} catch (broken: Throwable) {
+				Log.e(TAG, "no audio track for the sample", broken)
+				null
+			} ?: return
+			track = t
+			try {
+				t.play()
+			} catch (broken: Throwable) {
+				Log.e(TAG, "the sample would not play", broken)
+				return
+			}
+			val buffer = ByteArray(CHUNK)
+			var written = 0L
+			while (mine == generation) {
+				val n = try {
+					e.read(buffer)
+				} catch (_: Throwable) {
+					-1
+				}
+				if (n <= 0) break
+				try {
+					optimizer.process(buffer, n)
+				} catch (_: Throwable) {
+				}
+				var at = 0
+				while (at < n && mine == generation) {
+					val wrote = try {
+						t.write(buffer, at, n - at)
+					} catch (_: Throwable) {
+						break
+					}
+					if (wrote <= 0) break
+					at += wrote
+					bytesPlayed += wrote
+					written += wrote / BYTES_PER_FRAME
+				}
+			}
+			if (mine == generation) {
+				// Waited out before stopping rather than after. The track holds
+				// most of a second, which is the last few words of a short sample,
+				// and release() cuts that off; stop() would let it play but also
+				// puts the playback head back to nought, so there would be nothing
+				// left to watch. So this waits for the head to reach the end of
+				// what was written while the track is still running.
+				drained = waitToDrain(t, mine, written, rate)
+				runCatching { t.stop() }
+			} else {
+				runCatching { t.pause(); t.flush(); t.stop() }
+			}
+		} finally {
+			val held = t
+			if (held != null) {
+				runCatching { held.release() }
+				if (track === held) track = null
+			}
+			playing = false
 		}
-		if (mine == generation) {
-			// Waited out before stopping rather than after. The track holds
-			// most of a second, which is the last few words of a short sample,
-			// and release() cuts that off; stop() would let it play but also
-			// puts the playback head back to nought, so there would be nothing
-			// left to watch. So this waits for the head to reach the end of
-			// what was written while the track is still running.
-			drained = waitToDrain(t, mine, written, rate)
-			runCatching { t.stop() }
-		} else {
-			runCatching { t.pause(); t.flush(); t.stop() }
-		}
-		runCatching { t.release() }
-		if (track === t) track = null
-		playing = false
 	}
 
 	/** Answers whether everything written was actually heard. */

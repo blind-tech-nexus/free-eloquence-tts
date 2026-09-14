@@ -98,12 +98,12 @@ class AudioGenerator(context: Context) {
 			e.applyVoice(settings.voice, settings.shape(settings.voice))
 			val words = try {
 				UserDictionary.snapshot(app).entries
-			} catch (broken: Exception) {
+			} catch (broken: Throwable) {
 				emptyList()
 			}
 			val abbreviations = try {
 				Abbreviations.entries(app)
-			} catch (broken: Exception) {
+			} catch (broken: Throwable) {
 				emptyList()
 			}
 			val prosody = Prosody.prefix(settings.phrasePrediction)
@@ -114,7 +114,7 @@ class AudioGenerator(context: Context) {
 			val pieces = TextPipeline.pieces(text, settings, words, abbreviations).iterator()
 			var held: TextPieces.Piece? = try {
 				if (pieces.hasNext()) pieces.next() else null
-			} catch (broken: Exception) {
+			} catch (broken: Throwable) {
 				null
 			}
 			if (held == null) return null
@@ -122,20 +122,20 @@ class AudioGenerator(context: Context) {
 				val piece = held ?: break
 				val next = try {
 					if (pieces.hasNext()) pieces.next() else null
-				} catch (broken: Exception) {
+				} catch (broken: Throwable) {
 					null
 				}
 				val last = next == null
 				var audio = try {
 					prosody + Pauses.apply(piece.text, settings.pauses, last)
-				} catch (broken: Exception) {
+				} catch (broken: Throwable) {
 					prosody + piece.text
 				}
 				if (piece.forced && !last) audio += Pauses.AT_A_BOUNDARY
 				spokenChars += piece.text.length
 				try {
 					progress(spokenChars.coerceAtMost(total), total)
-				} catch (broken: Exception) {
+				} catch (broken: Throwable) {
 					// Progress is a courtesy, not a contract.
 				}
 				if (EvvEngine.isBlankSpeech(audio)) {
@@ -165,7 +165,7 @@ class AudioGenerator(context: Context) {
 			engine = null
 			try {
 				e.close()
-			} catch (broken: Exception) {
+			} catch (broken: Throwable) {
 			}
 		}
 	}
@@ -175,7 +175,7 @@ class AudioGenerator(context: Context) {
 		generation++
 		try {
 			engine?.stop()
-		} catch (broken: Exception) {
+		} catch (broken: Throwable) {
 		}
 	}
 
@@ -206,7 +206,7 @@ class AudioGenerator(context: Context) {
 				out.write(samples, 0, data)
 			}
 			file
-		} catch (broken: Exception) {
+		} catch (broken: Throwable) {
 			Log.e(TAG, "the file could not be written", broken)
 			null
 		}

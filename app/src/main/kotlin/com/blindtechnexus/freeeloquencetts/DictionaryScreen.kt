@@ -63,6 +63,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * read a line at a time and written straight to its own file, the screen says
  * how far it has got, and what does not fit is counted and reported rather
  * than kept.
+ *
+ * The search above the words finds either kind where it stands: a word by
+ * what is written or what is said, and a file by its name, whatever capital
+ * letters anything is written in.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,6 +76,10 @@ fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 	var files by remember { mutableStateOf(ExtraDictionaries.list(context)) }
 	var counts by remember { mutableStateOf(emptyMap<String, Int>()) }
 	var notice by remember { mutableStateOf("") }
+	// What the search box holds. Both lists below -- the words and the
+	// imported files -- answer it, whatever capital letters anything is
+	// written in.
+	var query by remember { mutableStateOf("") }
 	var adding by remember { mutableStateOf(false) }
 	var editing by remember { mutableStateOf<Pair<String, String>?>(null) }
 	var editingForEdit by remember { mutableStateOf(false) }
@@ -279,7 +287,33 @@ fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 			}
 
 			Gap(8.dp)
-			if (words.isEmpty()) {
+			OutlinedTextField(
+				value = query,
+				onValueChange = { query = it },
+				singleLine = true,
+				label = { Text(text = stringResource(R.string.dictionary_search_hint)) },
+				keyboardOptions = KeyboardOptions(
+					capitalization = KeyboardCapitalization.None,
+					autoCorrect = false,
+					keyboardType = KeyboardType.Text
+				),
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(horizontal = 16.dp)
+			)
+			Gap(8.dp)
+			// Both lists answer the search: a word matches what is written
+			// or what is said, and a file matches its name. Empty search is
+			// both lists whole, exactly as they always were.
+			val want = query.trim()
+			val shownWords = if (want.isEmpty()) words else words.filter {
+				it.first.contains(want, ignoreCase = true) ||
+					it.second.contains(want, ignoreCase = true)
+			}
+			val shownFiles = if (want.isEmpty()) files else files.filter {
+				it.name.contains(want, ignoreCase = true)
+			}
+			if (want.isEmpty() && words.isEmpty()) {
 				Text(
 					text = stringResource(R.string.dictionary_empty),
 					style = MaterialTheme.typography.bodyMedium,
@@ -288,7 +322,17 @@ fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 						.padding(horizontal = 16.dp, vertical = 12.dp)
 				)
 			} else {
-				for ((word, say) in words) {
+				if (want.isNotEmpty()) {
+					Text(
+						text = stringResource(R.string.dictionary_search_words, shownWords.size),
+						style = MaterialTheme.typography.bodyMedium,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
+						modifier = Modifier
+							.fillMaxWidth()
+							.padding(horizontal = 16.dp, vertical = 4.dp)
+					)
+				}
+				for ((word, say) in shownWords) {
 					WordRow(
 						word = word,
 						say = say,
@@ -300,7 +344,7 @@ fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 			Gap(16.dp)
 			SectionHeading(text = stringResource(R.string.dictionary_files_heading))
 			SectionText(text = stringResource(R.string.dictionary_files_description))
-			if (files.isEmpty()) {
+			if (want.isEmpty() && files.isEmpty()) {
 				Text(
 					text = stringResource(R.string.dictionary_files_empty),
 					style = MaterialTheme.typography.bodyMedium,
@@ -309,7 +353,7 @@ fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 						.padding(horizontal = 16.dp, vertical = 12.dp)
 				)
 			} else {
-				for (info in files) {
+				for (info in shownFiles) {
 					DictionaryFileRow(
 						name = info.name,
 						subtitle = counts[info.name]?.let {

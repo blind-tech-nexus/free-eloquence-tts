@@ -17,6 +17,14 @@ internal object EvvNative {
 			ok = true
 		} catch (e: UnsatisfiedLinkError) {
 			loadError = e
+		} catch (e: Throwable) {
+			// Anything else the loader can throw -- a security refusal, an
+			// initialization failure from inside the library -- is the same
+			// answer: the engine is unavailable. An exception escaping this
+			// block would poison every later use of this object with an
+			// ExceptionInInitializerError, which is how a missing library
+			// becomes a crash instead of a voice that is not there.
+			loadError = e
 		}
 		loaded = ok
 	}

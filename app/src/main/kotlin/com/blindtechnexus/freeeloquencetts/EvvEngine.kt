@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * Everything but [stop] is called from the synthesis thread. [stop] comes from
  * whichever thread asked, which the native side is written for.
  */
-class EvvEngine private constructor(private var handle: Long, val language: Int) {
+class EvvEngine private constructor(@Volatile private var handle: Long, val language: Int) {
 
 	private val guard = Any()
 
@@ -96,31 +96,56 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 
 		/** Makes an instance speaking [language], which is [Eci.ENGLISH_US]:
 		 *  the build carries that one module and the engine opens nothing
-		 *  else. */
+		 *  else. Answers null rather than throwing, whatever went wrong: a
+		 *  caller that cannot have an engine must get that answer, not lose
+		 *  the thread -- and on the framework's synthesis thread, losing it
+		 *  is losing the voice. */
 		fun open(language: Int): EvvEngine? {
 			if (!EvvNative.loaded) {
 				Log.e(TAG, "the native library did not load", EvvNative.loadError)
 				return null
 			}
-			val handle = EvvNative.create(language)
+			val handle = try {
+				EvvNative.create(language)
+			} catch (broken: Throwable) {
+				Log.e(TAG, "the native instance would not open", broken)
+				return null
+			}
 			if (handle == 0L) {
 				Log.e(TAG, "no engine instance for language 0x%08x".format(language))
 				return null
 			}
-			return EvvEngine(handle, language).apply { configure() }
+			return try {
+				EvvEngine(handle, language).apply { configure() }
+			} catch (broken: Throwable) {
+				Log.e(TAG, "the engine instance would not configure", broken)
+				try {
+					EvvNative.destroy(handle)
+				} catch (forgotten: Throwable) {
+					// The instance is being given up on; there is nothing
+					// left that wants it either way.
+				}
+				null
+			}
 		}
 	}
 
 	private fun configure() {
-		EvvNative.setParam(handle, Eci.PARAM_LANGUAGE_DIALECT, language)
-		EvvNative.setParam(handle, Eci.PARAM_SYNTH_MODE, 0)
-		EvvNative.setParam(handle, Eci.PARAM_REAL_WORLD_UNITS, 0)
+		// Each call guarded on its own rather than the block as a whole: a
+		// refusal in the middle must not take the sample rate -- the one
+		// the framework is told about -- down with it.
+		try { EvvNative.setParam(handle, Eci.PARAM_LANGUAGE_DIALECT, language) } catch (_: Throwable) {}
+		try { EvvNative.setParam(handle, Eci.PARAM_SYNTH_MODE, 0) } catch (_: Throwable) {}
+		try { EvvNative.setParam(handle, Eci.PARAM_REAL_WORLD_UNITS, 0) } catch (_: Throwable) {}
 		// Always on. The engine is the only thing that can act on an annotation,
 		// nothing in this app speaks without wanting pauses shortened, and one
 		// that is malformed is spoken rather than obeyed, so ordinary text
 		// carrying a backtick is read out as it stands.
-		setAnnotations(true)
-		setSampleRate(Eci.sampleRateHz(EvvNative.getParam(handle, Eci.PARAM_SAMPLE_RATE)))
+		try { setAnnotations(true) } catch (_: Throwable) {}
+		try {
+			setSampleRate(Eci.sampleRateHz(EvvNative.getParam(handle, Eci.PARAM_SAMPLE_RATE)))
+		} catch (_: Throwable) {
+		}
 	}
 
 	fun setSampleRate(hz: Int) = synchronized(guard) {
@@ -129,7 +154,15 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 		// Adopted only when the engine took it. eciSetParam answers -1 on a
 		// refusal, and a rate the framework is told about that the engine is
 		// not synthesising at is the wrong speed under the right label.
-		if (EvvNative.setParam(handle, Eci.PARAM_SAMPLE_RATE, index) != -1) {
+		// A JNI call that throws -- the library gone from under the process,
+		// a binder of a caller long dead -- is a refusal of the same kind:
+		// the rate stays what it was rather than taking the caller with it.
+		val took = try {
+			EvvNative.setParam(handle, Eci.PARAM_SAMPLE_RATE, index)
+		} catch (_: Throwable) {
+			-1
+		}
+		if (took != -1) {
 			sampleRateHz = Eci.sampleRateHz(index)
 		}
 	}
@@ -141,27 +174,44 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 	 *  moved, so calling it per utterance costs one comparison. */
 	fun setUpsampleMethod(method: Int) = synchronized(guard) {
 		if (closed || method == upsampleMethod) return
-		EvvNative.setUpsampleMethod(method)
+		try {
+			EvvNative.setUpsampleMethod(method)
+		} catch (_: Throwable) {
+			return
+		}
 		// The method is read when a converter is built, so the converter is
 		// rebuilt now -- by re-setting the rate it already has -- and the new
 		// method is in force on the next piece rather than on the next run.
 		// The call is recorded only when the rebuild took: a refused rebuild
 		// would otherwise read back as done while the old method still runs,
 		// and the retry that a fresh utterance brings would be skipped.
-		if (EvvNative.setParam(handle, Eci.PARAM_SAMPLE_RATE, Eci.sampleRateIndex(sampleRateHz)) != -1) {
+		val took = try {
+			EvvNative.setParam(handle, Eci.PARAM_SAMPLE_RATE, Eci.sampleRateIndex(sampleRateHz))
+		} catch (_: Throwable) {
+			-1
+		}
+		if (took != -1) {
 			upsampleMethod = method
 		}
 	}
 
 	fun setAnnotations(on: Boolean) = synchronized(guard) {
-		if (!closed) EvvNative.setParam(handle, Eci.PARAM_INPUT_TYPE, if (on) 1 else 0)
+		if (closed) return
+		try {
+			EvvNative.setParam(handle, Eci.PARAM_INPUT_TYPE, if (on) 1 else 0)
+		} catch (_: Throwable) {
+		}
 	}
 
 	/** The abbreviation dictionary, which is what eciDictionary switches.
 	 *  Nought turns it on: that is the engine's own sense of the setting and
 	 *  not a mistake here. */
 	fun setAbbreviations(on: Boolean) = synchronized(guard) {
-		if (!closed) EvvNative.setParam(handle, Eci.PARAM_DICTIONARY, if (on) 0 else 1)
+		if (closed) return
+		try {
+			EvvNative.setParam(handle, Eci.PARAM_DICTIONARY, if (on) 0 else 1)
+		} catch (_: Throwable) {
+		}
 	}
 
 	/** What preset [index] (0 based, so 0 is Reed) is set to, without changing
@@ -185,7 +235,11 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 	private fun readPresetLocked(preset: Int): Map<Int, Int> {
 		val out = LinkedHashMap<Int, Int>()
 		for (param in 0 until Eci.NUM_VOICE_PARAMS) {
-			val value = EvvNative.getVoiceParam(handle, preset, param)
+			val value = try {
+				EvvNative.getVoiceParam(handle, preset, param)
+			} catch (_: Throwable) {
+				-1
+			}
 			if (value >= 0) out[param] = value
 		}
 		return out
@@ -204,29 +258,37 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 	 */
 	fun applyVoice(index: Int, shape: Map<Int, Int> = emptyMap()) = synchronized(guard) {
 		if (closed) return
-		val preset = if (index == Eci.LUNA_INDEX) Eci.LUNA_BASE_PRESET
-		else (index + Eci.FIRST_PRESET).coerceIn(Eci.FIRST_PRESET, Eci.LAST_PRESET)
-		EvvNative.copyVoice(handle, preset, Eci.SCRATCH_VOICE)
-		if (index == Eci.LUNA_INDEX) {
-			for ((param, value) in Eci.LUNA_SHAPE) {
-				if (param == Eci.VOICE_SPEED) continue
+		try {
+			val preset = if (index == Eci.LUNA_INDEX) Eci.LUNA_BASE_PRESET
+			else (index + Eci.FIRST_PRESET).coerceIn(Eci.FIRST_PRESET, Eci.LAST_PRESET)
+			EvvNative.copyVoice(handle, preset, Eci.SCRATCH_VOICE)
+			if (index == Eci.LUNA_INDEX) {
+				for ((param, value) in Eci.LUNA_SHAPE) {
+					if (param == Eci.VOICE_SPEED) continue
+					EvvNative.setVoiceParam(handle, Eci.SCRATCH_VOICE, param, Eci.clampVoice(param, value))
+				}
+			}
+			// The preset's own speed is not kept. Two of the eight ship faster than
+			// the rest, so leaving it would make changing voice change the pace.
+			EvvNative.setVoiceParam(
+				handle, Eci.SCRATCH_VOICE, Eci.VOICE_SPEED,
+				shape[Eci.VOICE_SPEED] ?: Eci.DEFAULT_SPEED
+			)
+			for ((param, value) in shape) {
 				EvvNative.setVoiceParam(handle, Eci.SCRATCH_VOICE, param, Eci.clampVoice(param, value))
 			}
+			EvvNative.copyVoice(handle, Eci.SCRATCH_VOICE, Eci.VOICE_CURRENT)
+			baseSpeed = EvvNative.getVoiceParam(handle, Eci.VOICE_CURRENT, Eci.VOICE_SPEED)
+			basePitch = EvvNative.getVoiceParam(handle, Eci.VOICE_CURRENT, Eci.VOICE_PITCH_BASELINE)
+			currentRate = -1
+			currentPitch = -1
+		} catch (_: Throwable) {
+			// A voice that would not apply leaves the one before it in
+			// force. The utterance still speaks -- in the wrong voice,
+			// which is what the log is for -- rather than taking the
+			// service down with it.
+			Log.e(TAG, "the voice would not apply")
 		}
-		// The preset's own speed is not kept. Two of the eight ship faster than
-		// the rest, so leaving it would make changing voice change the pace.
-		EvvNative.setVoiceParam(
-			handle, Eci.SCRATCH_VOICE, Eci.VOICE_SPEED,
-			shape[Eci.VOICE_SPEED] ?: Eci.DEFAULT_SPEED
-		)
-		for ((param, value) in shape) {
-			EvvNative.setVoiceParam(handle, Eci.SCRATCH_VOICE, param, Eci.clampVoice(param, value))
-		}
-		EvvNative.copyVoice(handle, Eci.SCRATCH_VOICE, Eci.VOICE_CURRENT)
-		baseSpeed = EvvNative.getVoiceParam(handle, Eci.VOICE_CURRENT, Eci.VOICE_SPEED)
-		basePitch = EvvNative.getVoiceParam(handle, Eci.VOICE_CURRENT, Eci.VOICE_PITCH_BASELINE)
-		currentRate = -1
-		currentPitch = -1
 	}
 
 	/** Android hands rate and pitch over as a percentage of normal, where the
@@ -237,14 +299,22 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 		// Not baseSpeed * percent. The engine's speed scale is nothing like
 		// linear in how fast it speaks, so SpeechRate does the conversion.
 		val want = SpeechRate.speedForPercent(baseSpeed, percent)
-		EvvNative.setVoiceParam(handle, Eci.VOICE_CURRENT, Eci.VOICE_SPEED, want)
+		try {
+			EvvNative.setVoiceParam(handle, Eci.VOICE_CURRENT, Eci.VOICE_SPEED, want)
+		} catch (_: Throwable) {
+			return
+		}
 		currentRate = percent
 	}
 
 	fun setPitchPercent(percent: Int) = synchronized(guard) {
 		if (closed || percent == currentPitch || basePitch < 0) return
 		val want = (basePitch.toLong() * percent / 100).toInt().coerceIn(0, Eci.PERCENT_MAX)
-		EvvNative.setVoiceParam(handle, Eci.VOICE_CURRENT, Eci.VOICE_PITCH_BASELINE, want)
+		try {
+			EvvNative.setVoiceParam(handle, Eci.VOICE_CURRENT, Eci.VOICE_PITCH_BASELINE, want)
+		} catch (_: Throwable) {
+			return
+		}
 		currentPitch = percent
 	}
 
@@ -254,32 +324,60 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 	 *  the whole of what forcing the volume can be: re-asserting this app's
 	 *  own number each time, the way [setAbbreviations] is re-sent. */
 	fun setVolume(value: Int) = synchronized(guard) {
-		if (!closed) EvvNative.setVoiceParam(
-			handle, Eci.VOICE_CURRENT, Eci.VOICE_VOLUME, Eci.clampVoice(Eci.VOICE_VOLUME, value)
-		)
+		if (closed) return
+		try {
+			EvvNative.setVoiceParam(
+				handle, Eci.VOICE_CURRENT, Eci.VOICE_VOLUME, Eci.clampVoice(Eci.VOICE_VOLUME, value)
+			)
+		} catch (_: Throwable) {
+		}
 	}
 
 	fun getVoiceParam(param: Int): Int = synchronized(guard) {
-		if (closed) -1 else EvvNative.getVoiceParam(handle, Eci.VOICE_CURRENT, param)
+		if (closed) return -1
+		return try {
+			EvvNative.getVoiceParam(handle, Eci.VOICE_CURRENT, param)
+		} catch (_: Throwable) {
+			-1
+		}
 	}
 
 	/** Hands a file to the engine's own dictionary loader. Nought is success. */
 	fun loadDictionary(volume: Int, path: String): Int = synchronized(guard) {
-		if (closed) -1 else EvvNative.loadDictionary(handle, volume, path)
+		if (closed) return -1
+		return try {
+			EvvNative.loadDictionary(handle, volume, path)
+		} catch (_: Throwable) {
+			-1
+		}
 	}
 
 	fun teachWord(volume: Int, key: String, say: String): Int = synchronized(guard) {
-		if (closed) -1 else EvvNative.teachWord(
-			handle, volume, WesternText.encode(key), WesternText.encode(say)
-		)
+		if (closed) return -1
+		return try {
+			EvvNative.teachWord(
+				handle, volume, WesternText.encode(key), WesternText.encode(say)
+			)
+		} catch (_: Throwable) {
+			-1
+		}
 	}
 
 	fun lookUpWord(volume: Int, key: String): String? = synchronized(guard) {
-		if (closed) null else EvvNative.lookUpWord(handle, volume, WesternText.encode(key))
+		if (closed) return null
+		return try {
+			EvvNative.lookUpWord(handle, volume, WesternText.encode(key))
+		} catch (_: Throwable) {
+			null
+		}
 	}
 
 	fun forgetDictionaries() = synchronized(guard) {
-		if (!closed) EvvNative.forgetDictionaries(handle)
+		if (closed) return
+		try {
+			EvvNative.forgetDictionaries(handle)
+		} catch (_: Throwable) {
+		}
 	}
 
 	/**
@@ -324,12 +422,21 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 	 * is stuck.
 	 */
 	fun read(into: ByteArray, timeoutMs: Int = READ_TIMEOUT_MS): Int {
-		if (closed) return -1
+		// Counted before anything is asked, and the handle is only touched
+		// once counted. [close] destroys the native instance as soon as the
+		// count reads nought, so a read that checked first and counted after
+		// would leave a window -- between the check and the count -- in
+		// which the instance could be destroyed under it, and the JNI call
+		// would then run on memory that is no longer an engine. Counting
+		// first closes it: whatever [close] sees, a read that might touch
+		// the handle is one it waits for.
 		reading.incrementAndGet()
 		try {
 			if (closed) return -1
+			val h = handle
+			if (h == 0L) return -1
 			return try {
-				EvvNative.read(handle, into, timeoutMs)
+				EvvNative.read(h, into, timeoutMs)
 			} catch (broken: Throwable) {
 				Log.e(TAG, "the read failed", broken)
 				-1
@@ -339,8 +446,19 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 		}
 	}
 
+	/**
+	 * Asks for silence. Never throws: this is called from the framework's
+	 * stop path, from the notification's button, and from the settings
+	 * screen, and none of them can do anything with a failure except die
+	 * of it. A stop that did not reach the engine is still answered --
+	 * every caller that cares also watches its own flag.
+	 */
 	fun stop() = synchronized(guard) {
-		if (!closed) EvvNative.stop(handle)
+		if (closed) return
+		try {
+			EvvNative.stop(handle)
+		} catch (_: Throwable) {
+		}
 	}
 
 	/**
@@ -363,10 +481,17 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 	fun close() = synchronized(guard) {
 		if (closed) return
 		closed = true
-		EvvNative.stop(handle)
+		try {
+			EvvNative.stop(handle)
+		} catch (_: Throwable) {
+		}
 		if (awaitReader()) {
-			EvvNative.destroy(handle)
+			val h = handle
 			handle = 0
+			try {
+				EvvNative.destroy(h)
+			} catch (_: Throwable) {
+			}
 			return
 		}
 		val orphan = handle
@@ -382,7 +507,10 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 				}
 				waited += CLOSE_POLL_MS.toInt()
 			}
-			EvvNative.destroy(orphan)
+			try {
+				EvvNative.destroy(orphan)
+			} catch (_: Throwable) {
+			}
 		}, "evv-close").also { it.isDaemon = true }.start()
 	}
 
