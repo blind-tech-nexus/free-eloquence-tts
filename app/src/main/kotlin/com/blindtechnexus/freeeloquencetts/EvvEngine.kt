@@ -65,6 +65,35 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 			if (!EvvNative.loaded) "" else runCatching { EvvNative.version() }.getOrDefault("")
 		}
 
+		/**
+		 * Whether [text] carries nothing the engine could say: whitespace
+		 * and backtick annotations only. A piece like that is skipped by the
+		 * caller rather than handed over, because an utterance of nothing is
+		 * a wait for audio that is never coming, not speech.
+		 */
+		fun isBlankSpeech(text: String): Boolean {
+			var i = 0
+			val n = text.length
+			while (i < n) {
+				val c = text[i]
+				if (c == '`') {
+					i++
+					while (i < n && !text[i].isWhitespace()) i++
+					continue
+				}
+				if (!c.isWhitespace()) return false
+				i++
+			}
+			return true
+		}
+
+		/**
+		 * The longest text one [speak] call takes. Pieces are hundreds of
+		 * characters; anything past this is a caller that lost its way, and
+		 * refusing it is cheaper than queueing it.
+		 */
+		const val MAX_SPEAK_CHARS = 256 * 1024
+
 		/** Makes an instance speaking [language], which is [Eci.ENGLISH_US]:
 		 *  the build carries that one module and the engine opens nothing
 		 *  else. */
@@ -137,10 +166,23 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 
 	/** What preset [index] (0 based, so 0 is Reed) is set to, without changing
 	 *  the voice being spoken in. This is what the settings screen shows, so a
-	 *  slider starts at the voice's own number rather than at one of ours. */
+	 *  slider starts at the voice's own number rather than at one of ours.
+	 *  Luna answers her base preset's numbers with her own shape laid over
+	 *  them, which is what she is spoken in. */
 	fun presetShape(index: Int): Map<Int, Int> = synchronized(guard) {
 		if (closed) return emptyMap()
+		if (index == Eci.LUNA_INDEX) {
+			val base = readPresetLocked(Eci.LUNA_BASE_PRESET)
+			if (base.isEmpty()) return Eci.LUNA_SHAPE
+			val out = LinkedHashMap<Int, Int>(base)
+			out.putAll(Eci.LUNA_SHAPE)
+			return out
+		}
 		val preset = (index + Eci.FIRST_PRESET).coerceIn(Eci.FIRST_PRESET, Eci.LAST_PRESET)
+		return readPresetLocked(preset)
+	}
+
+	private fun readPresetLocked(preset: Int): Map<Int, Int> {
 		val out = LinkedHashMap<Int, Int>()
 		for (param in 0 until Eci.NUM_VOICE_PARAMS) {
 			val value = EvvNative.getVoiceParam(handle, preset, param)
@@ -156,12 +198,21 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 	 * one into an editable number, change it there, and copy that onto the
 	 * voice being spoken in. Anything [shape] does not name keeps what the
 	 * preset had, which is why an empty map is the right thing to pass when
-	 * nobody has chosen otherwise.
+	 * nobody has chosen otherwise. Luna is copied from her base preset with
+	 * her own shape laid under the listener's, so she is herself until
+	 * somebody tunes her and keeps the tuning afterwards.
 	 */
 	fun applyVoice(index: Int, shape: Map<Int, Int> = emptyMap()) = synchronized(guard) {
 		if (closed) return
-		val preset = (index + Eci.FIRST_PRESET).coerceIn(Eci.FIRST_PRESET, Eci.LAST_PRESET)
+		val preset = if (index == Eci.LUNA_INDEX) Eci.LUNA_BASE_PRESET
+		else (index + Eci.FIRST_PRESET).coerceIn(Eci.FIRST_PRESET, Eci.LAST_PRESET)
 		EvvNative.copyVoice(handle, preset, Eci.SCRATCH_VOICE)
+		if (index == Eci.LUNA_INDEX) {
+			for ((param, value) in Eci.LUNA_SHAPE) {
+				if (param == Eci.VOICE_SPEED) continue
+				EvvNative.setVoiceParam(handle, Eci.SCRATCH_VOICE, param, Eci.clampVoice(param, value))
+			}
+		}
 		// The preset's own speed is not kept. Two of the eight ship faster than
 		// the rest, so leaving it would make changing voice change the pace.
 		EvvNative.setVoiceParam(
@@ -240,9 +291,23 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 	 * between the caller's check and the engine's queueing, which is an
 	 * utterance nobody reads while the next one queues behind it, and that
 	 * wait is exactly what a fast swipe used to feel like.
+	 *
+	 * Total: blank text, absurdly long text and anything the native side
+	 * throws are all answered with false rather than with an exception,
+	 * because a caller that hands over a bad piece must get its utterance
+	 * back, not lose the service.
 	 */
 	fun speak(text: String, isStopped: () -> Boolean = { false }): Boolean = synchronized(guard) {
-		if (closed || isStopped()) false else EvvNative.speak(handle, WesternText.encode(text))
+		if (closed || isStopped()) return false
+		return try {
+			if (text.isBlank() || text.length > MAX_SPEAK_CHARS) return false
+			val bytes = WesternText.encode(text)
+			if (bytes.isEmpty()) return false
+			EvvNative.speak(handle, bytes)
+		} catch (refused: Throwable) {
+			Log.e(TAG, "the engine refused the text", refused)
+			false
+		}
 	}
 
 	/**
@@ -263,7 +328,12 @@ class EvvEngine private constructor(private var handle: Long, val language: Int)
 		reading.incrementAndGet()
 		try {
 			if (closed) return -1
-			return EvvNative.read(handle, into, timeoutMs)
+			return try {
+				EvvNative.read(handle, into, timeoutMs)
+			} catch (broken: Throwable) {
+				Log.e(TAG, "the read failed", broken)
+				-1
+			}
 		} finally {
 			reading.decrementAndGet()
 		}

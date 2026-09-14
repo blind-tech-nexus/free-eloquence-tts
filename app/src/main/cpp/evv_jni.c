@@ -405,6 +405,14 @@ JNIEXPORT jboolean JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_sp
 	n = (*env)->GetArrayLength(env, text);
 	if (n <= 0)
 		return JNI_FALSE;
+	/* A piece is hundreds of bytes; anything past a quarter of a megabyte is
+	   a caller that lost its way, and refusing it is cheaper than feeding the
+	   engine a text that long -- not least because the buffer below grows to
+	   hold whatever it is given, and would keep the room afterwards. */
+	if (n > 256 * 1024) {
+		LOGE("the text is too long to speak (%d bytes)", (int)n);
+		return JNI_FALSE;
+	}
 	if (!wait_until_idle(in, SPEAK_IDLE_MS)) {
 		LOGE("the engine never left the previous utterance");
 		return finished(in);

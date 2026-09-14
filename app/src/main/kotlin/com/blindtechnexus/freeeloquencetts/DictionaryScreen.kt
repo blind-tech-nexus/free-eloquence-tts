@@ -1,5 +1,6 @@
 package com.blindtechnexus.freeeloquencetts
 
+import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,6 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,31 +40,43 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The dictionary manager, which is the whole of the dictionary feature.
  *
- * A dictionary is a list of pairs: a word as it is written, and what to say
- * instead. The list is on the screen, and each word is a stop of its own that
- * says both halves. Pressing a word opens a choice between editing it and
- * taking it away. Add word opens a small form, and a whole file can be
- * brought in or written out beside it.
+ * There are two kinds of words here. The words typed on this screen live in
+ * the one list, added, edited and taken away one at a time. A file brought
+ * in from elsewhere -- a .dict shared online, an export from another phone --
+ * is kept beside it under its own name instead of being poured into the same
+ * list: the imported dictionaries below say what came from where, and tapping
+ * one opens it, with every word it holds and the same options this screen
+ * has. Both are heard the next time anything is spoken.
  *
- * Every change is written to the dictionary file at once, and the speech
- * service reads that file's own revision on the next utterance, so a word added
- * here is heard the next time anything is spoken -- no restart, no save. A word
- * matches whatever capital letters it is written in: "DOJ" and "doj" are the
- * same entry, and both are heard.
+ * Every change is written at once, and the speech service notices the file's
+ * own revision on the next utterance, so there is no save and no restart. A
+ * word matches whatever capital letters it is written in: "DOJ" and "doj" are
+ * the same entry, and both are heard.
+ *
+ * Imports are streaming, which is what makes files of lakhs of words -- and
+ * the worst of them millions -- an import rather than a crash. The file is
+ * read a line at a time and written straight to its own file, the screen says
+ * how far it has got, and what does not fit is counted and reported rather
+ * than kept.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DictionaryScreen(onBack: () -> Unit) {
+fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 	val context = LocalContext.current
 	var words by remember { mutableStateOf(UserDictionary.words(context)) }
+	var files by remember { mutableStateOf(ExtraDictionaries.list(context)) }
+	var counts by remember { mutableStateOf(emptyMap<String, Int>()) }
 	var notice by remember { mutableStateOf("") }
 	var adding by remember { mutableStateOf(false) }
 	var editing by remember { mutableStateOf<Pair<String, String>?>(null) }
 	var editingForEdit by remember { mutableStateOf(false) }
+	var importing by remember { mutableStateOf<String?>(null) }
+	val cancelImport = remember { AtomicBoolean(false) }
 
 	fun refresh() {
 		words = try {
@@ -70,57 +84,101 @@ fun DictionaryScreen(onBack: () -> Unit) {
 		} catch (e: Exception) {
 			emptyList()
 		}
+		files = ExtraDictionaries.list(context)
 	}
 
-	val importFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-		if (uri != null) {
-			// Run heavy work off main thread to avoid ANR and crash
-			Thread {
-				val entries = try {
-					context.contentResolver.openInputStream(uri)?.use { input ->
-						// Try stream parse first (safe for huge files), fallback to decode
-						val streamEntries = UserDictionary.parseStream(input)
-						if (streamEntries.isNotEmpty()) streamEntries
-						else {
-							// Re-open because previous parse consumed stream
-							context.contentResolver.openInputStream(uri)?.use { input2 ->
-								val text = Dictionaries.decode(input2.readBytes())
-								UserDictionary.parse(text)
-							} ?: emptyList()
-						}
-					} ?: emptyList()
-				} catch (e: Exception) {
-					emptyList()
-				}
-				val taken = try {
-					if (entries.isEmpty()) 0 else UserDictionary.merge(context, entries)
-				} catch (e: Exception) {
-					0
-				}
-				// Back to main thread for UI
-				(context as? android.app.Activity)?.runOnUiThread {
-					try {
-						refresh()
-						notice = context.getString(
-							if (taken > 0) R.string.dictionary_imported else R.string.dictionary_import_nothing,
-							taken
-						)
-						Toast.makeText(context, notice, Toast.LENGTH_SHORT).show()
-					} catch (_: Exception) {
-						Toast.makeText(context, "Import failed", Toast.LENGTH_SHORT).show()
-					}
-				}
-			}.apply { isDaemon = true }.start()
-		}
+	fun recount() {
+		val names = files.map { it.name }
+		Thread {
+			val made = HashMap<String, Int>()
+			for (info in ExtraDictionaries.list(context)) {
+				if (info.name !in names) continue
+				made[info.name] = ExtraDictionaries.count(info)
+			}
+			(context as? android.app.Activity)?.runOnUiThread { counts = made }
+		}.apply { isDaemon = true }.start()
 	}
-	val exportFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+
+	// The counts are a pass over every file, which is work for a thread
+	// rather than for the composition -- and for after the screen is up,
+	// since the names are what is swiped through first.
+	LaunchedEffect(Unit) { recount() }
+
+	val importFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+		if (uri == null) return@rememberLauncherForActivityResult
+		if (ExtraDictionaries.list(context).size >= ExtraDictionaries.MAX_FILES) {
+			val said = context.getString(R.string.dictionary_files_full)
+			notice = said
+			Toast.makeText(context, said, Toast.LENGTH_SHORT).show()
+			return@rememberLauncherForActivityResult
+		}
+		val display = try {
+			context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+				val at = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+				if (at >= 0 && cursor.moveToFirst()) cursor.getString(at) else null
+			}
+		} catch (e: Exception) {
+			null
+		} ?: "dictionary"
+		cancelImport.set(false)
+		importing = context.getString(R.string.dictionary_importing, 0)
+		Thread {
+			val result = try {
+				context.contentResolver.openInputStream(uri)?.use { input ->
+					ExtraDictionaries.importStream(
+						context,
+						input,
+						display,
+						progress = { total, _ ->
+							val said = context.getString(R.string.dictionary_importing, total)
+							(context as? android.app.Activity)?.runOnUiThread {
+								importing = said
+							}
+						},
+						isCancelled = { cancelImport.get() }
+					)
+				}
+			} catch (e: Exception) {
+				null
+			}
+			(context as? android.app.Activity)?.runOnUiThread {
+				try {
+					importing = null
+					refresh()
+					val said = when {
+						result == null -> context.getString(R.string.dictionary_import_nothing)
+						result.truncated -> context.getString(
+							R.string.dictionary_imported_file_truncated,
+							result.kept,
+							result.total,
+							result.name
+						)
+						else -> context.getString(
+							R.string.dictionary_imported_file,
+							result.kept,
+							result.name
+						)
+					}
+					notice = said
+					Toast.makeText(context, said, Toast.LENGTH_SHORT).show()
+					recount()
+				} catch (_: Exception) {
+					Toast.makeText(context, "Import failed", Toast.LENGTH_SHORT).show()
+				}
+			}
+		}.apply { isDaemon = true }.start()
+	}
+	val exportFile = rememberLauncherForActivityResult(
+		ActivityResultContracts.CreateDocument("application/octet-stream")
+	) { uri ->
 		if (uri != null) {
+			val snapshot = words
 			Thread {
 				val exported = try {
 					context.contentResolver.openOutputStream(uri)?.use { sink ->
 						// Stream write to avoid building huge string
 						sink.bufferedWriter(Charsets.UTF_8).use { w ->
-							for ((word, say) in words) {
+							for ((word, say) in snapshot) {
 								if (word.isEmpty() || say.isEmpty()) continue
 								w.write(word.replace("\n", " ").replace("\t", " "))
 								w.write('\t'.code)
@@ -136,7 +194,7 @@ fun DictionaryScreen(onBack: () -> Unit) {
 				(context as? android.app.Activity)?.runOnUiThread {
 					try {
 						notice = if (exported) {
-							context.getString(R.string.dictionary_exported, words.size)
+							context.getString(R.string.dictionary_exported, snapshot.size)
 						} else {
 							context.getString(R.string.dictionary_export_failed)
 						}
@@ -204,6 +262,20 @@ fun DictionaryScreen(onBack: () -> Unit) {
 						)
 					}
 				}
+				importing?.let { progress ->
+					Gap(8.dp)
+					Row(modifier = Modifier.fillMaxWidth()) {
+						Text(
+							text = progress,
+							style = MaterialTheme.typography.bodyMedium,
+							modifier = Modifier.weight(1f)
+						)
+						Spacer(modifier = Modifier.width(8.dp))
+						TextButton(onClick = { cancelImport.set(true) }) {
+							Text(text = stringResource(R.string.cancel))
+						}
+					}
+				}
 			}
 
 			Gap(8.dp)
@@ -221,6 +293,29 @@ fun DictionaryScreen(onBack: () -> Unit) {
 						word = word,
 						say = say,
 						onPress = { editing = word to say }
+					)
+				}
+			}
+
+			Gap(16.dp)
+			SectionHeading(text = stringResource(R.string.dictionary_files_heading))
+			SectionText(text = stringResource(R.string.dictionary_files_description))
+			if (files.isEmpty()) {
+				Text(
+					text = stringResource(R.string.dictionary_files_empty),
+					style = MaterialTheme.typography.bodyMedium,
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(horizontal = 16.dp, vertical = 12.dp)
+				)
+			} else {
+				for (info in files) {
+					DictionaryFileRow(
+						name = info.name,
+						subtitle = counts[info.name]?.let {
+							context.getString(R.string.dictionary_file_words, it)
+						} ?: "",
+						onPress = { onOpenFile(info.name) }
 					)
 				}
 			}
@@ -288,7 +383,7 @@ fun DictionaryScreen(onBack: () -> Unit) {
 
 /** One word of the dictionary: what is written, and what is said. */
 @Composable
-private fun WordRow(word: String, say: String, onPress: () -> Unit) {
+internal fun WordRow(word: String, say: String, onPress: () -> Unit) {
 	Column(
 		modifier = Modifier
 			.fillMaxWidth()
@@ -308,9 +403,33 @@ private fun WordRow(word: String, say: String, onPress: () -> Unit) {
 	}
 }
 
+/** One imported dictionary: its name, and how many words it holds. */
+@Composable
+private fun DictionaryFileRow(name: String, subtitle: String, onPress: () -> Unit) {
+	Column(
+		modifier = Modifier
+			.fillMaxWidth()
+			.clickable(role = Role.Button, onClick = onPress)
+			.semantics(mergeDescendants = true) {
+				contentDescription = if (subtitle.isEmpty()) name else "$name, $subtitle"
+				role = Role.Button
+			}
+			.padding(horizontal = 16.dp, vertical = 12.dp)
+	) {
+		Text(text = name, style = MaterialTheme.typography.bodyLarge)
+		if (subtitle.isNotEmpty()) {
+			Text(
+				text = subtitle,
+				style = MaterialTheme.typography.bodyMedium,
+				color = MaterialTheme.colorScheme.onSurfaceVariant
+			)
+		}
+	}
+}
+
 /** The form for a word and what to say instead of it. */
 @Composable
-private fun WordDialog(
+internal fun WordDialog(
 	title: String,
 	word: String,
 	say: String,
@@ -372,7 +491,7 @@ private fun WordDialog(
 
 /** What to do with one word: change it, or take it away. */
 @Composable
-private fun WordOptionsDialog(
+internal fun WordOptionsDialog(
 	word: String,
 	onEdit: () -> Unit,
 	onDelete: () -> Unit,

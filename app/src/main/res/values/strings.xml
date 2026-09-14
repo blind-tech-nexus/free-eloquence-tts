@@ -30,6 +30,8 @@
 	<string name="main_system_action">Open system TTS settings</string>
 	<string name="main_about_description">About the app and developers.</string>
 	<string name="main_about_action">About</string>
+	<string name="main_audio_description">Type text and save it as an audio file spoken in your voice.</string>
+	<string name="main_audio_action">Audio generator</string>
 	<string name="main_system_unavailable">Cannot open system TTS settings on this device.</string>
 
 	<string name="battery_title">Battery exemption needed</string>
@@ -99,7 +101,20 @@
 	<string name="dictionary_add">Add word</string>
 	<string name="dictionary_import">Import file</string>
 	<string name="dictionary_export">Export file</string>
-	<string name="dictionary_export_name">alt-eloquence-dictionary.txt</string>
+	<string name="dictionary_export_name">eloquence-dictionary.dict</string>
+	<string name="dictionary_files_heading">Imported dictionaries</string>
+	<string name="dictionary_files_description">Files you imported. Tap one to open it.</string>
+	<string name="dictionary_files_empty">No imported files yet. Import one to keep it here under its own name.</string>
+	<string name="dictionary_files_full">No room for another dictionary. Delete one first.</string>
+	<string name="dictionary_importing">Importing %1$d words…</string>
+	<string name="dictionary_imported_file">Imported %1$d words into %2$s.</string>
+	<string name="dictionary_imported_file_truncated">Imported %1$d of %2$d words into %3$s. The rest did not fit.</string>
+	<string name="dictionary_file_words">%1$d words</string>
+	<string name="dictionary_file_delete_title">Delete dictionary?</string>
+	<string name="dictionary_file_delete_message">Delete %1$s and its %2$d words?</string>
+	<string name="dictionary_file_deleted">Deleted %1$s.</string>
+	<string name="dictionary_file_search_hint">Search words</string>
+	<string name="dictionary_file_showing">Showing %1$d of %2$d words. Search to find more.</string>
 	<string name="dictionary_empty">No words yet. Add one or import a file.</string>
 	<string name="dictionary_added">Added %1$s.</string>
 	<string name="dictionary_deleted">Deleted %1$s.</string>
@@ -167,6 +182,8 @@
 	<string name="capital_pitch">High pitch</string>
 	<string name="ssml_label">Remove tags</string>
 	<string name="ssml_description">Remove SSML tags so they are not spoken.</string>
+	<string name="text_styles_label">Read text styles</string>
+	<string name="text_styles_description">Announce bold, italic, links, colors and other styles in text that carries them.</string>
 	<string name="spelling_label">Spelling</string>
 	<string name="spelling_description">Say text letter by letter, on its own or in the phonetic alphabet.</string>
 	<string name="spelling_off">Normal</string>
@@ -206,8 +223,8 @@
 	<string name="battery_exemption_granted">Allowed</string>
 	<string name="battery_exemption_not_granted">Not allowed. Tap to allow.</string>
 	<string name="battery_exemption_description">Most important. Without this, voice stops when phone sleeps.</string>
-	<string name="persistent_notification_label">Keep notification</string>
-	<string name="persistent_notification_description">Show a notification to keep app awake.</string>
+	<string name="persistent_notification_label">Run in foreground even while not in use</string>
+	<string name="persistent_notification_description">On. Keeps the voice running when the phone is locked or the app is closed.</string>
 	<string name="notification_stop_label">Stop button</string>
 	<string name="notification_stop_description">Add stop button to notification.</string>
 	<string name="start_on_boot_label">Start after restart</string>
@@ -356,4 +373,19 @@
 
 	<string name="sample_text">Hello from Eloquence.</string>
 	<string name="preview_text">Hello from Eloquence. This is a test.</string>
+
+	<string name="audio_title">Audio generator</string>
+	<string name="audio_description">Type text, generate it in your voice, then share or save the audio.</string>
+	<string name="audio_text_hint">Text to speak</string>
+	<string name="audio_generate">Generate audio</string>
+	<string name="audio_generating">Generating… %1$d of %2$d characters.</string>
+	<string name="audio_ready">Audio ready. Share it or save it.</string>
+	<string name="audio_failed">Could not generate audio from this text.</string>
+	<string name="audio_empty">Type something first.</string>
+	<string name="audio_too_long">Text is too long. Keep it under %1$d characters.</string>
+	<string name="audio_share">Share</string>
+	<string name="audio_save">Save</string>
+	<string name="audio_saved">Saved.</string>
+	<string name="audio_save_failed">Could not save file.</string>
+	<string name="audio_file_name">eloquence-audio.wav</string>
 </resources>

@@ -9,7 +9,12 @@ package com.blindtechnexus.freeeloquencetts
  * - letter+opener: "abc~" -> "abc ~" etc
  * - "books (s)" -> "books(s)"
  * - space before punctuation: "hello ." -> "hello."
- * - grouped thousands ",000": "1,000,000" -> "1000000" (removes commas when pattern is thousands)
+ *
+ * Commas inside numbers are deliberately left alone: "10,000" stays "10,000",
+ * because a comma between digits says the number is read whole (see
+ * [Numbers], whose first rule is exactly that). Stripping them here would
+ * turn a formatted number into a long plain run and have it read digit by
+ * digit, which is the opposite of what the comma means.
  */
 object TextFixes {
 
@@ -25,14 +30,12 @@ object TextFixes {
 		var needOpener = false
 		var needBracket = false
 		var needMark = false
-		var needComma = false
 		for (c in text) {
 			if (!needLetterDigit && c.isLetter()) needLetterDigit = true
 			if (!needOpener && c in OPENERS_SET) needOpener = true
 			if (!needBracket && c == '(') needBracket = true
 			if (!needMark && c in MARKS) needMark = true
-			if (!needComma && c == ',') needComma = true
-			if (needLetterDigit && needOpener && needBracket && needMark && needComma) break
+			if (needLetterDigit && needOpener && needBracket && needMark) break
 		}
 		if (!needLetterDigit && !needOpener && !needBracket && !needMark) return text
 
@@ -41,20 +44,6 @@ object TextFixes {
 		var i = 0
 		while (i < n) {
 			val c = text[i]
-
-			// Handle grouped thousands: look ahead for digit(,ddd)+ pattern containing ,000
-			if (needComma && c.isDigit()) {
-				val tokenEnd = scanNumberWithCommas(text, i)
-				if (tokenEnd > i) {
-					val token = text.substring(i, tokenEnd)
-					if (isGroupedThousands(token)) {
-						// Remove commas
-						for (ch in token) if (ch != ',') out.append(ch)
-						i = tokenEnd
-						continue
-					}
-				}
-			}
 
 			// Handle spaces before marks and "(s)" - look ahead when we see whitespace
 			if (c.isWhitespace()) {
@@ -110,38 +99,4 @@ object TextFixes {
 		return out.toString()
 	}
 
-	private fun scanNumberWithCommas(text: String, start: Int): Int {
-		var j = start
-		var hasComma = false
-		while (j < text.length) {
-			val ch = text[j]
-			if (ch.isDigit()) j++
-			else if (ch == ',') { hasComma = true; j++ }
-			else break
-		}
-		// Must have at least one comma and not end with comma
-		if (!hasComma) return start
-		// Ensure token ends with digit, not comma
-		if (j > start && text[j - 1] == ',') j--
-		return j
-	}
-
-	private fun isGroupedThousands(token: String): Boolean {
-		// Pattern: \b\d{1,3},000(?:,\d{3})+\b
-		// Quick checks
-		if (!token.contains(',')) return false
-		if (!token.contains("000")) return false
-		val parts = token.split(',')
-		if (parts.size < 2) return false
-		if (parts[0].length !in 1..3) return false
-		if (!parts[0].all { it.isDigit() }) return false
-		// First after first must be 000
-		if (parts[1] != "000") return false
-		// Rest must be exactly 3 digits
-		for (k in 1 until parts.size) {
-			if (parts[k].length != 3) return false
-			if (!parts[k].all { it.isDigit() }) return false
-		}
-		return true
-	}
 }

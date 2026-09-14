@@ -93,6 +93,13 @@ class Settings(context: Context) {
 		get() = prefs.getBoolean(KEY_STRIP_SSML, true)
 		set(value) = prefs.edit().putBoolean(KEY_STRIP_SSML, value).apply()
 
+	/** Whether the styles carried in styled text are read out: bold, italic,
+	 *  underline, links, colours and the rest (see [TextStyles]). On by
+	 *  default, and silent for plain text, which carries no styles to read. */
+	var readTextStyles: Boolean
+		get() = prefs.getBoolean(KEY_READ_TEXT_STYLES, true)
+		set(value) = prefs.edit().putBoolean(KEY_READ_TEXT_STYLES, value).apply()
+
 	/** How a single capital letter is said. One of the [CapitalLetters]
 	 *  levels, and not a voice's business. */
 	var capitalMode: Int
@@ -174,14 +181,19 @@ class Settings(context: Context) {
 		set(value) = prefs.edit()
 			.putInt(KEY_SPELLING_MODE, value.coerceIn(Spelling.OFF, Spelling.CAPITALS_NATO)).apply()
 
-	/** Whether the keep-alive notification holds the engine in the foreground,
-	 *  so Android leaves it running in the background.
+	/** Whether the app runs in the foreground even while not in use.
+	 *
+	 * On by default: the keep-alive notification holds the engine in the
+	 * foreground whether or not anything is bound to it, so Android leaves
+	 * it running in the background -- and, just as important, keeps it
+	 * running when the phone is locked. A voice that stops the moment the
+	 * screen goes dark is a voice that is not there when it is needed.
 	 *
 	 * The notification belongs to the app rather than to the speech service,
 	 * which is what lets it stay up when nothing is bound to the engine: see
 	 * [KeepAliveService]. */
 	var persistentNotification: Boolean
-		get() = prefs.getBoolean(KEY_PERSISTENT_NOTIFICATION, false)
+		get() = prefs.getBoolean(KEY_PERSISTENT_NOTIFICATION, true)
 		set(value) = prefs.edit().putBoolean(KEY_PERSISTENT_NOTIFICATION, value).apply()
 
 	/** Whether the app and its notification come back by themselves after the
@@ -421,6 +433,7 @@ class Settings(context: Context) {
 		const val KEY_EMOJI = "emoji"
 		const val KEY_NUMBER_MODE = "number_mode"
 		const val KEY_STRIP_SSML = "strip_ssml"
+		const val KEY_READ_TEXT_STYLES = "read_text_styles"
 		const val KEY_CAPITAL_MODE = "capital_mode"
 		const val KEY_EXPAND_ABBREVIATIONS = "expand_abbreviations"
 		const val KEY_CODE_MODE = "code_mode"

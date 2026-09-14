@@ -1,5 +1,6 @@
 package com.blindtechnexus.freeeloquencetts
 
+import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
@@ -82,9 +83,11 @@ class SettingsTest {
 	}
 
 	/** The switches for the battery and stability screen are remembered, and
-	 *  each is off until somebody turns it on: a notification or a wake lock
-	 *  nobody asked for would be a surprise, and so would a log of what they
-	 *  never did. The notification check starts at three seconds -- the
+	 *  running in the foreground even while not in use is on until somebody
+	 *  turns it off: a voice that stops when the phone is locked is the
+	 *  failure it is for, and every other switch here starts off, since a
+	 *  wake lock or a log nobody asked for would be a surprise. The
+	 *  notification check starts at three seconds -- the
 	 *  promise the screen makes -- and a value nobody offered falls back to
 	 *  it rather than running wild. The foreground and wake lock properties
 	 *  are retired from the screen and fixed in Stability, but they still
@@ -92,7 +95,11 @@ class SettingsTest {
 	 *  parsing. */
 	@Test
 	fun theBatteryAndStabilitySwitchesRememberTheirState() {
-		assertFalse("the persistent notification starts on", settings.persistentNotification)
+		// The wipe in setUp writes the switch off, so the key is taken away
+		// first: what is asserted is the default, which is what a phone that
+		// never had the switch hears.
+		remove(Settings.KEY_PERSISTENT_NOTIFICATION)
+		assertTrue("running in the foreground starts off", settings.persistentNotification)
 		assertFalse("speaking in the foreground starts on", settings.foregroundWhileSpeaking)
 		assertFalse("the wake lock starts on", settings.wakeLock)
 		assertFalse("action tracking starts on", settings.trackActions)
@@ -118,6 +125,26 @@ class SettingsTest {
 			KeepAlive.CHECK_MS.toInt(),
 			settings.keepAliveCheckMs
 		)
+	}
+
+	/** Text styles are read until somebody says otherwise, and the answer is
+	 *  remembered either way. */
+	@Test
+	fun textStylesAreReadUntilSomebodySaysOtherwise() {
+		remove(Settings.KEY_READ_TEXT_STYLES)
+		assertTrue("reading text styles starts off", settings.readTextStyles)
+		settings.readTextStyles = false
+		assertFalse(settings.readTextStyles)
+		settings.readTextStyles = true
+		assertTrue(settings.readTextStyles)
+	}
+
+	/** Takes one key away, so the default underneath it can be heard. */
+	private fun remove(key: String) {
+		val context = InstrumentationRegistry.getInstrumentation().targetContext
+		DirectBoot.storage(context)
+			.getSharedPreferences("${context.packageName}_preferences", Context.MODE_PRIVATE)
+			.edit().remove(key).apply()
 	}
 
 	private fun wipe() {

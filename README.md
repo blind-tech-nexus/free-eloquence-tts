@@ -15,7 +15,7 @@ No warranty. See LICENSE, and read the part about language data before redistrib
 ## What works
 
 * One language, English (United States), spoken for every utterance whatever locale the caller named -- which is also what keeps a TTS router such as Auto TTS routing here instead of giving up at the probe. See [Language](#language).
-* Eight preset voices: Reed, Shelley, Bobby, Rocko, Glen, Sandy, Grandma, Grandpa. Offered through the Android voice API, so they appear separately.
+* Nine preset voices: Reed, Shelley, Bobby, Rocko, Glen, Sandy, Grandma, Grandpa, and Shelley, a second female voice with a sweeter shape of her own. Offered through the Android voice API, so they appear separately.
 * All eight voice parameters: speed, pitch, inflection, head size, roughness, breathiness, volume, gender.
 * Audio optimization above the sample rate: balanced, louder, or cleaner finishing of the samples. See [Audio optimization](#audio-optimization).
 * Speech rate and pitch from the system settings, with a switch to force this app's own over them.
@@ -26,6 +26,8 @@ No warranty. See LICENSE, and read the part about language data before redistrib
 * Spelling a word out, letter by letter or in the NATO phonetic alphabet, either always or only for a word written in capitals.
 * A document is spoken from its first sentence rather than from its last: see [A long text is streamed](#a-long-text-is-streamed).
 * A notification that keeps the engine in the foreground whether or not anything is bound to it, a stop button on it, and the same after a restart for whoever wants it: see [Keeping the voice alive](#keeping-the-voice-alive-when-nothing-is-speaking).
+* Text styles read out in words: bold, italic, links, colours and the rest, when the text carries them.
+* An audio generator: type text, speak it in your voice, and share or save the file.
 * An update channel, checked in the background on every launch, that ends at Android's own installer: see [Updates](#updates).
 * Android 6 and later. arm64-v8a, armeabi-v7a, x86_64.
 
@@ -102,7 +104,7 @@ The notification carries the app's only control that works while the engine is s
 
 One of them: *how often the notification is looked for*, two to ten seconds. The clock both holders check on; a phone that clears notifications aggressively wants the short end. It is a choice button rather than a slider, because the values that mean anything are a handful of measured ones and a bar between them invites a number that has no meaning.
 
-Everything the screen used to offer about speaking itself -- speaking in the foreground, the wake lock and how long it is held, how far ahead of the speech the samples may run, running further ahead on long text, giving the engine back when idle, and giving up after the engine goes silent -- is fixed in `Stability` and `Pacing` instead. None of those has a second good answer: a per-utterance foreground claim is binder traffic on the synthesis thread in front of every first syllable, a wake lock held per utterance is the same, a lead above a few hundred milliseconds is a queue of unheard speech the next swipe throws away (measured: 2229 ms of audio handed over in 700 ms of speaking without the limit, about 1000 ms with it), an engine given back has to be made again -- a second or so -- before the next thing is said, and a stuck engine should be noticed in five seconds rather than fifteen. The old properties are still in `Settings` so that preferences written by an earlier build keep parsing, but nothing reads them.
+Everything the screen used to offer about speaking itself -- speaking in the foreground, the wake lock and how long it is held, how far ahead of the speech the samples may run, running further ahead on long text, giving the engine back when idle, and giving up after the engine goes silent -- is fixed in `Stability` and `Pacing` instead. None of those has a second good answer: speech that stops the moment the screen goes dark is the failure the foreground claim and the wake lock are for, a lead above a few hundred milliseconds is a queue of unheard speech the next swipe throws away (measured: 2229 ms of audio handed over in 700 ms of speaking without the limit, about 1000 ms with it), an engine given back has to be made again -- a second or so -- before the next thing is said, and a stuck engine should be noticed in five seconds rather than fifteen. The old properties are still in `Settings` so that preferences written by an earlier build keep parsing, but nothing reads them. The one choice left on the screen is whether the app runs in the foreground even while not in use, on by default, which holds the protection whether anything is being spoken or not.
 
 Below the number, one paragraph says what is in force now -- whether the app's own service is holding the notification and whether notifications are allowed at all -- because the question this screen is opened to answer is not what was set but whether it is working.
 
@@ -166,7 +168,7 @@ Expand abbreviations is `eciDictionary`, which is inverted in the engine: zero t
 
 ## Dictionaries
 
-The dictionary manager is a list of the user's own words and what to say instead. Add, edit, remove, import and export; a word added is heard the next time anything is spoken, including on "Speak a sample". Matching does not care about capital letters: `doj` and `DOJ` are the same word, because IBM's own dictionary is case-sensitive and a screen reader hands over whatever case the control had, which is why a word added in the manager used to vanish in speech.
+The dictionary manager is a list of the user's own words and what to say instead. Add, edit, remove, import and export; a word added is heard the next time anything is spoken, including on "Speak a sample". Matching does not care about capital letters: `doj` and `DOJ` are the same word, because IBM's own dictionary is case-sensitive and a screen reader hands over whatever case the control had, which is why a word added in the manager used to vanish in speech. A file brought in from elsewhere is kept beside the list under its own name instead of being poured into it, and tapping it opens every word it holds with the same options; exports are `.dict` files, and imports are streaming, which is what makes files of lakhs of words -- and the worst of them millions -- an import rather than a crash.
 
 The files people share are text: a word, a tab, then either a respelling (`dee oe jeigh`) or a pronunciation in the engine's own alphabet (`` `[Ekspoz1e] ``). [mohamed00/altibmttsdictionaries](https://github.com/mohamed00/altibmttsdictionaries) has the English pair. An import is the same reading.
 
@@ -251,7 +253,7 @@ A dictionary of two hundred thousand words is a trie that takes a moment to buil
 
 The file carries a version beside it, in `words.dic.ver`, and every write moves the number on. A write hands the rebuild to a thread of its own -- one of them, daemon, named `evv-dictionary` -- and the utterance that follows compares one integer against the one its trie was built from. A match is the trie it already has, which is the ordinary case by a wide margin, because a write happens once and is spoken from a thousand times. A mismatch waits on a rebuild that was started before the utterance was, and is usually finished already.
 
-The version is what makes that safe rather than merely fast. Without it, a reader on the synthesis thread and a writer on another are racing over one file and the reader has no way to know it lost. With it, the trie and the number it was built from are published together under one lock, so a reader sees a pair that goes together or an older pair, and never a trie from one list against the version of another.
+The version is what makes that safe rather than merely fast. Without it, a reader on the synthesis thread and a writer on another are racing over one file and the reader has no way to know it lost. With it, the trie and the number it was built from are published together under one lock, so a reader sees a pair that goes together or an older pair, and never a trie from one list against the version of another. The imported dictionaries ride the same snapshot: the main list first and then every imported file, up to the same total between them all, with the files' own names, sizes and ages beside the version, so a file added, removed or rewritten rebuilds the trie on the next utterance.
 
 ## Speed
 
