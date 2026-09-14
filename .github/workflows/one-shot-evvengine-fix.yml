@@ -1,0 +1,97 @@
+name: One-shot EvvEngine fix
+
+on:
+  pull_request_target:
+    types: [reopened]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-verify:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/evvengine-unit-return'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Convert affected functions to block bodies
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/src/main/kotlin/com/blindtechnexus/freeeloquencetts/EvvEngine.kt')
+          text = path.read_text()
+
+          replacements = [
+              ('fun setAnnotations(on: Boolean) = synchronized(guard) {', 'fun setAnnotations(on: Boolean) {\n\t\tsynchronized(guard) {'),
+              ('fun setAbbreviations(on: Boolean) = synchronized(guard) {', 'fun setAbbreviations(on: Boolean) {\n\t\tsynchronized(guard) {'),
+              ('fun applyVoice(index: Int, shape: Map<Int, Int> = emptyMap()) = synchronized(guard) {', 'fun applyVoice(index: Int, shape: Map<Int, Int> = emptyMap()) {\n\t\tsynchronized(guard) {'),
+              ('fun setVolume(value: Int) = synchronized(guard) {', 'fun setVolume(value: Int) {\n\t\tsynchronized(guard) {'),
+          ]
+
+          for old, new in replacements:
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one occurrence of {old!r}')
+              text = text.replace(old, new, 1)
+
+          # The transformed outer functions need their own closing brace.
+          markers = [
+              'fun setAnnotations(on: Boolean) {\n',
+              'fun setAbbreviations(on: Boolean) {\n',
+              'fun applyVoice(index: Int, shape: Map<Int, Int> = emptyMap()) {\n',
+              'fun setVolume(value: Int) {\n',
+          ]
+
+          # Add `}` immediately after each affected synchronized block's existing closing brace.
+          for marker in markers:
+              start = text.index(marker)
+              next_fun = text.find('\n\tfun ', start + len(marker))
+              if next_fun == -1:
+                  next_fun = len(text)
+              block = text[start:next_fun]
+              if block.count('\n\t\t}\n\t}\n') < 1:
+                  raise SystemExit(f'Could not locate synchronized closing braces for {marker.strip()}')
+              block = block.replace('\n\t\t}\n\t}\n', '\n\t\t}\n\t}\n', 1)
+              # Existing closing brace closes synchronized; append one to close the function.
+              old_end = block.rfind('\n\t}\n')
+              block = block[:old_end] + '\n\t}\n\t}\n'
+              text = text[:start] + block + text[next_fun:]
+
+          path.write_text(text)
+          PY
+
+      - name: Compile Kotlin release
+        run: ./gradlew :app:compileReleaseKotlin --stacktrace
+
+      - name: Commit fixed source and remove temporary branch workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/evvengine-fix.yml || true
+          git add app/src/main/kotlin/com/blindtechnexus/freeeloquencetts/EvvEngine.kt
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: resolve EvvEngine Unit return type mismatches'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
+      - name: Remove one-shot workflow from main
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch origin main
+          git checkout main
+          git rm .github/workflows/one-shot-evvengine-fix.yml
+          git commit -m 'ci: remove one-shot EvvEngine fix runner'
+          git push origin main
