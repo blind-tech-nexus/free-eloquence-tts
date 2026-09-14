@@ -114,19 +114,29 @@ object Eci {
 	const val LUNA_BASE_PRESET = 2
 
 	/**
-	 * What makes Luna Luna: a sweet female voice, higher and brighter than
-	 * the preset underneath her, smooth rather than rough, with a breath of
-	 * softness in it. By the numbers eciSetVoiceParam takes, and applied
-	 * under anything the listener has chosen for her, so her own settings
-	 * still win where they exist.
+	 * What makes Luna Luna: a sweet, clearly female voice, higher and
+	 * brighter than the preset underneath her, smooth rather than rough,
+	 * with enough breath in it to sound soft and enough lilt to sound
+	 * alive. By the numbers eciSetVoiceParam takes, and applied under
+	 * anything the listener has chosen for her, so her own settings still
+	 * win where they exist.
+	 *
+	 * The numbers are chosen against the two complaints a flat female
+	 * voice earns: sounding male, and sounding robotic. What reads as
+	 * male is a low pitch on a large head, so the baseline sits high and
+	 * the head small; what reads as robotic is a monotone with an edge,
+	 * so the fluctuation is generous, the roughness is nearly nothing,
+	 * and the breathiness rounds what is left. The speed is deliberately
+	 * not here -- see [EvvEngine.applyVoice], which keeps every voice at
+	 * the listener's own pace.
 	 */
 	val LUNA_SHAPE: Map<Int, Int> = mapOf(
 		VOICE_GENDER to 1,
-		VOICE_PITCH_BASELINE to 72,
-		VOICE_PITCH_FLUCTUATION to 55,
-		VOICE_HEAD_SIZE to 28,
-		VOICE_ROUGHNESS to 8,
-		VOICE_BREATHINESS to 35,
+		VOICE_PITCH_BASELINE to 80,
+		VOICE_PITCH_FLUCTUATION to 65,
+		VOICE_HEAD_SIZE to 24,
+		VOICE_ROUGHNESS to 5,
+		VOICE_BREATHINESS to 42,
 		VOICE_VOLUME to 92
 	)
 

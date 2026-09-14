@@ -57,11 +57,25 @@
 
 /* How long speak waits for the previous utterance to leave the engine before
    it gives up and answers failure. The wait is normally milliseconds -- the
-   worker is either already idle or unwinding an aborted utterance -- so
-   reaching this means the engine is wedged rather than busy, and the caller
-   answers by giving the instance back instead of holding the synthesis thread
-   for the rest of the day. */
-#define SPEAK_IDLE_MS 3000
+   worker is either already idle or unwinding an aborted utterance, which
+   takes tens of milliseconds with the rules compiled -- so reaching this
+   means the engine is wedged rather than busy, and the caller answers by
+   giving the instance back instead of holding the synthesis thread. Short on
+   purpose: this wait holds the caller's lock, so a stop landing inside it
+   waits it out, and a swipe that waits is a swipe that feels late. Nothing is
+   reset on the way out -- see the timeout below -- so a slow-but-healthy
+   engine that did reach this would only cost its piece, never the instance. */
+#define SPEAK_IDLE_MS 1500
+
+/* How long destroy waits for the worker to come out of the engine before it
+   stops waiting and leaks the instance instead. The wait is normally nothing
+   at all -- the abort is what brings the worker out -- so reaching this means
+   the engine is wedged inside eciSynchronize and joining it would never
+   return. This call runs wherever the instance is given back, which includes
+   the main thread, where a join that never returns is an app that stops
+   responding and is killed. A leaked instance is memory; a hung main thread
+   is the voice gone. */
+#define DESTROY_JOIN_MS 5000
 
 typedef struct {
 	ECIHand         eci;
@@ -78,6 +92,8 @@ typedef struct {
 	pthread_t       worker;
 	pthread_cond_t  work;
 	int             running;
+	int             exited;
+	int             mono;
 	int             pending;
 	int             busy;
 	int             quitting;
@@ -91,6 +107,24 @@ typedef struct {
 
 static instance* unwrap(jlong handle) {
 	return (instance*)(intptr_t)handle;
+}
+
+/* The moment, on the clock this instance's waits run on. Monotonic wherever
+   the condition variables were made for it, because the wall clock jumps --
+   daylight saving, the network stepping it backwards -- and a wait measured
+   on a clock that jumps either never ends or ends at once, which is a hang
+   or a lost utterance made out of nothing. */
+static void now_for(instance* in, struct timespec* ts) {
+	clock_gettime(in->mono ? CLOCK_MONOTONIC : CLOCK_REALTIME, ts);
+}
+
+static void add_millis(struct timespec* ts, long millis) {
+	ts->tv_sec += millis / 1000;
+	ts->tv_nsec += (millis % 1000) * 1000000L;
+	if (ts->tv_nsec >= 1000000000L) {
+		ts->tv_nsec -= 1000000000L;
+		ts->tv_sec += 1;
+	}
 }
 
 static void put(instance* in, const unsigned char* src, size_t n) {
@@ -144,13 +178,17 @@ static void take(instance* in, unsigned char* dst, size_t n) {
  * own data. The same loop on one kept thread runs for hundreds. */
 static void* worker_loop(void* data) {
 	instance* in = (instance*)data;
-	struct timespec tick = { 0, 1000L * 1000L };
 	for (;;) {
 		int spins;
 		pthread_mutex_lock(&in->lock);
 		while (!in->pending && !in->quitting)
 			pthread_cond_wait(&in->work, &in->lock);
 		if (in->quitting) {
+			/* Said out loud, because destroy is waiting on exactly this:
+			   the flag is what turns its join into one that returns at
+			   once rather than one that might never return. */
+			in->exited = 1;
+			pthread_cond_broadcast(&in->work);
 			pthread_mutex_unlock(&in->lock);
 			return NULL;
 		}
@@ -173,12 +211,8 @@ static void* worker_loop(void* data) {
 			begun = in->started || in->aborted;
 			if (!begun) {
 				struct timespec until;
-				clock_gettime(CLOCK_REALTIME, &until);
-				until.tv_nsec += tick.tv_nsec;
-				if (until.tv_nsec >= 1000000000L) {
-					until.tv_nsec -= 1000000000L;
-					until.tv_sec += 1;
-				}
+				now_for(in, &until);
+				add_millis(&until, 1);
 				/* Counted as a waiter, because that is what the callback looks
 				   for before it goes to the trouble of a wake-up. The read is
 				   not the only thread that sleeps on this condition, and a
@@ -221,15 +255,30 @@ static jboolean finished(instance* in) {
 static int wait_until_idle(instance* in, long millis) {
 	struct timespec until;
 
-	clock_gettime(CLOCK_REALTIME, &until);
-	until.tv_sec += millis / 1000;
-	until.tv_nsec += (millis % 1000) * 1000000L;
-	if (until.tv_nsec >= 1000000000L) {
-		until.tv_nsec -= 1000000000L;
-		until.tv_sec += 1;
-	}
+	now_for(in, &until);
+	add_millis(&until, millis);
 	pthread_mutex_lock(&in->lock);
 	while (in->busy) {
+		if (pthread_cond_timedwait(&in->work, &in->lock, &until) == ETIMEDOUT) {
+			pthread_mutex_unlock(&in->lock);
+			return 0;
+		}
+	}
+	pthread_mutex_unlock(&in->lock);
+	return 1;
+}
+
+/* Waits for the worker to have left its loop, which is what makes joining it
+   return at once. The lock must not be held. Answers 1 when it left and 0
+   when the wait ran out first, in which case the caller detaches the thread
+   and leaks the instance rather than joining for ever. */
+static int wait_until_exited(instance* in, long millis) {
+	struct timespec until;
+
+	now_for(in, &until);
+	add_millis(&until, millis);
+	pthread_mutex_lock(&in->lock);
+	while (!in->exited) {
 		if (pthread_cond_timedwait(&in->work, &in->lock, &until) == ETIMEDOUT) {
 			pthread_mutex_unlock(&in->lock);
 			return 0;
@@ -243,18 +292,13 @@ static int wait_until_idle(instance* in, long millis) {
    the clock that let the caller go rather than the condition. The lock has to
    be held, as it is with any wait on a condition. */
 static int
-wait_millis(pthread_cond_t* cond, pthread_mutex_t* lock, long millis)
+wait_millis(instance* in, pthread_cond_t* cond, long millis)
 {
 	struct timespec until;
 
-	clock_gettime(CLOCK_REALTIME, &until);
-	until.tv_sec += millis / 1000;
-	until.tv_nsec += (millis % 1000) * 1000000L;
-	if (until.tv_nsec >= 1000000000L) {
-		until.tv_nsec -= 1000000000L;
-		until.tv_sec += 1;
-	}
-	return pthread_cond_timedwait(cond, lock, &until) == ETIMEDOUT;
+	now_for(in, &until);
+	add_millis(&until, millis);
+	return pthread_cond_timedwait(cond, &in->lock, &until) == ETIMEDOUT;
 }
 
 /* Runs on the engine's synthesis thread. It may not call back into the same
@@ -266,7 +310,12 @@ static int ECICALL on_message(ECIHand handle, ECIMessage message, int param, voi
 	if (message != eciWaveformBuffer)
 		return eciDataProcessed;
 	want = (size_t)param * sizeof(short);
-	if (want == 0)
+	/* Nothing the engine was asked for can be bigger than the ring, but a
+	   buffer that big would wait for room that can never arrive and wedge
+	   the worker on it, so anything out of range is dropped rather than
+	   queued. In practice this never fires; if it ever does, the utterance
+	   loses a frame rather than the engine losing the thread it runs on. */
+	if (want == 0 || want > RING_BYTES)
 		return eciDataProcessed;
 	pthread_mutex_lock(&in->lock);
 	while (!in->aborted && RING_BYTES - in->count < want)
@@ -322,13 +371,27 @@ JNIEXPORT jlong JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_creat
 		return 0;
 	}
 	pthread_mutex_init(&in->lock, NULL);
-	pthread_cond_init(&in->room, NULL);
-	pthread_cond_init(&in->filled, NULL);
-	pthread_cond_init(&in->work, NULL);
+	/* The waits run on the monotonic clock, which is the one that never
+	   jumps. Where the platform refuses that clock the waits fall back to
+	   the wall clock they always ran on, which is still a working engine
+	   on a phone whose time never moves under it. */
+	{
+		pthread_condattr_t attr;
+		pthread_condattr_init(&attr);
+		in->mono = pthread_condattr_setclock(&attr, CLOCK_MONOTONIC) == 0;
+		pthread_cond_init(&in->room, &attr);
+		pthread_cond_init(&in->filled, &attr);
+		pthread_cond_init(&in->work, &attr);
+		pthread_condattr_destroy(&attr);
+	}
 	eciRegisterCallback(in->eci, on_message, in);
 	if (!eciSetOutputBuffer(in->eci, FRAME_SAMPLES, in->frame)) {
 		LOGE("the engine refused the output buffer");
 		eciDelete(in->eci);
+		pthread_cond_destroy(&in->room);
+		pthread_cond_destroy(&in->filled);
+		pthread_cond_destroy(&in->work);
+		pthread_mutex_destroy(&in->lock);
 		free(in->scratch);
 		free(in->text);
 		free(in->ring);
@@ -338,6 +401,10 @@ JNIEXPORT jlong JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_creat
 	if (pthread_create(&in->worker, NULL, worker_loop, in) != 0) {
 		LOGE("no thread to run the engine on");
 		eciDelete(in->eci);
+		pthread_cond_destroy(&in->room);
+		pthread_cond_destroy(&in->filled);
+		pthread_cond_destroy(&in->work);
+		pthread_mutex_destroy(&in->lock);
 		free(in->scratch);
 		free(in->text);
 		free(in->ring);
@@ -363,10 +430,23 @@ JNIEXPORT void JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_destro
 	pthread_mutex_unlock(&in->lock);
 	/* The abort flag is what brings the worker out of the engine: the next
 	   buffer it is offered is answered eciDataAbort and eciSynchronize
-	   returns. Nothing is asked of the engine from this thread. */
+	   returns. Nothing is asked of the engine from this thread.
+	   The worker is waited for, but not for ever: a wedged engine never
+	   comes out of eciSynchronize, and a join that never returns on the
+	   thread that gives instances back is an app that stops responding.
+	   Past the wait the thread is detached and the instance is leaked --
+	   untouched, so that a worker which does come out later still finds
+	   its lock and its engine where it left them -- and the next utterance
+	   opens a fresh one instead of queuing behind this one for ever. */
 	if (in->running) {
-		pthread_join(in->worker, NULL);
-		in->running = 0;
+		if (wait_until_exited(in, DESTROY_JOIN_MS)) {
+			pthread_join(in->worker, NULL);
+			in->running = 0;
+		} else {
+			LOGE("the engine's thread never came out; the instance is leaked, not waited for");
+			pthread_detach(in->worker);
+			return;
+		}
 	}
 	/* A dictionary that is still in force when the instance goes is what
 	   crashed eciDelete: it walks the dictionaries it thinks are attached and
@@ -414,8 +494,16 @@ JNIEXPORT jboolean JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_sp
 		return JNI_FALSE;
 	}
 	if (!wait_until_idle(in, SPEAK_IDLE_MS)) {
+		/* The worker is still inside the engine from the utterance before,
+		   which means the engine is wedged rather than busy: unwinding an
+		   aborted utterance takes milliseconds. Nothing here is reset --
+		   marking this utterance over while that thread is still inside the
+		   engine would let the next one queue behind it, and two threads in
+		   eci calls at once is how an instance faults. The caller answers by
+		   giving the instance back, which is what unblocks the next
+		   utterance instead of holding it behind this one. */
 		LOGE("the engine never left the previous utterance");
-		return finished(in);
+		return JNI_FALSE;
 	}
 	pthread_mutex_lock(&in->lock);
 	in->aborted = 0;
@@ -485,7 +573,7 @@ JNIEXPORT jint JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_read(J
 		while (in->count == 0 && !in->done && !in->aborted) {
 			if (timeoutMs <= 0)
 				pthread_cond_wait(&in->filled, &in->lock);
-			else if (wait_millis(&in->filled, &in->lock, (long)timeoutMs) != 0) {
+			else if (wait_millis(in, &in->filled, (long)timeoutMs) != 0) {
 				timed_out = 1;
 				break;
 			}

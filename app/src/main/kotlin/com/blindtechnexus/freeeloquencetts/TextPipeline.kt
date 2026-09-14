@@ -44,19 +44,25 @@ object TextPipeline {
 		abbreviations: List<Abbreviations.Entry> = emptyList()
 	): String {
 		if (raw.isEmpty()) return raw
+		// Every step guarded on its own, against everything: a rewrite that
+		// throws -- on hostile input, on a text longer than anything tested
+		// -- costs its own change and never the utterance. Errors are caught
+		// alongside exceptions for the same reason: a stack overflow in a
+		// regular expression is still one step's failure, and the text it
+		// was given is still speakable without it.
 		var text = raw
-		try { if (s.stripSsml) text = Ssml.strip(text) } catch (_: Exception) {}
-		try { text = Emoji.apply(text, s.readEmoji) } catch (_: Exception) {}
-		try { text = UserDictionary.apply(text, words) } catch (_: Exception) {}
+		try { if (s.stripSsml) text = Ssml.strip(text) } catch (_: Throwable) {}
+		try { text = Emoji.apply(text, s.readEmoji) } catch (_: Throwable) {}
+		try { text = UserDictionary.apply(text, words) } catch (_: Throwable) {}
 		if (s.expandAbbreviations) {
-			try { text = Abbreviations.apply(text, abbreviations) } catch (_: Exception) {}
+			try { text = Abbreviations.apply(text, abbreviations) } catch (_: Throwable) {}
 		}
-		try { text = CodeReading.apply(text, s.codeOptions()) } catch (_: Exception) {}
-		try { text = TextFixes.apply(text) } catch (_: Exception) {}
-		try { text = Numbers.apply(text, s.numberMode) } catch (_: Exception) {}
-		try { text = CapitalLetters.apply(text, s.capitalMode) } catch (_: Exception) {}
-		try { text = Spelling.apply(text, s.spellingMode) } catch (_: Exception) {}
-		return try { Symbols.apply(text, s.symbolMode, s.customSymbols) } catch (_: Exception) { text }
+		try { text = CodeReading.apply(text, s.codeOptions()) } catch (_: Throwable) {}
+		try { text = TextFixes.apply(text) } catch (_: Throwable) {}
+		try { text = Numbers.apply(text, s.numberMode) } catch (_: Throwable) {}
+		try { text = CapitalLetters.apply(text, s.capitalMode) } catch (_: Throwable) {}
+		try { text = Spelling.apply(text, s.spellingMode) } catch (_: Throwable) {}
+		return try { Symbols.apply(text, s.symbolMode, s.customSymbols) } catch (_: Throwable) { text }
 	}
 
 	/**
@@ -91,7 +97,7 @@ object TextPipeline {
 	): Sequence<TextPieces.Piece> = TextPieces.pieceSequence(raw).map { piece ->
 		val said = try {
 			apply(piece.text, s, words, abbreviations)
-		} catch (_: Exception) {
+		} catch (_: Throwable) {
 			piece.text
 		}
 		// A piece the settings reduced to nothing is not an utterance, and

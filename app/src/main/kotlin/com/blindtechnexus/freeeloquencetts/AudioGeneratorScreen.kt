@@ -1,6 +1,7 @@
 package com.blindtechnexus.freeeloquencetts
 
 import android.content.Intent
+import android.media.MediaPlayer
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -63,9 +64,15 @@ fun AudioGeneratorScreen(onBack: () -> Unit) {
 	var notice by remember { mutableStateOf("") }
 	var generating by remember { mutableStateOf(false) }
 	var ready by remember { mutableStateOf<File?>(null) }
+	// What the playback button says: at rest it offers to play, while the
+	// file is sounding it offers to pause, paused it offers to go on, and
+	// heard out it offers to play again from the start.
+	var playback by remember { mutableStateOf(Playback.IDLE) }
+	val player = remember { Player() }
 
 	DisposableEffect(Unit) {
 		onDispose {
+			player.release()
 			generator.cancel()
 			settings.close()
 		}
@@ -97,8 +104,81 @@ fun AudioGeneratorScreen(onBack: () -> Unit) {
 		}.apply { isDaemon = true }.start()
 	}
 
+	/** Puts the player away and the button back to rest. */
+	fun stopPlayback() {
+		player.release()
+		playback = Playback.IDLE
+	}
+
+	/** Plays [file] from the start on a fresh player. */
+	fun startPlayback(file: File) {
+		player.release()
+		try {
+			val sounding = MediaPlayer()
+			sounding.setDataSource(file.absolutePath)
+			sounding.setOnCompletionListener { playback = Playback.DONE }
+			sounding.setOnErrorListener { _, _, _ ->
+				player.release()
+				playback = Playback.IDLE
+				val said = context.getString(R.string.audio_play_failed)
+				notice = said
+				Toast.makeText(context, said, Toast.LENGTH_SHORT).show()
+				true
+			}
+			sounding.prepare()
+			sounding.start()
+			player.media = sounding
+			playback = Playback.PLAYING
+		} catch (_: Throwable) {
+			player.release()
+			playback = Playback.IDLE
+			val said = context.getString(R.string.audio_play_failed)
+			notice = said
+			Toast.makeText(context, said, Toast.LENGTH_SHORT).show()
+		}
+	}
+
+	/** What the playback button does: pause while sounding, go on while
+	 *  paused, start over when heard out, and start when at rest. A player
+	 *  that refuses any of it is thrown away and a fresh one starts, so a
+	 *  button that did nothing is never the answer. */
+	fun togglePlayback() {
+		val file = ready ?: return
+		when (playback) {
+			Playback.PLAYING -> {
+				try {
+					player.media?.pause()
+					playback = Playback.PAUSED
+				} catch (_: Throwable) {
+					startPlayback(file)
+				}
+			}
+			Playback.PAUSED -> {
+				try {
+					player.media?.start()
+					playback = Playback.PLAYING
+				} catch (_: Throwable) {
+					startPlayback(file)
+				}
+			}
+			Playback.DONE -> {
+				try {
+					player.media?.seekTo(0)
+					player.media?.start()
+					playback = Playback.PLAYING
+				} catch (_: Throwable) {
+					startPlayback(file)
+				}
+			}
+			Playback.IDLE -> startPlayback(file)
+		}
+	}
+
 	fun generate() {
 		if (generating) return
+		// Whatever was sounding belongs to the file before this one: it
+		// stops now rather than talking over the generation.
+		stopPlayback()
 		if (input.isBlank()) {
 			val said = context.getString(R.string.audio_empty)
 			notice = said
@@ -128,6 +208,7 @@ fun AudioGeneratorScreen(onBack: () -> Unit) {
 			done = { file ->
 				if (mine != turn.get()) return@render
 				generating = false
+				playback = Playback.IDLE
 				ready = file
 				val said = if (file != null) {
 					context.getString(R.string.audio_ready)
@@ -206,6 +287,22 @@ fun AudioGeneratorScreen(onBack: () -> Unit) {
 				}
 				if (ready != null && !generating) {
 					Gap(8.dp)
+					OutlinedButton(
+						onClick = ::togglePlayback,
+						modifier = Modifier.fillMaxWidth()
+					) {
+						Text(
+							text = stringResource(
+								when (playback) {
+									Playback.PLAYING -> R.string.audio_pause
+									Playback.DONE -> R.string.audio_replay
+									else -> R.string.audio_play
+								}
+							),
+							style = MaterialTheme.typography.labelLarge
+						)
+					}
+					Gap(8.dp)
 					Row(modifier = Modifier.fillMaxWidth()) {
 						OutlinedButton(
 							onClick = ::share,
@@ -231,6 +328,41 @@ fun AudioGeneratorScreen(onBack: () -> Unit) {
 					}
 				}
 			}
+		}
+	}
+}
+
+/** What the playback button is offering. At rest it plays, while the file
+ *  is sounding it pauses, paused it goes on, and heard out it replays. */
+private enum class Playback {
+	IDLE, PLAYING, PAUSED, DONE
+}
+
+/**
+ * The player the button above talks to, held outside the composition so
+ * that redrawing the screen never touches it.
+ *
+ * Everything here runs on the main thread -- the button, the generation
+ * finishing, and the player calling back -- so there is nothing to race
+ * about. [release] answers in every state a MediaPlayer has, including
+ * none at all, which is what makes leaving the screen, starting over, and
+ * a file the player refused all safe in the same way.
+ */
+private class Player {
+
+	var media: MediaPlayer? = null
+
+	fun release() {
+		val sounding = media
+		media = null
+		if (sounding == null) return
+		try {
+			sounding.reset()
+		} catch (_: Throwable) {
+		}
+		try {
+			sounding.release()
+		} catch (_: Throwable) {
 		}
 	}
 }
