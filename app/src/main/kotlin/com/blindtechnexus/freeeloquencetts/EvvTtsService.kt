@@ -402,7 +402,19 @@ class EvvTtsService : TextToSpeechService() {
 				callback.error(TextToSpeech.ERROR_SERVICE)
 				return
 			}
-			say(target, request, callback, s)
+			try {
+				say(target, request, callback, s)
+			} catch (failed: Throwable) {
+				// The last resort, which say() itself should never reach:
+				// an utterance that throws its way out still owes the
+				// framework an answer, and the phone its next utterance.
+				Log.e(TAG, "the utterance was lost", failed)
+				try {
+					callback.error(TextToSpeech.ERROR_SYNTHESIS)
+				} catch (broken: Throwable) {
+					// Nothing left to tell.
+				}
+			}
 		} finally {
 			speaking.decrementAndGet()
 			afterAnUtterance()
@@ -427,7 +439,7 @@ class EvvTtsService : TextToSpeechService() {
 		if (speakForeground) { try { KeepAliveNotification.claim(this, s.notificationStopButton) } catch (_: Exception) {} }
 		val lock = acquireWakeLock()
 		try {
-			val rawText = request.charSequenceText?.toString().orEmpty()
+			val rawText = styledText(request, s)
 			if (rawText.isEmpty()) {
 				callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
 				callback.done()
@@ -441,102 +453,184 @@ class EvvTtsService : TextToSpeechService() {
 			val lead = Pacing.DEFAULT_MS.toLong()
 			val replacements = substitutions()
 
-			// The pieces, as a sequence rather than a list, and the whole of
-			// the difference is what a document does with it. A list is every
-			// piece cut and rewritten before the first one is spoken, so a
-			// chapter of a book is silence for as long as it takes to rewrite a
-			// chapter, and a person who swipes away a second in has paid for
-			// all of it and heard one sentence. A sequence rewrites the piece
-			// the utterance has reached, which puts the first syllable one
-			// piece of work -- a couple of hundred characters -- behind the
-			// request instead of one document behind it.
-			//
-			// Short text takes the road it always took: the whole of it through
-			// the pipeline and then cut, because a sentence that has been
-			// rewritten before it is cut is cut where the rewritten text says
-			// and not where the caller's did, and for a message that is the
-			// better answer.
-			val stream: Sequence<TextPieces.Piece> =
-				if (rawText.length > STREAM_FROM_CHARS) {
-					TextPipeline.pieces(rawText, s, replacements.words, replacements.abbreviations)
-				} else {
-					val text = try {
-						TextPipeline.apply(rawText, s, replacements.words, replacements.abbreviations)
-					} catch (_: Exception) {
-						rawText
+			// Everything from here to the last piece is one utterance, and an
+			// utterance that throws anywhere in the middle -- a sequence that
+			// misbehaves, a callback that tears itself down, an engine that
+			// wedges -- still owes the framework its finish and the phone its
+			// next utterance. So the whole of it sits inside one hand that
+			// catches everything: the utterance ends finished, the engine is
+			// given back, and the thread that drove it goes back to the
+			// framework unharmed. Whatever the mixed scripts of the world do
+			// to a piece, they do it to that utterance and to nothing after
+			// it.
+			try {
+				// The pieces, as a sequence rather than a list, and the whole of
+				// the difference is what a document does with it. A list is every
+				// piece cut and rewritten before the first one is spoken, so a
+				// chapter of a book is silence for as long as it takes to rewrite a
+				// chapter, and a person who swipes away a second in has paid for
+				// all of it and heard one sentence. A sequence rewrites the piece
+				// the utterance has reached, which puts the first syllable one
+				// piece of work -- a couple of hundred characters -- behind the
+				// request instead of one document behind it.
+				//
+				// Short text takes the road it always took: the whole of it through
+				// the pipeline and then cut, because a sentence that has been
+				// rewritten before it is cut is cut where the rewritten text says
+				// and not where the caller's did, and for a message that is the
+				// better answer.
+				val stream: Sequence<TextPieces.Piece> =
+					if (rawText.length > STREAM_FROM_CHARS) {
+						TextPipeline.pieces(rawText, s, replacements.words, replacements.abbreviations)
+					} else {
+						val text = try {
+							TextPipeline.apply(rawText, s, replacements.words, replacements.abbreviations)
+						} catch (_: Exception) {
+							rawText
+						}
+						if (text.isEmpty()) {
+							callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
+							callback.done()
+							return
+						}
+						TextPieces.pieceSequence(text)
 					}
-					if (text.isEmpty()) {
-						callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
-						callback.done()
-						return
-					}
-					TextPieces.pieceSequence(text)
-				}
 
-			// One piece of lookahead, held in hand rather than read from a
-			// list. The end of an utterance is where the engine's own pause
-			// goes and where no boundary pause is added, and a sequence cannot
-			// say which of its pieces is the last until it has asked for the
-			// one after it -- so the one after it is asked for here, spoken
-			// next, and held over. A reference, against a first syllable that
-			// used to wait for a document.
-			val iterator = stream.iterator()
-			var held: TextPieces.Piece? = try {
-				if (iterator.hasNext()) iterator.next() else null
-			} catch (broken: Exception) {
-				null
-			}
-			if (held == null) {
-				callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
-				callback.done()
-				return
-			}
-			// The level of this utterance, made once for it. The optimizer
-			// carries the utterance's own loudness from piece to piece, which
-			// is what keeps the voice even from the first piece to the last
-			// instead of swelling as it finds its feet on every one.
-			val optimizer = AudioOptimizer(s.audioOptimization, target.sampleRateHz)
-			while (!stopped) {
-				val piece = held ?: break
-				val next = try {
+				// One piece of lookahead, held in hand rather than read from a
+				// list. The end of an utterance is where the engine's own pause
+				// goes and where no boundary pause is added, and a sequence cannot
+				// say which of its pieces is the last until it has asked for the
+				// one after it -- so the one after it is asked for here, spoken
+				// next, and held over. A reference, against a first syllable that
+				// used to wait for a document.
+				val iterator = stream.iterator()
+				var held: TextPieces.Piece? = try {
 					if (iterator.hasNext()) iterator.next() else null
 				} catch (broken: Exception) {
 					null
 				}
-				val last = next == null
-				var audio = try { prosody + Pauses.apply(piece.text, s.pauses, last) } catch (_: Exception) { prosody + piece.text }
-				if (piece.forced && !last) audio += Pauses.AT_A_BOUNDARY
-				// Asked again here, after the text work above, because a stop
-				// lands in milliseconds and the work takes them: handing a
-				// doomed piece over queues an utterance nobody reads while the
-				// next one waits behind it. The fence inside speak() closes
-				// what is left of the window.
-				if (stopped) break
-				if (!target.speak(audio, isStopped = { stopped })) {
-					// A stopped utterance owes the framework nothing: done()
-					// here would report a cut utterance as heard out. A refusal
-					// anything else explains -- the engine wedged, the text
-					// refused -- is answered by giving the instance back, so
-					// the next utterance opens a fresh one instead of queuing
-					// behind whatever went wrong.
-					if (stopped) return
-					Log.e(TAG, "engine refused ${audio.length} chars")
-					engineIsSuspect = true
-					if (opening.began) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
+				if (held == null) {
+					callback.start(target.sampleRateHz, AudioFormat.ENCODING_PCM_16BIT, 1)
+					callback.done()
 					return
 				}
-				when (pump(target, callback, pace, opening, buffer, optimizer, Stability.ENGINE_SILENCE_MS, lead)) {
-					Pump.Next -> Unit
-					Pump.Over -> { remember(pace); finish(callback, opening); return }
-					Pump.Gone -> { remember(pace); return }
+				// The level of this utterance, made once for it. The optimizer
+				// carries the utterance's own loudness from piece to piece, which
+				// is what keeps the voice even from the first piece to the last
+				// instead of swelling as it finds its feet on every one.
+				val optimizer = AudioOptimizer(s.audioOptimization, target.sampleRateHz)
+				// Pieces that threw, in a row. One bad piece is skipped and the
+				// utterance goes on; a run of them is an engine that wants
+				// giving back, and the utterance ends finished rather than
+				// skipping its way through to nothing.
+				var failures = 0
+				while (!stopped) {
+					val piece = held ?: break
+					val next = try {
+						if (iterator.hasNext()) iterator.next() else null
+					} catch (broken: Exception) {
+						null
+					}
+					val last = next == null
+					var audio = try { prosody + Pauses.apply(piece.text, s.pauses, last) } catch (_: Exception) { prosody + piece.text }
+					if (piece.forced && !last) audio += Pauses.AT_A_BOUNDARY
+					// A piece that carries nothing to say -- whitespace, say,
+					// or pauses the settings annotated onto nothing -- is not
+					// handed over. An utterance of nothing is a wait for audio
+					// that is never coming, and the engine refusing it is a
+					// refusal the caller should never have invited.
+					if (EvvEngine.isBlankSpeech(audio)) {
+						held = next
+						continue
+					}
+					// Asked again here, after the text work above, because a stop
+					// lands in milliseconds and the work takes them: handing a
+					// doomed piece over queues an utterance nobody reads while the
+					// next one waits behind it. The fence inside speak() closes
+					// what is left of the window.
+					if (stopped) break
+					try {
+						if (!target.speak(audio, isStopped = { stopped })) {
+							// A stopped utterance owes the framework nothing: done()
+							// here would report a cut utterance as heard out. A refusal
+							// anything else explains -- the engine wedged, the text
+							// refused -- is answered by giving the instance back, so
+							// the next utterance opens a fresh one instead of queuing
+							// behind whatever went wrong.
+							if (stopped) return
+							Log.e(TAG, "engine refused ${audio.length} chars")
+							engineIsSuspect = true
+							if (opening.began) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
+							return
+						}
+						when (pump(target, callback, pace, opening, buffer, optimizer, Stability.ENGINE_SILENCE_MS, lead)) {
+							Pump.Next -> Unit
+							Pump.Over -> { remember(pace); finish(callback, opening); return }
+							Pump.Gone -> { remember(pace); return }
+						}
+						failures = 0
+					} catch (failed: Throwable) {
+						// One piece lost, out loud in the log, and the
+						// utterance goes on with the next: a bad piece must
+						// cost its own words and never the message around
+						// them, and never the service either.
+						Log.e(TAG, "a piece failed (${audio.length} chars) and was skipped", failed)
+						failures++
+						try {
+							target.stop()
+						} catch (broken: Throwable) {
+							// The engine is being given back anyway.
+						}
+						engineIsSuspect = true
+						if (failures >= MAX_PIECE_FAILURES) {
+							remember(pace)
+							finish(callback, opening)
+							return
+						}
+					}
+					held = next
 				}
-				held = next
+				remember(pace)
+				finish(callback, opening)
+			} catch (failed: Throwable) {
+				Log.e(TAG, "the utterance failed and was finished anyway", failed)
+				engineIsSuspect = true
+				try {
+					target.stop()
+				} catch (broken: Throwable) {
+					// The engine is being given back anyway.
+				}
+				remember(pace)
+				finish(callback, opening)
 			}
-			remember(pace)
-			finish(callback, opening)
 		} finally {
 			if (speakForeground) { try { KeepAliveNotification.release(this, detach = false) } catch (_: Exception) {} }
 			releaseWakeLock(lock)
+		}
+	}
+
+	/**
+	 * What the caller asked to be heard.
+	 *
+	 * The request carries a character sequence rather than a string, and a
+	 * sequence may carry styles along with the words -- bold, italic,
+	 * colours, links. With [Settings.readTextStyles] on those are read out
+	 * in words (see [TextStyles]); otherwise they are dropped the way they
+	 * always were. Total: a sequence that misbehaves answers the words
+	 * without it, and one that will not even do that answers nothing, which
+	 * the caller above finishes as an empty utterance rather than as a
+	 * service that died.
+	 */
+	private fun styledText(request: SynthesisRequest, s: Settings): String {
+		return try {
+			val sequence = request.charSequenceText ?: return ""
+			if (s.readTextStyles) TextStyles.annotate(sequence) else sequence.toString()
+		} catch (broken: Throwable) {
+			try {
+				request.charSequenceText?.toString().orEmpty()
+			} catch (failed: Throwable) {
+				""
+			}
 		}
 	}
 
@@ -643,11 +737,12 @@ class EvvTtsService : TextToSpeechService() {
 
 	/** What happens in the pause after an utterance: a suspect engine given
 	 *  back at once so that the next one opens fresh, the CPU held a little
-	 *  longer when that is asked for, and the engine given back after long
-	 *  enough idle. The last two are fixed off -- see [Stability] -- and
-	 *  their machinery stays for what it says rather than for what it does.
-	 *  This runs before the synthesis thread is free for the next request,
-	 *  so whatever it does delays the next first syllable by that much. */
+	 *  longer so a second utterance onto a locked phone finds it awake, and
+	 *  the engine given back after long enough idle. The last is fixed off
+	 *  -- see [Stability] -- and its machinery stays for what it says rather
+	 *  than for what it does. This runs before the synthesis thread is free
+	 *  for the next request, so whatever it does delays the next first
+	 *  syllable by that much. */
 	private fun afterAnUtterance() {
 		if (engineIsSuspect) {
 			engineIsSuspect = false
@@ -681,9 +776,10 @@ class EvvTtsService : TextToSpeechService() {
 
 	// ---- keeping the CPU awake ------------------------------------------
 
-	/** A partial wake lock, held across the utterance when that is asked for.
-	 *  Fixed off: asking for one per utterance is binder traffic on this
-	 *  thread in front of every first syllable. See [Stability]. */
+	/** A partial wake lock, held across the utterance. Without it a locked
+	 *  phone sleeps the CPU in the middle of synthesis, the waits time out
+	 *  one after another, and the utterance is given up on -- which reads as
+	 *  "locking the phone stops the speech". See [Stability]. */
 	private fun acquireWakeLock(): PowerManager.WakeLock? {
 		if (!Stability.WAKE_LOCK) return null
 		val held = wakeLock
@@ -833,8 +929,14 @@ class EvvTtsService : TextToSpeechService() {
 		const val DELIVER_TRIES = 2000
 		const val DELIVER_WAIT_MS = 1L
 
-		/** The longest an utterance may hold the wake lock before the system
-		 *  takes it back, as a ceiling rather than a course. */
-		const val WAKELOCK_TIMEOUT_MS = 10 * 60 * 1000L
+	/** The longest an utterance may hold the wake lock before the system
+	 *  takes it back, as a ceiling rather than a course. */
+	const val WAKELOCK_TIMEOUT_MS = 10 * 60 * 1000L
+
+	/** How many pieces in a row may throw before the utterance ends
+	 *  finished instead of skipping its way through to nothing. Three: one
+	 *  bad piece is an accident, two a coincidence, and three an engine that
+	 *  wants giving back. */
+	const val MAX_PIECE_FAILURES = 3
 	}
 }

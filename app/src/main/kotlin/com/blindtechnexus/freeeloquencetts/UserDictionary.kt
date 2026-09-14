@@ -44,7 +44,9 @@ object UserDictionary {
 	private const val NAME = "words.dic"
 	private const val VERSION_NAME = "words.dic.ver"
 	private const val MAX_LINE_LENGTH = 8192
-	private const val MAX_ENTRIES = 200_000
+	/** How many entries the speech between them all ever holds: the main
+	 *  list first, then the imported files, up to this many. */
+	const val MAX_ENTRIES = 200_000
 	private const val MAX_FILE_BYTES = 50L * 1024 * 1024 // 50 MB cap for safety
 
 	/** The version of the list on disk. Every write moves it on, and the
@@ -67,6 +69,11 @@ object UserDictionary {
 	 *  from one list against the version of another. */
 	@Volatile
 	private var builtVersion = Int.MIN_VALUE
+
+	/** What the trie above was built from: the main version together with
+	 *  the imported files' key, so either half moving is a rebuild. */
+	@Volatile
+	private var builtKey: String? = null
 
 	@Volatile
 	private var builtEntries: List<Pair<String, String>> = emptyList()
@@ -155,19 +162,35 @@ object UserDictionary {
 	/**
 	 * The list and its version, with the trie for it ready.
 	 *
-	 * Answers at once when the version has not moved, which is the case on
-	 * every utterance but the first after a change. When it has moved the
-	 * rebuild happens here, under [buildLock], so two threads asking at once
-	 * build it once between them; [rebuildAsync] is what keeps that from
-	 * usually being the synthesis thread.
+	 * Answers at once when nothing has moved, which is the case on every
+	 * utterance but the first after a change. When it has moved the rebuild
+	 * happens here, under [buildLock], so two threads asking at once build
+	 * it once between them; [rebuildAsync] is what keeps that from usually
+	 * being the synthesis thread.
+	 *
+	 * The list is the main list first and then every imported file (see
+	 * [ExtraDictionaries]), up to [MAX_ENTRIES] between them all, so a
+	 * library of dictionaries costs an utterance no more than the one list
+	 * ever did. What says something moved is the main version together with
+	 * the imported files' own key, which names every file, its size and its
+	 * age -- a file added, removed or rewritten is a key that no longer
+	 * matches, and the next utterance rebuilds.
 	 */
 	fun snapshot(context: Context): Snapshot {
 		ensureVersion(context)
 		val want = version
-		if (builtVersion == want) return Snapshot(want, builtEntries)
+		val key = want.toString() + ":" + ExtraDictionaries.combinedKey(context)
+		if (builtKey == key) return Snapshot(want, builtEntries)
 		synchronized(buildLock) {
-			if (builtVersion == want) return Snapshot(want, builtEntries)
-			val entries = words(context)
+			if (builtKey == key) return Snapshot(want, builtEntries)
+			val main = words(context)
+			val room = (MAX_ENTRIES - main.size).coerceAtLeast(0)
+			val entries = if (room > 0) {
+				val extra = ExtraDictionaries.allEntries(context, room)
+				if (extra.isEmpty()) main else main + extra
+			} else {
+				main
+			}
 			val made = WordReplacer(entries)
 			// The pipeline's own cache is primed from here rather than left to
 			// build it on the synthesis thread, and the list handed on is the
@@ -179,6 +202,7 @@ object UserDictionary {
 			builtMatcher = made
 			builtEntries = entries
 			builtVersion = want
+			builtKey = key
 			return Snapshot(want, entries)
 		}
 	}

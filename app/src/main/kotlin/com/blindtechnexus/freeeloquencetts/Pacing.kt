@@ -41,37 +41,45 @@ object Pacing {
  * that are no longer a choice.
  *
  * The "while speaking" section of the battery screen used to offer every one
- * of these. None of them has a second good answer -- a per-utterance
- * foreground claim is binder traffic on the synthesis thread in front of
- * every first syllable, a wake lock held per utterance is the same, a lead
- * above a few hundred milliseconds is a queue of unheard speech the next
- * swipe throws away, an engine given back has to be made again before the
- * next thing is said, and a stuck engine should be noticed in seconds rather
- * than in a quarter of a minute -- so the section is gone and the best
- * answers are fixed here, where the service reads them. [Settings] still
+ * of these. None of them has a second good answer -- speech that stops the
+ * moment the screen goes dark is the failure the foreground claim and the
+ * wake lock are for, a lead above a few hundred milliseconds is a queue of
+ * unheard speech the next swipe throws away, an engine given back has to be
+ * made again before the next thing is said, and a stuck engine should be
+ * noticed in seconds rather than in a quarter of a minute -- so the section
+ * is gone and the best answers are fixed here, where the service reads them.
+ * The one number on the battery screen that is still a choice is whether the
+ * app runs in the foreground even while not in use, which holds all of this
+ * protection whether anything is being spoken or not. [Settings] still
  * carries the old properties so that preferences written by an earlier build
  * keep parsing, but nothing reads them.
  */
 object Stability {
 
 	/** Whether the engine is held in the foreground while each utterance is
-	 *  being made. Fixed off: claiming and releasing the foreground around
-	 *  every utterance is two binder calls on the synthesis thread in front
-	 *  of every first syllable, and a service the system has bound speaks
-	 *  under that binding's own standing anyway. Whoever wants the
-	 *  protection has the persistent notification, which is held once rather
-	 *  than per utterance. */
-	const val FOREGROUND_WHILE_SPEAKING = false
+	 *  being made. Fixed on: a service the system has bound speaks under
+	 *  that binding's own standing while the phone is awake, but a locked
+	 *  phone owes a background service nothing, and speech that stops the
+	 *  moment the screen goes dark is the failure this is for. The claim is
+	 *  only made when the persistent notification is not already holding the
+	 *  foreground, so a phone that runs in the foreground anyway pays
+	 *  nothing per utterance. */
+	const val FOREGROUND_WHILE_SPEAKING = true
 
 	/** Whether the CPU is kept awake while an utterance is being made. Fixed
-	 *  off: acquiring a lock per utterance is binder traffic in front of
-	 *  every first syllable, and the audio already handed over is played
-	 *  under the playback's own holding. */
-	const val WAKE_LOCK = false
+	 *  on: without it a locked phone sleeps the CPU in the middle of
+	 *  synthesis, the waits time out one after another, and the utterance
+	 *  is given up on -- which reads as "locking the phone stops the
+	 *  speech". One lock held across the utterance, released in the same
+	 *  breath, so the cost is the speech and nothing after it. */
+	const val WAKE_LOCK = true
 
 	/** How long the CPU stays awake after the last thing said, in
-	 *  milliseconds. Fixed at nought, with the lock above it. */
-	const val WAKE_LOCK_TAIL_MS = 0
+	 *  milliseconds. Five seconds, so a second utterance that follows the
+	 *  first onto a locked phone finds the CPU still awake rather than
+	 *  paying to wake it; the system takes the lock back when the wait is
+	 *  over, so a silence that never ends costs nothing. */
+	const val WAKE_LOCK_TAIL_MS = 5000
 
 	/** How long an engine instance is kept after the last thing it said, in
 	 *  seconds. Fixed at nought, which is for ever: making a fresh instance

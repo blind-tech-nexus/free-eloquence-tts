@@ -94,11 +94,45 @@ object Eci {
 		return if (at >= 0) at else 1
 	}
 
-	/** The names the eight presets have gone by since Eloquence shipped. The
-	 *  engine numbers them 1 to 8 in this order. */
+	/** The names the eight presets have gone by since Eloquence shipped, and
+	 *  Luna after them. The engine numbers its own eight 1 to 8 in this
+	 *  order; Luna is this app's own ninth voice, built on one of them (see
+	 *  [LUNA_BASE_PRESET]) with a sweeter shape laid over it (see
+	 *  [LUNA_SHAPE]). */
 	val PRESET_NAMES = arrayOf(
-		"Reed", "Shelley", "Bobby", "Rocko", "Glen", "Sandy", "Grandma", "Grandpa"
+		"Reed", "Shelley", "Bobby", "Rocko", "Glen", "Sandy", "Grandma", "Grandpa", "Luna"
 	)
+
+	/** Where Luna sits in [PRESET_NAMES]. */
+	const val LUNA_INDEX = 8
+
+	/**
+	 * The engine preset Luna is built on, in the engine's own numbering 1
+	 * to 8: Shelley, the clear female voice, which is the closest of the
+	 * eight to what Luna is.
+	 */
+	const val LUNA_BASE_PRESET = 2
+
+	/**
+	 * What makes Luna Luna: a sweet female voice, higher and brighter than
+	 * the preset underneath her, smooth rather than rough, with a breath of
+	 * softness in it. By the numbers eciSetVoiceParam takes, and applied
+	 * under anything the listener has chosen for her, so her own settings
+	 * still win where they exist.
+	 */
+	val LUNA_SHAPE: Map<Int, Int> = mapOf(
+		VOICE_GENDER to 1,
+		VOICE_PITCH_BASELINE to 72,
+		VOICE_PITCH_FLUCTUATION to 55,
+		VOICE_HEAD_SIZE to 28,
+		VOICE_ROUGHNESS to 8,
+		VOICE_BREATHINESS to 35,
+		VOICE_VOLUME to 92
+	)
+
+	/** The gender a voice nobody has touched is: female for Luna, male for
+	 *  the rest, which is what their presets carry. */
+	fun defaultGender(index: Int): Int = if (index == LUNA_INDEX) 1 else 0
 
 	/**
 	 * The one language this app speaks: English (United States).

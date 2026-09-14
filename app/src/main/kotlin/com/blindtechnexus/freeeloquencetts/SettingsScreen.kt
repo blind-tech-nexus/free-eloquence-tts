@@ -393,6 +393,12 @@ private fun TextReading(state: SettingsModel) {
 		checked = state.stripSsml,
 		onChange = state::chooseStripSsml
 	)
+	SwitchRow(
+		label = stringResource(R.string.text_styles_label),
+		description = stringResource(R.string.text_styles_description),
+		checked = state.readTextStyles,
+		onChange = state::chooseReadTextStyles
+	)
 	val spellingModes = Spelling.MODES.map { stringResource(spellingNameOf(it)) }
 	ChoiceButton(
 		title = stringResource(R.string.spelling_label),

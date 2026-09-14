@@ -69,8 +69,8 @@ android {
 		applicationId = "com.blindtechnexus.freeeloquencetts"
 		minSdk = 23
 		targetSdk = 36
-		versionCode = 2
-		versionName = "1.2"
+		versionCode = 5
+		versionName = "1.5"
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 		ndk {
 			abiFilters += abis

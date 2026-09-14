@@ -65,11 +65,14 @@ class TextFixesTest {
 		assertEquals("word,", TextFixes.apply("word ,"))
 	}
 
+	/** The comma is what says "ten thousand" rather than "one zero zero zero
+	 *  zero", so it stays: the regrouping reads a comma grouping as the
+	 *  number whole, in every mode. */
 	@Test
-	fun commasComeOutOfRoundNumbers() {
-		assertEquals("1000000", TextFixes.apply("1,000,000"))
-		assertEquals("1000000 items", TextFixes.apply("1,000,000 items"))
-		assertEquals("2000000000", TextFixes.apply("2,000,000,000"))
+	fun commasStayInRoundNumbers() {
+		assertEquals("1,000,000", TextFixes.apply("1,000,000"))
+		assertEquals("1,000,000 items", TextFixes.apply("1,000,000 items"))
+		assertEquals("2,000,000,000", TextFixes.apply("2,000,000,000"))
 	}
 
 	/** Only a round thousand qualifies. 12,345 measured the same either way. */
@@ -105,7 +108,7 @@ class TextFixesTest {
 		try {
 			e!!.setSampleRate(11025)
 			e.applyVoice(0)
-			for (text in listOf("teamtalk5", "windows11", "hello(world)", "1,000,000")) {
+			for (text in listOf("teamtalk5", "windows11", "hello(world)")) {
 				val before = say(e, text)
 				val after = say(e, TextFixes.apply(text))
 				android.util.Log.e(TAG, "$text: $before then $after")

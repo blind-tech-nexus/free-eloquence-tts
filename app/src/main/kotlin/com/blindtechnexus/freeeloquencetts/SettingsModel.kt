@@ -87,6 +87,9 @@ class SettingsModel(context: Context) {
 	var stripSsml by mutableStateOf(settings.stripSsml)
 		private set
 
+	var readTextStyles by mutableStateOf(settings.readTextStyles)
+		private set
+
 	var capitalMode by mutableStateOf(settings.capitalMode)
 		private set
 
@@ -101,7 +104,7 @@ class SettingsModel(context: Context) {
 
 	private val shape = mutableStateMapOf<Int, Int>().apply { putAll(settings.shape(settings.voice)) }
 
-	val gender: Int get() = shape[Eci.VOICE_GENDER] ?: 0
+	val gender: Int get() = shape[Eci.VOICE_GENDER] ?: Eci.defaultGender(voice)
 
 	init {
 		preview.open {
@@ -220,6 +223,11 @@ class SettingsModel(context: Context) {
 	fun chooseStripSsml(on: Boolean) {
 		stripSsml = on
 		settings.stripSsml = on
+	}
+
+	fun chooseReadTextStyles(on: Boolean) {
+		readTextStyles = on
+		settings.readTextStyles = on
 	}
 
 	fun chooseCapitalMode(mode: Int) {

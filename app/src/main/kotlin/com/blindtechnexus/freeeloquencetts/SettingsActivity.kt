@@ -22,7 +22,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 
 /** Which of the screens is up. */
-internal enum class Destination { WELCOME, MAIN, SETTINGS, ABOUT, DICTIONARY, ABBREVIATIONS, BATTERY }
+internal enum class Destination {
+	WELCOME, MAIN, SETTINGS, ABOUT, DICTIONARY, DICTIONARY_FILE, ABBREVIATIONS, BATTERY, AUDIO
+}
 
 /**
  * The app's one activity, and the screens it shows.
@@ -66,6 +68,10 @@ class SettingsActivity : ComponentActivity() {
 	/** Where the activity came in, which is where the back key goes when there
 	 *  is no main screen behind the one that is up. */
 	private var enteredAt = Destination.MAIN
+
+	/** The imported dictionary the file screen is showing, named when it is
+	 *  opened and read by the composition. */
+	private var openDictionaryFile by mutableStateOf("")
 
 	/** Whether to say in so many words why the exemption is required. The
 	 *  system's screen is a yes or no with nothing said about it, and a yes
@@ -130,7 +136,8 @@ class SettingsActivity : ComponentActivity() {
 							onOpenSystemSpeechSettings = {
 								SystemSpeechSettings.open(this@SettingsActivity)
 							},
-							onAbout = { destination = Destination.ABOUT }
+							onAbout = { destination = Destination.ABOUT },
+							onAudio = { destination = Destination.AUDIO }
 						)
 						Destination.SETTINGS -> SettingsScreen(
 							state = remember { settingsModel() },
@@ -139,13 +146,25 @@ class SettingsActivity : ComponentActivity() {
 							onOpenAbbreviations = { destination = Destination.ABBREVIATIONS },
 							onOpenBattery = { destination = Destination.BATTERY }
 						)
-						Destination.DICTIONARY -> DictionaryScreen(onBack = ::back)
+						Destination.DICTIONARY -> DictionaryScreen(
+							onBack = ::back,
+							onOpenFile = { name ->
+								openDictionaryFile = name
+								destination = Destination.DICTIONARY_FILE
+							}
+						)
+						Destination.DICTIONARY_FILE -> DictionaryFileScreen(
+							name = openDictionaryFile,
+							onBack = ::back,
+							onDeleted = ::back
+						)
 						Destination.ABBREVIATIONS -> AbbreviationsScreen(onBack = ::back)
 						Destination.BATTERY -> BatteryScreen(
 							onBack = ::back,
 							onRequestExemption = ::requestTheExemption
 						)
 						Destination.ABOUT -> AboutScreen(onBack = ::back)
+						Destination.AUDIO -> AudioGeneratorScreen(onBack = ::back)
 					}
 					// Not over the welcome screen, which has a job of its own
 					// to finish first, and one at a time: two dialogs up at
@@ -207,6 +226,8 @@ class SettingsActivity : ComponentActivity() {
 			}
 			Destination.DICTIONARY, Destination.ABBREVIATIONS ->
 				destination = Destination.SETTINGS
+			Destination.DICTIONARY_FILE -> destination = Destination.DICTIONARY
+			Destination.AUDIO -> destination = Destination.MAIN
 			Destination.BATTERY ->
 				// The notification sent us here, and there is nothing behind it.
 				if (enteredAt == Destination.BATTERY) finish() else destination = Destination.SETTINGS

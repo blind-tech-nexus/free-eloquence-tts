@@ -10,9 +10,9 @@ import org.junit.runner.RunWith
  * The one road all text takes, in the order the engine must see it.
  *
  * Each piece has a test of its own; what is checked here is the order, which
- * is the thing a test of each piece in isolation would miss. The fixes run
- * before the numbers, so a grouped thousand is one run again before it is
- * regrouped; the capital annotation is added after the fixes, so nothing
+ * is the thing a test of each piece in isolation would miss. The fixes keep a
+ * grouped thousand grouped, so the regrouping sees the comma and reads the
+ * number whole; the capital annotation is added after the fixes, so nothing
  * walks into it; and the symbols run last, which is why a backtick annotation
  * survives them.
  */
@@ -32,8 +32,9 @@ class TextPipelineTest {
 	}
 
 	@Test
-	fun theThousandsCommaGoesBeforeTheRegrouping() {
-		assertEquals("1 0 0 0 0 0 0", apply("1,000,000", numbers = Numbers.DIGITS))
+	fun aGroupedThousandIsReadWhole() {
+		assertEquals("1,000,000", apply("1,000,000", numbers = Numbers.DIGITS))
+		assertEquals("10,000", apply("10,000", numbers = Numbers.PAIRS))
 	}
 
 	@Test
