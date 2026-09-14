@@ -2,7 +2,7 @@ name: One-shot EvvEngine fix
 
 on:
   pull_request_target:
-    types: [reopened]
+    types: [reopened, synchronize]
     branches: [main]
 
 permissions:
