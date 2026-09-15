@@ -3,7 +3,6 @@ package com.blindtechnexus.freeeloquencetts
 import android.graphics.Color
 import android.graphics.Typeface
 import android.text.Layout
-import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.text.SpannableString
 import android.text.style.AlignmentSpan
