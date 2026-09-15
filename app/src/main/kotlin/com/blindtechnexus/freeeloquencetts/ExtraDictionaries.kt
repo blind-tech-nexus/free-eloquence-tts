@@ -50,17 +50,36 @@ object ExtraDictionaries {
     const val MAX_FILES = 50
 
     /** How many entries one imported file keeps. What does not fit is
-     *  counted and reported, and the file is marked truncated. */
-    const val MAX_ENTRIES_PER_FILE = 200_000
+     *  counted and reported, and the file is marked truncated.
+     *
+     *  A million entries is around twenty megabytes of file and is what
+     *  [MAX_INPUT_BYTES] holds in the worst case anyway; the two are caps on
+     *  what is *kept*, and neither is a cap on what the speech is matched
+     *  against. That one is the index's own budget -- see
+     *  [UserDictionary.indexBudgetChars] -- and it is the smaller of the
+     *  three, so a file that fills this file up still leaves the engine
+     *  exactly the memory it had. */
+    const val MAX_ENTRIES_PER_FILE = 1_000_000
 
     /** How many bytes of an import are read before the rest is left
      *  unread. Past this the import is truncated whatever the entry count
-     *  says, because bytes are what the phone is out of. */
-    const val MAX_INPUT_BYTES = 60L * 1024 * 1024
+     *  says, because bytes are what the phone is out of -- and the bytes are
+     *  counted as they are written rather than as they are read, so this is
+     *  the size of the file that can result and not an estimate of it. */
+    const val MAX_INPUT_BYTES = 192L * 1024 * 1024
+
+    /** How much room has to be left on the phone before an import is
+     *  started. An import that fills the storage it is written to takes the
+     *  app's settings, its dictionaries and anything else the user had with
+     *  it, which is a worse answer than refusing the import. */
+    private const val KEEP_FREE_BYTES = 24L * 1024 * 1024
 
     private const val MAX_LINE_LENGTH = 8192
-    private const val MAX_WORD_LENGTH = 500
-    private const val MAX_SAY_LENGTH = 2000
+    /** The longest key and replacement a stored entry may have. The same
+     *  two numbers the index matches on, because an entry the index will not
+     *  take is an entry that would sit in the file and never be said. */
+    private const val MAX_WORD_LENGTH = WordIndex.MAX_KEY_CHARS
+    private const val MAX_SAY_LENGTH = WordIndex.MAX_SAY_CHARS
     private const val MAX_NAME_LENGTH = 80
 
     /** How many times the files have been written in this process. */
@@ -150,9 +169,42 @@ object ExtraDictionaries {
         keyAt = 0L
     }
 
+    /**
+     * Every imported file offered to the index being built, in the order the
+     * screen lists them, and none of them ever held.
+     *
+     * This is what the speech is matched against and the whole of why a
+     * dictionary of millions of words is possible: the files are read a line
+     * at a time, each line is offered to the builder and then dropped, and
+     * the reading stops the moment the builder has no room left. What is
+     * held at the end is the index and nothing else, so a file of a billion
+     * words costs the same as a file of a thousand -- and a file that cannot
+     * be read costs its own words and never the utterance.
+     */
+    fun indexInto(context: Context, builder: WordIndex.Builder, byteCap: Long) {
+        try {
+            for (info in list(context)) {
+                if (builder.roomLeft <= 0) return
+                var bytes = 0L
+                BufferedReader(InputStreamReader(FileInputStream(info.file), Charsets.UTF_8), 8192).use { reader ->
+                    while (builder.roomLeft > 0) {
+                        val line = reader.readLine() ?: break
+                        bytes += line.length + 1
+                        if (bytes > byteCap) break
+                        val parsed = parseLine(line) ?: continue
+                        builder.add(parsed.first, parsed.second)
+                    }
+                }
+            }
+        } catch (broken: Exception) {
+            // What was indexed is what is matched with.
+        }
+    }
+
     /** Every imported file's entries, up to [cap] of them, main list first
      *  being the caller's business. Streaming and capped: files past the cap
-     *  are not even opened. */
+     *  are not even opened. Kept for callers that want the pairs themselves
+     *  -- the speech service wants [indexInto], which holds none of them. */
     fun allEntries(context: Context, cap: Int): List<Pair<String, String>> {
         if (cap <= 0) return emptyList()
         val out = ArrayList<Pair<String, String>>(1024)
@@ -265,38 +317,40 @@ object ExtraDictionaries {
         raw: InputStream,
         displayName: String,
         progress: ((total: Int, kept: Int) -> Unit)? = null,
-        isCancelled: (() -> Boolean)? = null
+        isCancelled: (() -> Boolean)? = null,
+        cap: Int = MAX_ENTRIES_PER_FILE
     ): Result? {
         return try {
             val into = readyDir(context)
             if (list(context).size >= MAX_FILES) return null
+            val room = roomForImport(into)
+            if (room <= 0L) return null
             val target = uniqueFile(into, sanitize(displayName))
                 ?: return null
             val tmp = File(into, "${target.name}.tmp")
             val buffered = BufferedInputStream(raw, 32768)
             val charset = detect(buffered)
+            val written = ByteCounter(FileOutputStream(tmp))
             var kept = 0
             var total = 0
-            var bytes = 0L
             var truncated = false
             var failed = false
             try {
                 BufferedReader(InputStreamReader(buffered, charset), 8192).use { reader ->
-                    BufferedWriter(OutputStreamWriter(FileOutputStream(tmp), Charsets.UTF_8), 8192).use { writer ->
+                    BufferedWriter(OutputStreamWriter(written, Charsets.UTF_8), 8192).use { writer ->
                         while (true) {
                             val l = reader.readLine() ?: break
                             if (isCancelled?.invoke() == true) {
                                 failed = true
                                 break
                             }
-                            bytes += l.length + 1
-                            if (bytes > MAX_INPUT_BYTES) {
+                            if (written.count > room) {
                                 truncated = true
                                 break
                             }
                             val parsed = parseLine(l) ?: continue
                             total++
-                            if (kept >= MAX_ENTRIES_PER_FILE) {
+                            if (kept >= cap) {
                                 truncated = true
                                 continue
                             }
@@ -332,8 +386,7 @@ object ExtraDictionaries {
                 }
                 return null
             }
-            if (target.exists()) target.delete()
-            tmp.renameTo(target)
+            if (!put(tmp, target)) return null
             noteChanged()
             UserDictionary.rebuildAsync(context)
             Result(displayName(target.name), kept, total, truncated, target.length())
@@ -352,33 +405,53 @@ object ExtraDictionaries {
         name: String,
         raw: InputStream,
         progress: ((total: Int, kept: Int) -> Unit)? = null,
-        isCancelled: (() -> Boolean)? = null
+        isCancelled: (() -> Boolean)? = null,
+        cap: Int = MAX_ENTRIES_PER_FILE
     ): Result? {
         return try {
             val f = fileFor(context, name) ?: return null
-            var room = MAX_ENTRIES_PER_FILE - count(Info(name, f, f.length(), f.lastModified()))
+            var room = cap - count(Info(name, f, f.length(), f.lastModified()))
             if (room <= 0) return Result(name, 0, 0, true, f.length())
             val buffered = BufferedInputStream(raw, 32768)
             val charset = detect(buffered)
+            val tmp = File(f.parentFile, "${f.name}.tmp")
+            val written = ByteCounter(FileOutputStream(tmp))
+            val byteRoom = roomForImport(readyDir(context))
             var kept = 0
             var total = 0
-            var bytes = 0L
             var truncated = false
             var failed = false
             try {
+                // What is already there is copied in first, line by line, so
+                // that the import is written into a file of its own and put
+                // in place in one move: an import that is cancelled, or that
+                // fills the storage it is written to, leaves the dictionary
+                // it was adding to exactly as it was rather than with half
+                // of a line at the end of it.
+                BufferedReader(InputStreamReader(FileInputStream(f), Charsets.UTF_8), 8192).use { reader ->
+                    BufferedWriter(OutputStreamWriter(written, Charsets.UTF_8), 8192).use { writer ->
+                        while (true) {
+                            val l = reader.readLine() ?: break
+                            writer.write(l)
+                            writer.write('\n'.code)
+                        }
+                    }
+                }
+                // The bytes of the import are counted apart from the bytes of
+                // the copy and added to them, because the two phases write to
+                // the file through different streams: counting only the first
+                // would let a second import of a hundred gigabytes fill the
+                // phone without the check ever firing.
+                val appended = ByteCounter(FileOutputStream(tmp, true))
                 BufferedReader(InputStreamReader(buffered, charset), 8192).use { reader ->
-                    BufferedWriter(
-                        OutputStreamWriter(FileOutputStream(f, true), Charsets.UTF_8),
-                        8192
-                    ).use { writer ->
+                    BufferedWriter(OutputStreamWriter(appended, Charsets.UTF_8), 8192).use { writer ->
                         while (true) {
                             val l = reader.readLine() ?: break
                             if (isCancelled?.invoke() == true) {
                                 failed = true
                                 break
                             }
-                            bytes += l.length + 1
-                            if (bytes > MAX_INPUT_BYTES) {
+                            if (written.count + appended.count > byteRoom) {
                                 truncated = true
                                 break
                             }
@@ -406,7 +479,14 @@ object ExtraDictionaries {
             } catch (broken: Exception) {
                 failed = true
             }
-            if (failed) return null
+            if (failed) {
+                runCatching { tmp.delete() }
+                return null
+            }
+            // A truncated import is a short file and not a broken one: the
+            // last line written is a whole line, because the check above
+            // happens between lines rather than inside one.
+            if (!put(tmp, f)) return null
             noteChanged()
             UserDictionary.rebuildAsync(context)
             Result(name, kept, total, truncated, f.length())
@@ -437,8 +517,7 @@ object ExtraDictionaries {
                     w.write("\n")
                 }
             }
-            if (target.exists()) target.delete()
-            tmp.renameTo(target)
+            if (!put(tmp, target)) return false
             noteChanged()
             UserDictionary.rebuildAsync(context)
             true
@@ -448,34 +527,80 @@ object ExtraDictionaries {
     }
 
     fun add(context: Context, name: String, word: String, say: String): Boolean {
-        return try {
-            if (word.isBlank() || say.isBlank()) return false
-            val kept = entries(context, name).filterNot { it.first.equals(word, ignoreCase = true) }
-                .toMutableList()
-            if (kept.size >= MAX_ENTRIES_PER_FILE) return false
-            kept.add(word.trim() to say.trim())
-            write(context, name, kept)
-        } catch (broken: Exception) {
-            false
-        }
+        if (word.isBlank() || say.isBlank()) return false
+        return rewrite(context, name, { it.equals(word, ignoreCase = true) }, listOf(word.trim() to say.trim()))
     }
 
     fun remove(context: Context, name: String, word: String): Boolean {
-        return try {
-            write(context, name, entries(context, name).filterNot { it.first.equals(word, ignoreCase = true) })
-        } catch (broken: Exception) {
-            false
-        }
+        return rewrite(context, name, { it.equals(word, ignoreCase = true) }, emptyList())
     }
 
     fun replace(context: Context, name: String, oldWord: String, word: String, say: String): Boolean {
+        if (word.isBlank() || say.isBlank()) return false
+        return rewrite(
+            context,
+            name,
+            { it.equals(oldWord, ignoreCase = true) || it.equals(word, ignoreCase = true) },
+            listOf(word.trim() to say.trim())
+        )
+    }
+
+    /**
+     * One entry changed in the file [name], streamed rather than listed.
+     *
+     * The change used to be read, filtered and written back, which is a list
+     * of a million words in memory to change one of them. Here the file is
+     * read a line at a time into a file beside it, [drop] is asked of each
+     * word as it goes past, and the new entries are written at the end; the
+     * result then takes the place of what was there in one move. A line that
+     * is not an entry is kept as it was written.
+     */
+    private fun rewrite(
+        context: Context,
+        name: String,
+        drop: (String) -> Boolean,
+        add: List<Pair<String, String>>
+    ): Boolean {
         return try {
-            if (word.isBlank() || say.isBlank()) return false
-            val kept = entries(context, name).filterNot {
-                it.first.equals(oldWord, ignoreCase = true) || it.first.equals(word, ignoreCase = true)
-            }.toMutableList()
-            kept.add(word.trim() to say.trim())
-            write(context, name, kept)
+            val target = fileFor(context, name) ?: return false
+            val tmp = File(target.parentFile, "${target.name}.tmp")
+            var written = 0
+            val writer = BufferedWriter(OutputStreamWriter(FileOutputStream(tmp), Charsets.UTF_8), 8192)
+            try {
+                BufferedReader(InputStreamReader(FileInputStream(target), Charsets.UTF_8), 8192).use { reader ->
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        val parsed = parseLine(line)
+                        if (parsed == null) {
+                            writer.write(line)
+                            writer.write('\n'.code)
+                            continue
+                        }
+                        if (drop(parsed.first)) continue
+                        if (written >= MAX_ENTRIES_PER_FILE) continue
+                        writer.write(parsed.first)
+                        writer.write('\t'.code)
+                        writer.write(parsed.second)
+                        writer.write('\n'.code)
+                        written++
+                    }
+                }
+                for ((word, say) in add) {
+                    if (written >= MAX_ENTRIES_PER_FILE) break
+                    val parsed = parseLine(word + "\t" + say) ?: continue
+                    writer.write(parsed.first)
+                    writer.write('\t'.code)
+                    writer.write(parsed.second)
+                    writer.write('\n'.code)
+                    written++
+                }
+            } finally {
+                writer.close()
+            }
+            if (!put(tmp, target)) return false
+            noteChanged()
+            UserDictionary.rebuildAsync(context)
+            true
         } catch (broken: Exception) {
             false
         }
@@ -494,6 +619,58 @@ object ExtraDictionaries {
         } catch (broken: Exception) {
             false
         }
+    }
+
+    /** How many bytes of an import may be written before the rest of it is
+     *  left unread: the smaller of the file ceiling and what the phone has
+     *  free with room to spare. */
+    private fun roomForImport(into: File): Long {
+        val free = try {
+            into.usableSpace
+        } catch (broken: Exception) {
+            MAX_INPUT_BYTES
+        }
+        return Math.min(MAX_INPUT_BYTES, (free - KEEP_FREE_BYTES).coerceAtLeast(0L))
+    }
+
+    /** [tmp] put in the place of [target] in one move, with no moment in
+     *  which the dictionary does not exist: a rename, and a copy only for a
+     *  filesystem that refused the rename. */
+    private fun put(tmp: File, target: File): Boolean {
+        if (tmp.renameTo(target)) return true
+        return try {
+            tmp.inputStream().use { from ->
+                target.outputStream().use { to -> from.copyTo(to) }
+            }
+            tmp.delete()
+            true
+        } catch (failed: Exception) {
+            runCatching { tmp.delete() }
+            false
+        }
+    }
+
+    /** The bytes a stream has been given, counted as they go past rather than
+     *  estimated from the lines that produced them: what fills a phone's
+     *  storage is bytes, and a file of accented words is not the length of
+     *  its lines. */
+    private class ByteCounter(private val out: java.io.OutputStream) : java.io.OutputStream() {
+        var count = 0L
+            private set
+
+        override fun write(b: Int) {
+            out.write(b)
+            count++
+        }
+
+        override fun write(b: ByteArray, off: Int, len: Int) {
+            out.write(b, off, len)
+            count += len
+        }
+
+        override fun flush() = out.flush()
+
+        override fun close() = out.close()
     }
 
     /**

@@ -76,6 +76,12 @@ fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 	var files by remember { mutableStateOf(ExtraDictionaries.list(context)) }
 	var counts by remember { mutableStateOf(emptyMap<String, Int>()) }
 	var notice by remember { mutableStateOf("") }
+	// What the voice is actually matching with: how many of the dictionary's
+	// words are in force, and how many were left out for want of the room
+	// this phone's heap could give them. Counted rather than assumed,
+	// because the screen says "Imported 1,000,000 words" either way and the
+	// second number is the one that explains a word not being said.
+	var inForce by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 	// What the search box holds. Both lists below -- the words and the
 	// imported files -- answer it, whatever capital letters anything is
 	// written in.
@@ -107,10 +113,28 @@ fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 		}.apply { isDaemon = true }.start()
 	}
 
+	/** Asks the dictionary for the index it is matching with, off the main
+	 *  thread: a rebuild that is still running is waited for here, and the
+	 *  screen has the numbers of the last one until this answers. */
+	fun recountInForce() {
+		Thread {
+			val snapshot = try {
+				UserDictionary.snapshot(context)
+			} catch (broken: Exception) {
+				null
+			}
+			val made = snapshot?.let { it.index.size to it.dropped }
+			(context as? android.app.Activity)?.runOnUiThread { inForce = made }
+		}.apply { isDaemon = true }.start()
+	}
+
 	// The counts are a pass over every file, which is work for a thread
 	// rather than for the composition -- and for after the screen is up,
 	// since the names are what is swiped through first.
-	LaunchedEffect(Unit) { recount() }
+	LaunchedEffect(Unit) {
+		recount()
+		recountInForce()
+	}
 
 	val importFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
 		if (uri == null) return@rememberLauncherForActivityResult
@@ -153,6 +177,7 @@ fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 				try {
 					importing = null
 					refresh()
+			recountInForce()
 					val said = when {
 						result == null -> context.getString(R.string.dictionary_import_nothing)
 						result.truncated -> context.getString(
@@ -270,6 +295,17 @@ fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 						)
 					}
 				}
+					inForce?.let { (kept, dropped) ->
+					Gap(4.dp)
+					Text(
+						text = if (dropped > 0) {
+							stringResource(R.string.dictionary_in_force_some, kept, dropped)
+						} else {
+							stringResource(R.string.dictionary_in_force, kept)
+						},
+						style = MaterialTheme.typography.bodySmall
+					)
+				}
 				importing?.let { progress ->
 					Gap(8.dp)
 					Row(modifier = Modifier.fillMaxWidth()) {
@@ -375,6 +411,7 @@ fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 			onConfirm = { word, say ->
 				if (UserDictionary.add(context, word.trim(), say.trim())) {
 					refresh()
+			recountInForce()
 					val said = context.getString(R.string.dictionary_added, word.trim())
 					notice = said
 					Toast.makeText(context, said, Toast.LENGTH_SHORT).show()
@@ -394,6 +431,7 @@ fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 				onConfirm = { newWord, newSay ->
 					if (UserDictionary.replace(context, word, newWord.trim(), newSay.trim())) {
 						refresh()
+			recountInForce()
 						notice = context.getString(R.string.dictionary_updated, newWord.trim())
 						Toast.makeText(context, notice, Toast.LENGTH_SHORT).show()
 					}
@@ -410,6 +448,7 @@ fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 				onDelete = {
 					if (UserDictionary.remove(context, word)) {
 						refresh()
+			recountInForce()
 						notice = context.getString(R.string.dictionary_deleted, word)
 						Toast.makeText(context, notice, Toast.LENGTH_SHORT).show()
 					}

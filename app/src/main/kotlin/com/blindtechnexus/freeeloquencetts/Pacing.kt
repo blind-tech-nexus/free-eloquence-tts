@@ -94,10 +94,4 @@ object Stability {
 	 *  than that the text is long -- faster detection for low latency. */
 	const val ENGINE_SILENCE_MS = 3000
 
-	/** How often the notification is looked for and put back, in
-	 *  milliseconds. Two seconds is the short end for a phone that clears
-	 *  notifications aggressively, ten seconds the long end for one that
-	 *  leaves them alone, and three is what the screen has always promised.
-	 *  The one number on this screen that is still a choice. */
-	val NOTIFICATION_CHECKS = listOf(2000, 3000, 5000, 10000)
 }

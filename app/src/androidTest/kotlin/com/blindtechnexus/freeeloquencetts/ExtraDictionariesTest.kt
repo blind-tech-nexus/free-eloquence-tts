@@ -121,19 +121,27 @@ class ExtraDictionariesTest {
 
 	@Test
 	fun aFilePastTheLimitIsTruncatedNotCrashed() {
+		// The cap is what a file keeps rather than what an import reads --
+		// see [ExtraDictionaries.MAX_ENTRIES_PER_FILE] -- and it is a
+		// parameter here so that the test says the same thing about the
+		// truncation without writing a million lines to say it. What is
+		// checked is the promise: the file stops at the cap, the rest is
+		// counted rather than kept, and the import says so instead of
+		// throwing.
 		val lines = StringBuilder()
-		for (i in 0 until ExtraDictionaries.MAX_ENTRIES_PER_FILE + 1000) {
-			lines.append("w$i\ts$i\n")
-		}
+		for (i in 0 until 120) lines.append("w$i\ts$i\n")
 		val result = ExtraDictionaries.importStream(
 			context,
 			lines.toString().byteInputStream(),
-			"test-huge.dict"
+			"test-huge.dict",
+			cap = 100
 		)
 		assertNotNull(result)
 		made.add(result!!.name)
-		assertEquals(ExtraDictionaries.MAX_ENTRIES_PER_FILE, result.kept)
+		assertEquals(100, result.kept)
+		assertEquals(120, result.total)
 		assertTrue("the import did not say it was truncated", result.truncated)
+		assertTrue("the truncated file is longer than its cap", result.bytes < lines.length)
 	}
 
 	@Test

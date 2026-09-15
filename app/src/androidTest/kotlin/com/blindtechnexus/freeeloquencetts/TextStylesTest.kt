@@ -3,9 +3,13 @@ package com.blindtechnexus.freeeloquencetts
 import android.graphics.Color
 import android.graphics.Typeface
 import android.text.Layout
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.text.SpannableString
 import android.text.style.AlignmentSpan
 import android.text.style.BulletSpan
+import android.text.style.ClickableSpan
+import android.text.style.ImageSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.QuoteSpan
 import android.text.style.RelativeSizeSpan
@@ -16,6 +20,7 @@ import android.text.style.URLSpan
 import android.text.style.UnderlineSpan
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -119,6 +124,39 @@ class TextStylesTest {
 			"centered title end centered",
 			TextStyles.annotate(styled("title", AlignmentSpan.Standard(Layout.Alignment.ALIGN_CENTER)))
 		)
+	}
+
+	/** A page whose links are its own is still a page with links in it: the
+	 *  span Android uses for that is a ClickableSpan rather than a URLSpan,
+	 *  and the two sound the same to somebody listening. */
+	@Test
+	fun anyClickableSpanIsALink() {
+		val text = SpannableString("Press here now")
+		text.setSpan(object : ClickableSpan() {
+			override fun onClick(widget: android.view.View) = Unit
+		}, 6, 10, 0)
+		assertEquals("Press link here end link now", TextStyles.annotate(text))
+	}
+
+	/** A picture is not a word with a style on it, and the placeholder
+	 *  character it stands on is not a word at all. What is heard is the word
+	 *  image and what the page said the picture shows. */
+	@Test
+	fun anImageIsAnnouncedAndItsPlaceholderIsNot() {
+		val text = SpannableString("see \uFFFC here")
+		text.setSpan(ImageSpan(ColorDrawable(Color.RED), "a red square"), 4, 5, 0)
+		val said = TextStyles.annotate(text)
+		assertEquals("see image a red square here", said)
+		assertFalse("the placeholder was read out: $said", said.contains('\uFFFC'))
+	}
+
+	/** An image with nothing said about it is still an image, and still not a
+	 *  placeholder character in the middle of a sentence. */
+	@Test
+	fun anUndescribedImageIsStillAnImage() {
+		val text = SpannableString("see \uFFFC")
+		text.setSpan(ImageSpan(ColorDrawable(Color.RED)), 4, 5, 0)
+		assertEquals("see image", TextStyles.annotate(text))
 	}
 
 	@Test

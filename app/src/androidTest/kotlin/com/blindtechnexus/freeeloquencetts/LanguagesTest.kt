@@ -8,35 +8,55 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The one language: English (United States).
+ * The two languages: English (United States) and English (United Kingdom).
  *
- * This build carries exactly one language module and the app offers no choice
- * anywhere -- not on the settings screen, not in the stored preferences, and
- * not in what the service asks the engine for. So what is checked here is
- * small on purpose: the word is the engine's own, the spelling is the one
- * Android asks about, an instance opens in it, and the sample-rate table it
- * is synthesised at round-trips.
+ * This build carries both modules -- `lang/enus` and `lang/engb`, named
+ * together in the build script -- and both are offered: on the settings
+ * screen, in the voices the service answers with, and in what a caller can
+ * ask for by locale. So what is checked here is that the two numbers are the
+ * engine's own, that each has a name Android understands and a voice name to
+ * go with it, that an instance opens in either, and that the sample-rate
+ * table is shared by both.
  */
 @RunWith(AndroidJUnit4::class)
 class LanguagesTest {
 
 	@Test
-	fun theWordIsTheEnginesOwn() {
+	fun theWordsAreTheEnginesOwn() {
+		// eciGeneralAmericanEnglish and eciBritishEnglish, which differ in
+		// the one bit the dialect is written in.
 		assertEquals(0x00010000, Eci.ENGLISH_US)
+		assertEquals(0x00010001, Eci.ENGLISH_UK)
 	}
 
 	@Test
-	fun theFrameworkSpellingIsEngUsa() {
+	fun bothLanguagesAreOfferedWithAFrameworkSpellingAndAVoiceName() {
+		assertEquals(2, Eci.LANGUAGES.size)
 		assertEquals("eng", Eci.ISO3_LANGUAGE)
 		assertEquals("USA", Eci.ISO3_COUNTRY)
+		assertEquals("en", Eci.ISO2_LANGUAGE)
+		assertEquals(listOf("USA", "GBR"), Eci.LANGUAGES.map { it.iso3Country })
+		assertEquals(listOf("US", "GB"), Eci.LANGUAGES.map { it.iso2Country })
+		assertEquals("USA", Eci.countryOf(Eci.ENGLISH_US))
+		assertEquals("GBR", Eci.countryOf(Eci.ENGLISH_UK))
+		// A number no build knows answers with the American one rather than
+		// with nothing, so a bad preference is a voice and not a refusal.
+		assertEquals("USA", Eci.countryOf(0x0001FFFF))
+		assertEquals("eng-USA-Reed", Eci.voiceName(0))
+		assertEquals("eng-GBR-Reed", Eci.voiceName(0, Eci.ENGLISH_UK))
 	}
 
 	@Test
-	fun anInstanceOpensInIt() {
+	fun anInstanceOpensInEither() {
 		assertTrue("the native library did not load: ${EvvNative.loadError}", EvvNative.loaded)
-		val e = EvvEngine.open(Eci.ENGLISH_US)
-		assertNotNull("US English would not open", e)
-		e?.close()
+		for (language in Eci.LANGUAGES) {
+			val e = EvvEngine.open(language.code)
+			assertNotNull("${language.label} would not open", e)
+			if (e != null) {
+				assertEquals("the instance speaks another language", language.code, e.language)
+				e.close()
+			}
+		}
 	}
 
 	@Test

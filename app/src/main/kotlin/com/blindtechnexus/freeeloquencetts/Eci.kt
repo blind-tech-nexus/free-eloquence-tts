@@ -108,10 +108,19 @@ object Eci {
 
 	/**
 	 * The engine preset Luna is built on, in the engine's own numbering 1
-	 * to 8: Shelley, the clear female voice, which is the closest of the
-	 * eight to what Luna is.
+	 * to 8: Sandy, Adult Female 2. Shelley -- Adult Female 1 -- was the base
+	 * before her, and the trouble with Shelley was exactly the trouble this
+	 * is meant to fix: a voice built on the same preset as another voice
+	 * sounds like that voice, however much is laid over the top of it. Two
+	 * female voices that differ by a few numbers are two takes of one
+	 * recording; two that start from different presets are two voices.
+	 *
+	 * Both are female, so this is not a choice about gender -- it is a choice
+	 * about which of the two the shape below is then pushed away from. Sandy
+	 * is the brighter of the two, and a bright voice pushed brighter is
+	 * unmistakably not the other one.
 	 */
-	const val LUNA_BASE_PRESET = 2
+	const val LUNA_BASE_PRESET = 6
 
 	/**
 	 * What makes Luna Luna: a sweet, clearly female voice, higher and
@@ -132,38 +141,108 @@ object Eci {
 	 */
 	val LUNA_SHAPE: Map<Int, Int> = mapOf(
 		VOICE_GENDER to 1,
-		VOICE_PITCH_BASELINE to 80,
-		VOICE_PITCH_FLUCTUATION to 65,
-		VOICE_HEAD_SIZE to 24,
-		VOICE_ROUGHNESS to 5,
-		VOICE_BREATHINESS to 42,
+		VOICE_PITCH_BASELINE to 92,
+		VOICE_PITCH_FLUCTUATION to 70,
+		VOICE_HEAD_SIZE to 12,
+		VOICE_ROUGHNESS to 3,
+		VOICE_BREATHINESS to 38,
 		VOICE_VOLUME to 92
 	)
+
+	/**
+	 * What the two numbers that carry a voice's gender are doing, since
+	 * neither of them is called gender and both were tuned by ear rather
+	 * than by name.
+	 *
+	 * The engine's gender parameter is a label: it tells a caller what the
+	 * voice is and changes nothing about how it sounds. What a listener
+	 * hears as female is a small head -- shorter vocal folds and a shorter
+	 * tract, so higher formants, which is the timbre and not the pitch --
+	 * and a pitch baseline sitting high in the voice's own range. So Luna
+	 * takes the smallest head and the highest baseline the presets allow,
+	 * and the numbers around them are what keep that from sounding like a
+	 * caricature: the fluctuation gives her a lilt rather than a monotone,
+	 * the roughness is nearly nothing so nothing gravels up the top of the
+	 * range, and the breathiness rounds off the edge that a hard pitch
+	 * alone would have.
+	 *
+	 * [VOICE_SPEED] is deliberately absent: speed belongs to the listener,
+	 * not to any voice. See [EvvEngine.applyVoice].
+	 */
 
 	/** The gender a voice nobody has touched is: female for Luna, male for
 	 *  the rest, which is what their presets carry. */
 	fun defaultGender(index: Int): Int = if (index == LUNA_INDEX) 1 else 0
 
 	/**
-	 * The one language this app speaks: English (United States).
+	 * The two languages this app speaks: English as it is spoken in the
+	 * United States, and English as it is spoken in the United Kingdom.
 	 *
-	 * The engine this is built on can be compiled with several languages, but
-	 * this build carries exactly one module -- `LANGS` in the build script
-	 * names only lang/enus, and not overridably -- and the app offers exactly
-	 * one voice in it. There is no
-	 * language setting anywhere: not on the settings screen, not in the stored
-	 * preferences, and not in what the service asks the engine for. Every
-	 * utterance is synthesised in this language, whatever locale the caller
-	 * named, which is also what keeps the engine instance open for ever
-	 * instead of being closed and remade -- at about a second a time --
-	 * whenever a screen reader alternates between two languages.
+	 * The numbers are the engine's own -- `eciGeneralAmericanEnglish` and
+	 * `eciBritishEnglish` in its src/include/eci.h -- and the modules behind
+	 * them are the engine's own directories, `lang/enus` and `lang/engb`,
+	 * which the build script names and the Makefile compiles. The words are
+	 * IBM's and not ours: the family is the top half, the code set the third
+	 * byte and the dialect the bottom one, so the two differ in one bit and
+	 * speak in two accents.
+	 *
+	 * Both are carried, both are offered, and neither is closed to make room
+	 * for the other: a screen reader that reads an American page and then a
+	 * British one must not pay a second of silence between them, which is
+	 * what remaking an instance costs. See [EvvTtsService].
 	 */
 	const val ENGLISH_US = 0x00010000
+	const val ENGLISH_UK = 0x00010001
 
-	/** The ISO-3 language and country English (United States) answers to,
-	 *  which is what Android asks about. */
+	/** One language the app speaks: the engine's own number for it, the two
+	 *  spellings Android asks about, and what to call it on a screen. */
+	class Language(
+		val code: Int,
+		val iso3Country: String,
+		val iso2Country: String,
+		val label: String
+	)
+
+	/** Both of them, the American first, which is what every list that does
+	 *  not say otherwise is ordered by. */
+	val LANGUAGES = listOf(
+		Language(ENGLISH_US, "USA", "US", "English (United States)"),
+		Language(ENGLISH_UK, "GBR", "GB", "English (United Kingdom)")
+	)
+
+	/** The ISO-3 language both of them answer to, which is what Android asks
+	 *  about. */
 	const val ISO3_LANGUAGE = "eng"
+
+	/** The two-letter language, for a [java.util.Locale]. */
+	const val ISO2_LANGUAGE = "en"
+
+	/** The ISO-3 country of [language], or the American one for a number
+	 *  this build does not know: an answer that is always one of the two
+	 *  supported rather than nothing at all. */
+	fun countryOf(language: Int): String =
+		LANGUAGES.firstOrNull { it.code == language }?.iso3Country ?: "USA"
+
+	/** The same question with the two letters [java.util.Locale] wants. */
+	fun iso2CountryOf(language: Int): String =
+		LANGUAGES.firstOrNull { it.code == language }?.iso2Country ?: "US"
+
+	/** The one of the two [code] names, or the American one for anything
+	 *  else, so that a preference written by another build or edited by hand
+	 *  is a voice rather than a refusal. */
+	fun languageOf(code: Int): Language =
+		LANGUAGES.firstOrNull { it.code == code } ?: LANGUAGES[0]
+
+	/** The ISO-3 country the default voice name is built from, kept as its
+	 *  own name because it is what the service answered before there were
+	 *  two and what anything holding a voice name still expects. */
 	const val ISO3_COUNTRY = "USA"
+
+	/** What a name of one of this app's voices is built from: the engine's
+	 *  language, a dash, the country and the preset. The same shape as the
+	 *  American one has always had, extended to the British one. */
+	fun voiceName(preset: Int, language: Int = ENGLISH_US): String =
+		"eng-" + countryOf(language) + "-" + PRESET_NAMES[preset]
 
 	/**
 	 * How the engine raises its own eleven thousand and twenty five hertz to a

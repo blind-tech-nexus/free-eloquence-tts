@@ -9,6 +9,9 @@ package com.blindtechnexus.freeeloquencetts
  * - letter+opener: "abc~" -> "abc ~" etc
  * - "books (s)" -> "books(s)"
  * - space before punctuation: "hello ." -> "hello."
+ * - the characters a web page carries and a voice cannot say: zero-width
+ *   spaces, soft hyphens, byte-order marks, and the several spaces that are
+ *   not the space bar (see [WEB_CLEAN])
  *
  * Commas inside numbers are deliberately left alone: "10,000" stays "10,000",
  * because a comma between digits says the number is read whole (see
@@ -19,10 +22,16 @@ package com.blindtechnexus.freeeloquencetts
 object TextFixes {
 
 	private const val OPENERS = "~#\$%^*({|[<\"•"
+
 	private val OPENERS_SET = OPENERS.toSet()
 	private val MARKS = setOf(':', '.', '!', ';', ',', '?')
 
-	fun apply(text: String): String {
+	fun apply(raw: String): String {
+		if (raw.isEmpty()) return raw
+		// The characters a page leaves behind, taken out first: everything
+		// below is about where words end and marks begin, and a zero-width
+		// space in the middle of a word is a boundary that is not one.
+		val text = webClean(raw)
 		if (text.isEmpty()) return text
 
 		// Quick scan if any fix needed
@@ -99,4 +108,51 @@ object TextFixes {
 		return out.toString()
 	}
 
+	/**
+	 * The characters a web page carries that a voice cannot say.
+	 *
+	 * A page arrives from a browser already flattened to text, and the
+	 * flattening leaves things in it: a zero-width space wherever the markup
+	 * allowed a line break, a soft hyphen wherever a word could be split, a
+	 * byte-order mark at the front, an object replacement character wherever
+	 * an image was, and a non-breaking space wherever the layout wanted one.
+	 * None of them is a character anybody means to hear. The engine is given
+	 * them anyway -- they are in the text it was handed -- and what it does
+	 * with them is say a pause, or nothing, or the word "space", any of
+	 * which is a wrong word in the middle of a sentence.
+	 *
+	 * So they are taken out here, before anything else reads the text: the
+	 * invisible ones are dropped and the spaces that are not spaces become
+	 * the space bar. The whole pass is one scan and only runs when one of
+	 * these characters is in the text at all, which is never for text a
+	 * person typed and often for text a page was.
+	 */
+	private fun isWebNoise(c: Char): Boolean = when (c) {
+		'\u00A0', '\u1680', '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005',
+		'\u2006', '\u2007', '\u2008', '\u2009', '\u200A', '\u202F', '\u205F', '\u3000' -> true
+		'\u200B', '\u200C', '\u200D', '\u2060', '\uFEFF', '\u00AD', '\uFFFC', '\u180E' -> true
+		else -> false
+	}
+
+	private fun webClean(text: String): String {
+		var needed = false
+		for (c in text) {
+			if (isWebNoise(c)) {
+				needed = true
+				break
+			}
+		}
+		if (!needed) return text
+		val out = StringBuilder(text.length)
+		for (c in text) {
+			when {
+				c == '\u00A0' || c == '\u1680' || (c in '\u2000'..'\u200A') ||
+					c == '\u202F' || c == '\u205F' || c == '\u3000' -> out.append(' ')
+				c == '\u200B' || c == '\u200C' || c == '\u200D' || c == '\u2060' ||
+					c == '\uFEFF' || c == '\u00AD' || c == '\uFFFC' || c == '\u180E' -> Unit
+				else -> out.append(c)
+			}
+		}
+		return out.toString()
+	}
 }

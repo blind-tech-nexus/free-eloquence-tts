@@ -7,20 +7,25 @@
 
 	<!-- Welcome -->
 	<string name="welcome_title">Welcome to Free eloquence TTS</string>
-	<string name="welcome_alternative">Free alternative to paid eloquence TTS.</string>
-	<string name="welcome_free">Free to use. No payment needed.</string>
-	<string name="welcome_permissions">Needs 2 permissions: notifications and battery exemption. Battery exemption keeps voice working when phone is idle.</string>
-	<string name="welcome_about">Read about the app from main screen.</string>
+	<string name="welcome_alternative">The voice that reads to you, free, and yours to keep.</string>
+	<string name="welcome_free">No payment, no account, no subscription, and nothing to sign in to. The whole engine is in this app.</string>
+	<string name="welcome_intro">Everything is already working. This screen is what you get and the two permissions to allow; after it, the voice is yours.</string>
 	<string name="welcome_features">What you get</string>
-	<string name="welcome_voices">8 classic voices</string>
-	<string name="welcome_voices_description">Reed, Shelley, Bobby, Rocko, Glen, Sandy, Grandma and Grandpa, each tunable.</string>
+	<string name="welcome_voices">Nine voices</string>
+	<string name="welcome_voices_description">Reed, Shelley, Bobby, Rocko, Glen, Sandy, Grandma, Grandpa and Luna. Every one of them can be tuned, and Luna is a clear female voice of her own.</string>
+	<string name="welcome_languages">Two Englishes</string>
+	<string name="welcome_languages_description">American English and British English, each with all nine voices. Choose one here, or let a page that asks for a British voice have one.</string>
+	<string name="welcome_web">Web pages, read properly</string>
+	<string name="welcome_web_description">Links, headings, bold, italics, lists, quotes and images are announced as what they are instead of being read as flat text.</string>
 	<string name="welcome_code">Code reading</string>
 	<string name="welcome_code_description">Speaks camelCase, operators and indentation the way programmers hear them.</string>
 	<string name="welcome_spelling">Spelling and symbols</string>
-	<string name="welcome_spelling_description">Spells words out and reads punctuation and emoji on request.</string>
-	<string name="welcome_dictionaries">Custom dictionaries</string>
-	<string name="welcome_dictionaries_description">Teach the voice your names and abbreviations.</string>
-	<string name="welcome_continue">Continue</string>
+	<string name="welcome_spelling_description">Spells words out and reads punctuation, emoji and numbers on request.</string>
+	<string name="welcome_dictionaries">Dictionaries that take anything</string>
+	<string name="welcome_dictionaries_description">Teach the voice your names and abbreviations, and import word lists of any size — thousands or millions of words — without the voice ever going quiet.</string>
+	<string name="welcome_permissions">Two permissions come next: notifications, and the exemption from battery optimization. The exemption is the one that keeps the voice alive when the phone is idle, so if you want the voice to work with the screen off, allow it. Nothing here is required to hear the voice today.</string>
+	<string name="welcome_about">Everything on this screen can be changed later. The main screen has the settings, the dictionary, the updater and this welcome screen again.</string>
+	<string name="welcome_continue">Get started</string>
 
 	<!-- Main -->
 	<string name="main_tagline">Free alternative to paid eloquence TTS.</string>
@@ -47,7 +52,9 @@
 	<string name="settings_title">Voice settings</string>
 
 	<string name="section_voice">Voice</string>
-	<string name="section_voice_description">Pick voice and gender.</string>
+	<string name="section_voice_description">Pick the English, the voice and the gender.</string>
+	<string name="language_label">Language</string>
+	<string name="language_description">English (United States) or English (United Kingdom). Each one is a voice of its own with its own accent, and each is offered to anything that asks this engine to speak.</string>
 	<string name="voice_label">Voice</string>
 	<string name="gender_label">Gender</string>
 	<string name="gender_male">Male</string>
@@ -109,6 +116,8 @@
 	<string name="dictionary_importing">Importing %1$d words…</string>
 	<string name="dictionary_imported_file">Imported %1$d words into %2$s.</string>
 	<string name="dictionary_imported_file_truncated">Imported %1$d of %2$d words into %3$s. The rest did not fit.</string>
+	<string name="dictionary_in_force">The voice is using all %1$d of these words.</string>
+	<string name="dictionary_in_force_some">The voice is using %1$d of these words. %2$d did not fit the memory this phone can spare for the dictionary, so they are kept in the file but not matched with; a smaller list, or a shorter one in front, would bring them in.</string>
 	<string name="dictionary_file_words">%1$d words</string>
 	<string name="dictionary_file_delete_title">Delete dictionary?</string>
 	<string name="dictionary_file_delete_message">Delete %1$s and its %2$d words?</string>
@@ -224,13 +233,13 @@
 	<string name="battery_exemption_not_granted">Not allowed. Tap to allow.</string>
 	<string name="battery_exemption_description">Most important. Without this, voice stops when phone sleeps.</string>
 	<string name="persistent_notification_label">Run in foreground even while not in use</string>
-	<string name="persistent_notification_description">On. Keeps the voice running when the phone is locked or the app is closed.</string>
+	<string name="persistent_notification_description">Off. This is the only switch that shows a notification: on, one appears and stays, which is what keeps the voice running when the phone is locked or the app is closed. Off, no notification appears at all.</string>
 	<string name="notification_stop_label">Stop button</string>
 	<string name="notification_stop_description">Add stop button to notification.</string>
 	<string name="start_on_boot_label">Start after restart</string>
 	<string name="start_on_boot_description">Start again when phone restarts.</string>
-	<string name="notification_check_label">Check notification</string>
-	<string name="notification_check_description">How often to check if notification is still there.</string>
+	<string name="battery_notification_on">The notification is on and stays on; nothing checks it on a timer, because nothing needs to.</string>
+	<string name="battery_notification_off">No notification is showing and none will, until the switch above is turned on.</string>
 	<string name="foreground_while_speaking_label">Foreground while speaking</string>
 	<string name="foreground_while_speaking_description">Keep in foreground while speaking.</string>
 	<string name="battery_idle_heading">When idle</string>
@@ -273,9 +282,11 @@
 	<string name="battery_manufacturer_description">Some phones have extra battery screens. Open them here.</string>
 	<string name="battery_no_screen">No background settings found. Check Battery and Apps in system settings.</string>
 	<string name="battery_boot_needs_notification">Notification turned on too.</string>
-	<string name="battery_now">Now: %1$s. Notifications: %2$s.</string>
-	<string name="battery_now_service">Running with service</string>
-	<string name="battery_now_none">Running only when in use</string>
+	<string name="battery_now">Now: %1$s. %2$s Notifications: %3$s.</string>
+	<string name="battery_now_wanted">the notification is on</string>
+	<string name="battery_now_unwanted">the notification is off</string>
+	<string name="battery_now_service">Running with service.</string>
+	<string name="battery_now_none">Running only when in use.</string>
 	<string name="battery_now_allowed">Allowed</string>
 	<string name="battery_now_refused">Not allowed</string>
 

@@ -90,16 +90,21 @@ class AudioGenerator(context: Context) {
 	): File? {
 		if (text.isBlank() || total > MAX_CHARS) return null
 		if (!EvvNative.loaded) return null
-		val e = EvvEngine.open(Eci.ENGLISH_US)?.also { engine = it } ?: return null
+		// The language the settings screen chose, so the file that comes out
+		// is the voice that would have been heard rather than the American
+		// one regardless: the two are different modules and different
+		// accents, and a generator that ignored the setting would be a
+		// generator that saved somebody the wrong voice.
+		val e = EvvEngine.open(settings.language)?.also { engine = it } ?: return null
 		try {
 			e.setSampleRate(settings.sampleRateHz)
 			e.setUpsampleMethod(AudioOptimization.methodFor(settings.audioOptimization))
 			e.setAbbreviations(settings.abbreviations)
 			e.applyVoice(settings.voice, settings.shape(settings.voice))
-			val words = try {
-				UserDictionary.snapshot(app).entries
+			val index = try {
+				UserDictionary.snapshot(app).index
 			} catch (broken: Throwable) {
-				emptyList()
+				WordIndex.EMPTY
 			}
 			val abbreviations = try {
 				Abbreviations.entries(app)
@@ -111,7 +116,7 @@ class AudioGenerator(context: Context) {
 			val samples = ByteArrayOutputStream(65536)
 			val buffer = ByteArray(READ_CHUNK)
 			var spokenChars = 0
-			val pieces = TextPipeline.pieces(text, settings, words, abbreviations).iterator()
+			val pieces = TextPipeline.pieces(text, settings, index, abbreviations).iterator()
 			var held: TextPieces.Piece? = try {
 				if (pieces.hasNext()) pieces.next() else null
 			} catch (broken: Throwable) {

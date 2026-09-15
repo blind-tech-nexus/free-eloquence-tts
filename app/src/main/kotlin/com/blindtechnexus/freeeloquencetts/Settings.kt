@@ -58,6 +58,30 @@ class Settings(context: Context) {
 		get() = prefs.getInt(KEY_VOICE, 0).coerceIn(0, Eci.PRESET_NAMES.lastIndex)
 		set(value) = prefs.edit().putInt(KEY_VOICE, value).apply()
 
+	/**
+	 * Which English this app speaks unless a caller says otherwise: one of
+	 * [Eci.ENGLISH_US] and [Eci.ENGLISH_UK].
+	 *
+	 * American English is what it has always been and what it stays by
+	 * default. British English is a whole module of the engine compiled into
+	 * this build -- `lang/engb`, named in the build script beside `lang/enus`
+	 * -- so choosing it is not a flag over one voice: it is the other voice,
+	 * with its own presets, its own dictionary and its own idea of how a
+	 * vowel is said.
+	 *
+	 * A number no build knows answers with American English rather than with
+	 * silence, so a preference written by another version, or by hand, is a
+	 * voice either way.
+	 */
+	var language: Int
+		get() = prefs.getInt(KEY_LANGUAGE, Eci.ENGLISH_US).let {
+			if (Eci.LANGUAGES.any { spoken -> spoken.code == it }) it else Eci.ENGLISH_US
+		}
+		set(value) = prefs.edit().putInt(
+			KEY_LANGUAGE,
+			if (Eci.LANGUAGES.any { spoken -> spoken.code == value }) value else Eci.ENGLISH_US
+		).apply()
+
 	var sampleRateHz: Int
 		get() = prefs.getInt(KEY_SAMPLE_RATE, DEFAULT_SAMPLE_RATE)
 		set(value) = prefs.edit().putInt(KEY_SAMPLE_RATE, value).apply()
@@ -181,19 +205,28 @@ class Settings(context: Context) {
 		set(value) = prefs.edit()
 			.putInt(KEY_SPELLING_MODE, value.coerceIn(Spelling.OFF, Spelling.CAPITALS_NATO)).apply()
 
-	/** Whether the app runs in the foreground even while not in use.
+	/**
+	 * Whether the app runs in the foreground even while not in use, which is
+	 * to say whether there is a notification at all.
 	 *
-	 * On by default: the keep-alive notification holds the engine in the
-	 * foreground whether or not anything is bound to it, so Android leaves
-	 * it running in the background -- and, just as important, keeps it
-	 * running when the phone is locked. A voice that stops the moment the
-	 * screen goes dark is a voice that is not there when it is needed.
+	 * Off until somebody turns it on, and the switch is the whole of the
+	 * answer: nothing else in this app posts a notification. That is the
+	 * promise the battery screen makes and it is worth being exact about it,
+	 * because a notification that appears on its own -- while something is
+	 * being spoken, say -- is a notification the person who turned the switch
+	 * off did not ask for and cannot get rid of, which is the worst of both
+	 * worlds: the cost of a permanent notification and none of the standing
+	 * that would have kept the voice alive.
 	 *
-	 * The notification belongs to the app rather than to the speech service,
-	 * which is what lets it stay up when nothing is bound to the engine: see
-	 * [KeepAliveService]. */
+	 * On, the app's own service holds the engine in the foreground whether or
+	 * not anything is bound to it, so Android leaves it running in the
+	 * background -- and, just as important, keeps it running when the phone is
+	 * locked. The notification belongs to the app rather than to the speech
+	 * service, which is what lets it stay up when nothing is bound to the
+	 * engine: see [KeepAliveService].
+	 */
 	var persistentNotification: Boolean
-		get() = prefs.getBoolean(KEY_PERSISTENT_NOTIFICATION, true)
+		get() = prefs.getBoolean(KEY_PERSISTENT_NOTIFICATION, false)
 		set(value) = prefs.edit().putBoolean(KEY_PERSISTENT_NOTIFICATION, value).apply()
 
 	/** Whether the app and its notification come back by themselves after the
@@ -212,17 +245,6 @@ class Settings(context: Context) {
 	var notificationStopButton: Boolean
 		get() = prefs.getBoolean(KEY_NOTIFICATION_STOP, true)
 		set(value) = prefs.edit().putBoolean(KEY_NOTIFICATION_STOP, value).apply()
-
-	/** How often the notification is looked for and put back, in
-	 *  milliseconds. One of [Stability.NOTIFICATION_CHECKS]; anything else
-	 *  is answered with the default, which is the promise the screen makes. */
-	var keepAliveCheckMs: Int
-		get() = prefs.getInt(KEY_KEEP_ALIVE_CHECK_MS, KeepAlive.CHECK_MS.toInt())
-			.let { if (Stability.NOTIFICATION_CHECKS.contains(it)) it else KeepAlive.CHECK_MS.toInt() }
-		set(value) = prefs.edit().putInt(
-			KEY_KEEP_ALIVE_CHECK_MS,
-			if (Stability.NOTIFICATION_CHECKS.contains(value)) value else KeepAlive.CHECK_MS.toInt()
-		).apply()
 
 	/** Whether the engine is held in the foreground while each utterance is
 	 *  being made.
@@ -419,6 +441,7 @@ class Settings(context: Context) {
 
 	companion object {
 		const val KEY_VOICE = "voice_preset"
+		const val KEY_LANGUAGE = "language_dialect"
 		const val KEY_SAMPLE_RATE = "sample_rate_hz"
 		const val KEY_AUDIO_OPTIMIZATION = "audio_optimization"
 		const val KEY_ABBREVIATIONS = "abbreviations"
@@ -450,7 +473,6 @@ class Settings(context: Context) {
 		const val KEY_TRACK_ACTIONS = "track_actions"
 		const val KEY_START_ON_BOOT = "start_on_boot"
 		const val KEY_NOTIFICATION_STOP = "notification_stop"
-		const val KEY_KEEP_ALIVE_CHECK_MS = "keep_alive_check_ms"
 		const val KEY_FOREGROUND_WHILE_SPEAKING = "foreground_while_speaking"
 		const val KEY_WAKE_LOCK_TAIL = "wake_lock_tail_ms"
 		const val KEY_RELEASE_ENGINE = "release_engine_after_s"

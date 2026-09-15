@@ -1,9 +1,12 @@
 package com.blindtechnexus.freeeloquencetts
 
 import android.graphics.Typeface
+import android.os.Build
 import android.text.Layout
 import android.text.Spanned
 import android.text.style.AbsoluteSizeSpan
+import android.text.style.ClickableSpan
+import android.text.style.ImageSpan
 import android.text.style.AlignmentSpan
 import android.text.style.BackgroundColorSpan
 import android.text.style.BulletSpan
@@ -31,7 +34,8 @@ import android.text.style.UnderlineSpan
  * What is announced, and the whole of it:
  * - bold, italic and bold italic (StyleSpan)
  * - underline, strikethrough, superscript, subscript
- * - links (URLSpan)
+ * - links (URLSpan, and any other ClickableSpan)
+ * - images, with whatever the page said they show (ImageSpan)
  * - monospace and other named fonts (TypefaceSpan)
  * - larger and smaller text, and other resized text (RelativeSizeSpan,
  *   AbsoluteSizeSpan)
@@ -40,6 +44,24 @@ import android.text.style.UnderlineSpan
  *   (BackgroundColorSpan)
  * - bullets and quotes (BulletSpan, QuoteSpan)
  * - centred and right-aligned text (AlignmentSpan)
+ *
+ * The web is the reason most of the second half of that list exists. A page
+ * read by a browser arrives here already flattened to text, and the flattening
+ * keeps the meaning in spans: a link is a URLSpan, a heading is a StyleSpan
+ * with a RelativeSizeSpan beside it, a list item is a BulletSpan, a picture is
+ * an ImageSpan. Read without them, all of that is a wall of words in which a
+ * link is indistinguishable from the sentence around it and a picture is
+ * nothing at all -- which is what "the page read flat" sounds like. So every
+ * one of them is announced as the thing it is, twice, around the words it
+ * covers: "link Shop end link".
+ *
+ * A clickable span that is not a URL is still a link: on Android the
+ * difference between the two is which method the app overrides, not what a
+ * listener would hear, and a page whose links are handled in its own code
+ * rather than by the browser carries the plain kind. An image has no words of
+ * its own to wrap, so it is announced where it stands and the placeholder
+ * character under it is not read -- "image picture of a red bicycle" -- which
+ * is the one case where a span replaces text rather than describing it.
  *
  * What is deliberately not announced: black and white foreground colours,
  * which are the default ink on one screen or another and would be noise on
@@ -72,6 +94,10 @@ object TextStyles {
             }
             if (spans.isEmpty()) return text.toString()
             val marks = ArrayList<Mark>(spans.size * 2)
+            // Only allocated when something in the text is a thing rather
+            // than a description of the words: an image stands where a
+            // character stands, and that character is not a word.
+            var replaced: BooleanArray? = null
             var count = 0
             for (span in spans) {
                 if (count >= MAX_SPANS) break
@@ -80,18 +106,34 @@ object TextStyles {
                 } catch (broken: Exception) {
                     continue
                 } ?: continue
-                val from: Int
-                val to: Int
-                try {
-                    from = text.getSpanStart(span)
-                    to = text.getSpanEnd(span)
+                // A try that answers with the bounds rather than assigning
+                // them: a span whose ends cannot be read is skipped whole,
+                // and nothing is left half-initialised for the rest of the
+                // loop to trip over.
+                val bounds = try {
+                    text.getSpanStart(span) to text.getSpanEnd(span)
                 } catch (broken: Exception) {
                     continue
                 }
+                val from = bounds.first
+                val to = bounds.second
                 if (from < 0 || to <= from || from >= text.length) continue
                 val start = from.coerceIn(0, text.length)
                 val end = to.coerceIn(0, text.length)
                 if (end <= start) continue
+                if (span is ImageSpan) {
+                    // An image is not words with a style on them; it is a
+                    // thing standing where a character stands. The character
+                    // it stands on -- U+FFFC, an object replacement -- is not
+                    // read, and what is read instead is the word image and
+                    // whatever description the page gave it.
+                    val described = imageOf(span)
+                    if (replaced == null) replaced = BooleanArray(text.length)
+                    for (at in start until end) replaced[at] = true
+                    marks.add(Mark(start, false, true, described))
+                    count++
+                    continue
+                }
                 if (label.isEmpty()) {
                     // A marker that stands on its own, with no end to it.
                     val single = try {
@@ -124,7 +166,13 @@ object TextStyles {
                 // but a span that moved under us is not owed an infinite
                 // loop) is dropped rather than chased.
                 while (m < marks.size && marks[m].at < i) m++
-                if (i < text.length) out.append(text[i])
+                if (i < text.length) {
+                    // The character under an image is a placeholder, and a
+                    // placeholder read out loud is a wrong word between the
+                    // image and what it shows.
+                    val skip = replaced
+                    if (skip == null || !skip[i]) out.append(text[i])
+                }
                 i++
             }
             collapse(out.toString())
@@ -156,6 +204,10 @@ object TextStyles {
         is SuperscriptSpan -> "superscript"
         is SubscriptSpan -> "subscript"
         is URLSpan -> "link"
+        // Any other span that a finger can press is a link too, and a page
+        // that handles its own links carries this kind rather than URLSpan.
+        // The two are the same thing to a listener.
+        is ClickableSpan -> "link"
         is BulletSpan -> ""
         is QuoteSpan -> "quote"
         is TypefaceSpan -> fontOf(span)
@@ -181,6 +233,26 @@ object TextStyles {
     private fun singleOf(span: Any): String? = when (span) {
         is BulletSpan -> "bullet"
         else -> null
+    }
+
+    /** What an image is: the word for it, and whatever the page called it. */
+    private fun imageOf(span: ImageSpan): String {
+        val described = try {
+            // A description is Android 8's; before that an image has only the
+            // name of the thing it was loaded from, which is what [source] is.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) span.contentDescription else null
+        } catch (_: Throwable) {
+            null
+        }
+        val said = try {
+            span.source
+        } catch (_: Throwable) {
+            null
+        }
+        val label = (described?.takeIf { it.isNotBlank() } ?: said?.takeIf { it.isNotBlank() })
+        if (label == null) return "image"
+        val clean = label.filter { !it.isISOControl() }.trim().take(120)
+        return if (clean.isEmpty()) "image" else "image $clean"
     }
 
     private fun fontOf(span: TypefaceSpan): String? {

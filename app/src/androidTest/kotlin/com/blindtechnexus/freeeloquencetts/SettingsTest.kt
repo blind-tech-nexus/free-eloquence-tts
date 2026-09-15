@@ -82,49 +82,52 @@ class SettingsTest {
 		assertEquals(Eci.DEFAULT_SPEED, settings.shape(REED)[Eci.VOICE_SPEED])
 	}
 
-	/** The switches for the battery and stability screen are remembered, and
-	 *  running in the foreground even while not in use is on until somebody
-	 *  turns it off: a voice that stops when the phone is locked is the
-	 *  failure it is for, and every other switch here starts off, since a
-	 *  wake lock or a log nobody asked for would be a surprise. The
-	 *  notification check starts at three seconds -- the
-	 *  promise the screen makes -- and a value nobody offered falls back to
-	 *  it rather than running wild. The foreground and wake lock properties
-	 *  are retired from the screen and fixed in Stability, but they still
-	 *  round-trip here so that preferences written by an earlier build keep
-	 *  parsing. */
+	/** The switches for the battery and stability screen are remembered.
+	 *  Running in the foreground even while not in use starts off, because
+	 *  the notification is what it costs and nobody has asked for it yet; a
+	 *  voice that stops when the phone is locked is the price of that, and
+	 *  the screen says so where the switch is. Every other switch here
+	 *  starts off too, since a wake lock or a log nobody asked for would be
+	 *  a surprise. There is no notification interval any more -- the
+	 *  notification is posted once and left -- so what used to be read and
+	 *  written here in milliseconds is simply not a setting at all. The
+	 *  foreground and wake lock properties are retired from the screen and
+	 *  fixed in Stability, but they still round-trip here so that
+	 *  preferences written by an earlier build keep parsing. */
 	@Test
 	fun theBatteryAndStabilitySwitchesRememberTheirState() {
 		// The wipe in setUp writes the switch off, so the key is taken away
 		// first: what is asserted is the default, which is what a phone that
 		// never had the switch hears.
 		remove(Settings.KEY_PERSISTENT_NOTIFICATION)
-		assertTrue("running in the foreground starts off", settings.persistentNotification)
+		assertFalse("running in the foreground starts on", settings.persistentNotification)
 		assertFalse("speaking in the foreground starts on", settings.foregroundWhileSpeaking)
 		assertFalse("the wake lock starts on", settings.wakeLock)
 		assertFalse("action tracking starts on", settings.trackActions)
-		assertEquals(KeepAlive.CHECK_MS.toInt(), settings.keepAliveCheckMs)
-		assertEquals(
-			"the offered intervals moved",
-			listOf(2000, 3000, 5000, 10000),
-			Stability.NOTIFICATION_CHECKS
-		)
 		settings.persistentNotification = true
 		settings.foregroundWhileSpeaking = true
 		settings.wakeLock = true
 		settings.trackActions = true
-		settings.keepAliveCheckMs = 5000
 		assertTrue(settings.persistentNotification)
 		assertTrue(settings.foregroundWhileSpeaking)
 		assertTrue(settings.wakeLock)
 		assertTrue(settings.trackActions)
-		assertEquals(5000, settings.keepAliveCheckMs)
-		settings.keepAliveCheckMs = 12345
-		assertEquals(
-			"a foreign interval did not fall back to three seconds",
-			KeepAlive.CHECK_MS.toInt(),
-			settings.keepAliveCheckMs
-		)
+	}
+
+	/** The language this app speaks, and the fallback that makes it
+	 *  impossible to speak none: American English until somebody chooses
+	 *  otherwise, the British module if they choose it, and the American one
+	 *  again for a number no build knows -- a preference written by another
+	 *  version, or by hand, is a voice rather than a refusal. */
+	@Test
+	fun theLanguageIsOneOfTheTwoAndFallsBackToAmerican() {
+		remove(Settings.KEY_LANGUAGE)
+		assertEquals("the language starts as British", Eci.ENGLISH_US, settings.language)
+		settings.language = Eci.ENGLISH_UK
+		assertEquals("British English was not remembered", Eci.ENGLISH_UK, settings.language)
+		settings.language = 0x1234
+		assertEquals("a foreign language did not fall back", Eci.ENGLISH_US, settings.language)
+		settings.language = Eci.ENGLISH_US
 	}
 
 	/** Text styles are read until somebody says otherwise, and the answer is
@@ -153,7 +156,6 @@ class SettingsTest {
 		settings.voice = REED
 		settings.persistentNotification = false
 		settings.foregroundWhileSpeaking = false
-		settings.keepAliveCheckMs = KeepAlive.CHECK_MS.toInt()
 		settings.wakeLock = false
 		settings.trackActions = false
 	}

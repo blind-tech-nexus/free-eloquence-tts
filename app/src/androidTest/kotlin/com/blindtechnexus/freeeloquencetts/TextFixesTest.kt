@@ -82,6 +82,30 @@ class TextFixesTest {
 		assertEquals("September 5, 2026", TextFixes.apply("September 5, 2026"))
 	}
 
+	/** What a page leaves behind in the text it hands over: the characters
+	 *  that are not words and that the engine would otherwise say something
+	 *  for. A zero-width space inside a word must not become a break in it,
+	 *  and the space an author insisted on must become an ordinary one. */
+	@Test
+	fun theCharactersAWebPageCarriesAreTakenOut() {
+		assertEquals("hello world", TextFixes.apply("hello\u00A0world"))
+		assertEquals("hello world", TextFixes.apply("hello\u2009world"))
+		assertEquals("hello world", TextFixes.apply("hello\u3000world"))
+		// A zero-width space in the middle of a word is inside the word.
+		assertEquals("teamtalk", TextFixes.apply("team\u200Btalk"))
+		// A soft hyphen is a place a word could be split, not a hyphen.
+		assertEquals("eloquence", TextFixes.apply("elo\u00ADquence"))
+		assertEquals("hello", TextFixes.apply("\uFEFFhello"))
+		// An object replacement character is where a picture was.
+		assertEquals("see here", TextFixes.apply("see \uFFFC here"))
+	}
+
+	@Test
+	fun theWebCharactersDoNotBreakTheOrdinaryFixes() {
+		assertEquals("teamtalk 5", TextFixes.apply("teamtalk\u00A05"))
+		assertEquals("word.", TextFixes.apply("word \u00A0."))
+	}
+
 	@Test
 	fun ordinaryTextIsUntouched() {
 		for (text in listOf("3.14", "1.5", "e.g.", "Navigate up", "")) {

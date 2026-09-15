@@ -1,6 +1,5 @@
 package com.blindtechnexus.freeeloquencetts
 
-import android.content.res.Resources
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,10 +41,10 @@ import androidx.lifecycle.LifecycleEventObserver
  * on every resume, because the answer can change while that screen is up; the
  * notification that holds the app in the foreground, which now stands whether or
  * not anything is bound to the engine, since a service that keeps it up of its
- * own has been added for the purpose; the same notification coming back
- * after a restart, which is the one thing a reboot takes away; and how often
- * the notification is looked for, where a phone that clears notifications
- * aggressively wants the short end.
+ * own has been added for the purpose -- and which appears when that switch is
+ * on and at no other time, because nothing else in this app posts one; and the
+ * same notification coming back after a restart, which is the one thing a
+ * reboot takes away.
  *
  * How the engine behaves while speaking -- the foreground, the wake lock, how
  * far ahead of the speech the samples may run, how long an instance is kept,
@@ -71,17 +70,23 @@ import androidx.lifecycle.LifecycleEventObserver
 fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 	val context = LocalContext.current
 	val settings = remember { Settings(context.applicationContext) }
+	// Resolved before the sentence that starts with one: a screen whose
+	// first line says what is in force has to know it before it can say it.
+	// The clicks below are not compositions, so a sentence asked for in one
+	// would not compile -- which is why every sentence is read here.
+	val noBatteryScreen = stringResource(R.string.battery_no_screen)
+	val bootNeedsNotification = stringResource(R.string.battery_boot_needs_notification)
+	val notificationOn = stringResource(R.string.battery_notification_on)
+	val notificationOff = stringResource(R.string.battery_notification_off)
+
 	var granted by remember { mutableStateOf(BatteryExemption.isGranted(context)) }
 	var persistent by remember { mutableStateOf(settings.persistentNotification) }
 	var startOnBoot by remember { mutableStateOf(settings.startOnBoot) }
+	var notice by remember {
+		mutableStateOf(if (settings.persistentNotification) notificationOn else notificationOff)
+	}
 	var stopButton by remember { mutableStateOf(settings.notificationStopButton) }
-	var checkInterval by remember { mutableStateOf(settings.keepAliveCheckMs) }
 	var tracking by remember { mutableStateOf(settings.trackActions) }
-	var notice by remember { mutableStateOf("") }
-	// Resolved here rather than in the click: the click is not a composition,
-	// and a sentence asked for there would not compile.
-	val noBatteryScreen = stringResource(R.string.battery_no_screen)
-	val bootNeedsNotification = stringResource(R.string.battery_boot_needs_notification)
 
 	// The exemption is granted on a screen belonging to the system, and the
 	// answer is read again when that screen is left. The keep-alive's own state
@@ -141,6 +146,10 @@ fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 					// KeepAlive is the one that knows what to do when the system
 					// would not let that service start.
 					KeepAlive.sync(context, on)
+					// Nothing else in this app posts a notification, so this
+					// is not a note about a setting: it is what the phone is
+					// doing now.
+					notice = if (on) notificationOn else notificationOff
 					Tracker.action(settings, "persistent notification ${if (on) "on" else "off"}")
 				}
 			)
@@ -177,23 +186,6 @@ fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 					Tracker.action(settings, "start on boot ${if (on) "on" else "off"}")
 				}
 			)
-			ChoiceButton(
-				title = stringResource(R.string.notification_check_label),
-				shown = stringResource(
-					R.string.battery_value_is,
-					stringResource(R.string.notification_check_label),
-					durationLabel(context.resources, checkInterval)
-				),
-				options = Stability.NOTIFICATION_CHECKS.map { durationLabel(context.resources, it) },
-				chosen = indexOf(checkInterval, Stability.NOTIFICATION_CHECKS),
-				description = stringResource(R.string.notification_check_description),
-				onChoose = { at ->
-					val value = Stability.NOTIFICATION_CHECKS.getOrElse(at) { checkInterval }
-					checkInterval = value
-					settings.keepAliveCheckMs = value
-					Tracker.action(settings, "notification check every ${value}ms")
-				}
-			)
 			ActionRow(
 				label = stringResource(
 					if (ManufacturerScreens.hasOwnScreen()) R.string.battery_manufacturer_open
@@ -222,6 +214,8 @@ fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 			Paragraph(
 				text = stringResource(
 					R.string.battery_now,
+					if (persistent) stringResource(R.string.battery_now_wanted)
+					else stringResource(R.string.battery_now_unwanted),
 					if (KeepAliveService.isRunning) stringResource(R.string.battery_now_service)
 					else stringResource(R.string.battery_now_none),
 					if (KeepAliveNotification.notificationsAllowed(context))
@@ -255,53 +249,4 @@ private fun ExemptionRow(granted: Boolean, onClick: () -> Unit) {
 			Text(text = " $state")
 		}
 	}
-}
-
-/**
- * A duration in words, for a row that names one.
- *
- * The units are spelled out rather than left as "ms" and "s", because a bare
- * abbreviation is read out as a letter and a word is read out as a word, and
- * every number on this screen is only ever heard. A multiple of a minute is said
- * as minutes for the same reason: ninety seconds is a thing a person has to work
- * out and a minute and a half is not.
- *
- * [forever] is for the settings where nought is not a short wait but no wait at
- * all -- the engine being kept for ever rather than for nought seconds -- and it
- * is a word the row's own meaning needs, so it is a parameter rather than a
- * convention.
- */
-private fun durationLabel(resources: Resources, millis: Int, forever: Boolean = false): String {
-	if (millis == 0) {
-		return resources.getString(if (forever) R.string.battery_forever else R.string.battery_never)
-	}
-	if (millis % (60 * 1000) == 0) {
-		val minutes = millis / (60 * 1000)
-		return resources.getQuantityString(R.plurals.battery_minutes, minutes, minutes)
-	}
-	if (millis % 1000 == 0) {
-		val seconds = millis / 1000
-		return resources.getQuantityString(R.plurals.battery_seconds, seconds, seconds)
-	}
-	return resources.getString(R.string.battery_milliseconds, millis)
-}
-
-/** Which of the offered values a setting stands nearest to. The values are the
- *  ones the screen offers, so the answer is exact for anything set here; a
- *  number that came from another version of the app, or from a preference
- *  written by hand, is rounded to the nearest one rather than shown as a choice
- *  that is not in the list. */
-private fun indexOf(value: Int, options: List<Int>): Int {
-	val exact = options.indexOf(value)
-	if (exact >= 0) return exact
-	var best = 0
-	var bestBy = Int.MAX_VALUE
-	for (at in options.indices) {
-		val by = Math.abs(options[at] - value)
-		if (by < bestBy) {
-			bestBy = by
-			best = at
-		}
-	}
-	return best
 }

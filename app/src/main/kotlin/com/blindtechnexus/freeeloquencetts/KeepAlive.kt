@@ -7,158 +7,104 @@ import android.os.Looper
 import android.util.Log
 
 /**
- * The persistent notification that keeps the engine alive.
+ * The persistent notification, up while the switch says it should be and not
+ * otherwise.
  *
- * A foreground service is the one thing that tells Android, in the one language
- * Android always listens to, that an app is doing something the user asked for
- * and must not be killed. A text to speech engine is the awkward case: idle
- * almost all the time, needed at once when it is not, which is the shape every
- * battery policy is written to kill. The notification makes the engine visible,
- * so the system's own rules leave it alone.
+ * A foreground service is the one thing that tells Android, in the one
+ * language Android always listens to, that an app is doing something the user
+ * asked for and must not be killed. A text to speech engine is the awkward
+ * case: idle almost all the time, needed at once when it is not, which is the
+ * shape every battery policy is written to kill. The notification makes the
+ * engine visible, so the system's own rules leave it alone.
  *
- * It belongs to the app rather than to the speech service, which is what this
- * file used to get wrong. The speech service is a service the *system* binds
- * and unbinds: once the last reader has let go of it, it is destroyed, and a
- * notification posted by it went with it. Somebody who was told "this is what
- * keeps your voice working" then had a phone with no voice and no sign of one,
- * with nothing to swipe at. So the notification is posted by
- * [KeepAliveService], which the app starts and nothing else stops, and which
- * outlives the engine being unbound, the process being cached, and a reboot
- * when that has been asked for.
+ * It is one notification and one switch. On, [KeepAliveService] is started
+ * and holds the notification for as long as the app exists; off, that service
+ * is stopped and the notification goes with it -- and nothing else in this
+ * app posts one. There used to be a second poster: the speech service used to
+ * claim the foreground for the length of every utterance the switch was off
+ * for, so a person who had turned the notification off still met it several
+ * times a minute. It was defended as protection, and it was not: an utterance
+ * is a second long and the framework has already bound the service for it, so
+ * what the claim actually bought was a notification that appeared when it had
+ * been refused. The switch decides now, and only the switch.
+ *
+ * Nothing here polls either. The notification was looked for every few
+ * seconds and put back if it had gone, which was written for the case of a
+ * notification swiped away or dropped when the system rebuilds its list --
+ * and it cost a check every three seconds, for ever, on a phone that is
+ * mostly idle, which is exactly the cost the battery screen exists to
+ * explain. A notification posted by a foreground service is ongoing and is
+ * not swiped away; a service that is stopped takes its notification with it.
+ * So the check is gone and the notification is posted once, when the switch
+ * moves and when the service starts, which is all that was ever needed.
  *
  * Two things can still go wrong, and both have an answer here:
  *
  * Android 12 and later refuse a foreground service started from the
  * background, which is what starting one from a speech service the system
- * bound looks like to the system. Refused, this falls back to what it used to
- * do: the speech service posts the notification on itself for as long as it is
- * bound, and hands it over to the app's service the moment that one is up.
- * That is less than the app service gives, and a great deal more than nothing.
+ * bound looks like to the system. Refused, the app says so in the log and the
+ * switch's own screen says what is in force; the notification is not posted
+ * by the speech service instead, because a notification is the switch's to
+ * promise and not the engine's to make up for.
  *
- * A notification can be swiped, dismissed, or dropped when the system rebuilds
- * its list, and a foreground service whose notification has gone is a
- * foreground service nothing protects. So it is looked for every [CHECK_MS] and
- * put back if it is not there. On Android 13 and later the check leaves it
- * alone when the notification permission has not been given, because then the
- * system hides it by the user's own choice and re-posting it every few seconds
- * is noise for nothing.
+ * And a device that has refused the notification permission hides whatever is
+ * posted. That is the user's own answer, so nothing here argues with it: the
+ * service still holds the foreground where the system allows it, and nothing
+ * re-posts anything every few seconds.
  */
 class KeepAlive(private val service: Service) {
 
 	private val handler = Handler(Looper.getMainLooper())
 
-	/** Whether the speech service is the one posting the notification, which it
-	 *  is only while the app's own service cannot. */
-	private var holding = false
-
 	/** Whether the user has asked for any of this. */
 	private var wanted = false
 
-	private val check = object : Runnable {
-		override fun run() {
-			if (!wanted) return
-			// The setting is read again rather than trusted, because it can move
-			// while this is running: the switch on the battery screen, the same
-			// settings on another device, an update that replaced the service. A
-			// check that only knew what it was told to want would put the
-			// notification back three seconds after the person who turned it off
-			// had turned it off, which is the sound of an app that will not take
-			// no for an answer.
-			if (!Settings.flag(service, Settings.KEY_PERSISTENT_NOTIFICATION, false)) {
-				sync(false)
-				return
-			}
-			if (holding && builtWith != stopButton()) {
-				// The button on the notification is the setting's, and the
-				// notification that is up was built with whatever it said when
-				// this started. Posting it again is the whole of the update, and
-				// the check is where anybody who changed it finds out.
-				hold()
-			}
-			if (KeepAliveService.isRunning) {
-				// The app owns it. Handing over happens once rather than on
-				// every check, and the notification stays up because the
-				// service that has taken it over posts it as well.
-				if (holding) {
-					holding = false
-					KeepAliveNotification.release(service, detach = true)
-				}
-			} else if (!isShown()) {
-				hold()
-			}
-			handler.postDelayed(this, checkMs(service))
-		}
-	}
-
-	/** Turns the notification on or off, matching the setting. No-op when the
-	 *  state has not changed. */
+	/** Turns the notification on or off, matching the setting. A no-op when the
+	 *  state has not changed, which is what keeps the utterance path free of
+	 *  it: the speech service asks on every utterance and pays a comparison. */
 	fun sync(enabled: Boolean) {
 		if (enabled == wanted) return
 		wanted = enabled
-		handler.removeCallbacks(check)
 		if (enabled) {
 			KeepAlive.ensureChannel(service)
-			if (!KeepAliveService.start(service)) hold()
-			handler.postDelayed(check, checkMs(service))
+			KeepAliveService.start(service)
 		} else {
 			KeepAliveService.stop(service)
-			if (holding) {
-				holding = false
-				KeepAliveNotification.release(service, detach = false)
+			// Whatever is up goes with it: the service that was holding the
+			// notification may be the speech service's own fallback, and the
+			// switch is the whole of what says it should be there.
+			handler.post {
+				if (!wanted) KeepAliveNotification.cancel(service)
 			}
 		}
 	}
 
-	/** Called when the speech service goes away, so that a fallback
-	 *  notification does not outlive the only thing that can defend it. The
-	 *  app's own service is left alone: it is not the speech service's to
-	 *  stop, and leaving it up is the whole point. */
+	/** Whether the notification is wanted at all, which is what a screen that
+	 *  has just read the setting needs to know. */
+	fun isWanted(): Boolean = wanted
+
+	/** Called when the speech service goes away. The app's own service is left
+	 *  alone: it is not the speech service's to stop, and leaving it up is the
+	 *  whole point. */
 	fun release() {
 		wanted = false
-		handler.removeCallbacks(check)
-		if (holding) {
-			holding = false
-			KeepAliveNotification.release(service, detach = KeepAliveService.isRunning)
-		}
+		handler.removeCallbacksAndMessages(null)
 	}
-
-	/** Whether the notification that is up carries the stop button, which is
-	 *  what says whether it has to be built again after the switch moved. */
-	private var builtWith = true
-
-	private fun hold() {
-		val withStop = stopButton()
-		holding = KeepAliveNotification.claim(service, withStop)
-		if (holding) builtWith = withStop
-	}
-
-	/** Whether the notification is where it should be, from the point of view
-	 *  of a check that is only interested in the ones it can put back. */
-	private fun isShown(): Boolean {
-		if (!KeepAliveNotification.notificationsAllowed(service)) return true
-		return KeepAliveNotification.isPosted(service)
-	}
-
-	private fun stopButton(): Boolean =
-		Settings.flag(service, Settings.KEY_NOTIFICATION_STOP, true)
 
 	companion object {
 		const val TAG = "freeeloquencetts"
 		const val CHANNEL_ID = KeepAliveNotification.CHANNEL_ID
 		const val ID = KeepAliveNotification.ID
-		/** How often the notification is looked for, in milliseconds. */
-		const val CHECK_MS = 3000L
 
-		/** How often the notification is looked for now, in milliseconds:
-		 *  the setting's, or [CHECK_MS] for anything the screen never
-		 *  offered. Read fresh on every check, so a choice made on the
-		 *  battery screen is in force seconds later without restarting
-		 *  anything. Asked through [Settings.number] rather than an
-		 *  instance, which is what a check that runs for ever does. */
-		fun checkMs(context: Context): Long {
-			val at = Settings.number(context, Settings.KEY_KEEP_ALIVE_CHECK_MS, CHECK_MS.toInt())
-			return if (Stability.NOTIFICATION_CHECKS.contains(at)) at.toLong() else CHECK_MS
-		}
+		/** How often the notification is looked for and put back: never, and
+		 *  the nought is the answer rather than an absence. It used to be
+		 *  three seconds, on every phone, for ever, for a notification that
+		 *  a foreground service does not let be swiped away and that a
+		 *  stopped service takes with it. Nothing reads this; it is here so
+		 *  that anything still asking -- a screen, a test, a person reading
+		 *  the source -- is told that the check is gone rather than left to
+		 *  wonder how often it runs. See the note at the top of this file. */
+		const val CHECK_MS = 0L
 
 		private val handler = Handler(Looper.getMainLooper())
 
@@ -168,18 +114,20 @@ class KeepAlive(private val service: Service) {
 		 *  somebody to speak. */
 		fun sync(context: Context, enabled: Boolean) {
 			KeepAlive.ensureChannel(context)
-			if (enabled) KeepAliveService.start(context) else KeepAliveService.stop(context)
-			// The speech service's own check runs on the same clock, and a
-			// notification turned on from the screen has to be looked after
-			// while nothing is bound either. The app's service does that; this
-			// is here so that a device that refused the foreground service is
-			// still told about in the log rather than being silently worse.
-			if (enabled && !KeepAliveService.isRunning) {
+			if (enabled) {
+				KeepAliveService.start(context)
+				// A device that refused the foreground service is told about
+				// in the log rather than being silently worse. Once, and not
+				// on a clock: a failed start is not mended by asking again
+				// every three seconds for the rest of the day.
 				handler.postDelayed({
-					if (!KeepAliveService.isRunning) {
+					if (enabled && !KeepAliveService.isRunning) {
 						Log.w(TAG, "the keep-alive service would not start; the voice is unprotected until the engine speaks")
 					}
-				}, checkMs(context))
+				}, 1000L)
+			} else {
+				KeepAliveService.stop(context)
+				KeepAliveNotification.cancel(context)
 			}
 		}
 
