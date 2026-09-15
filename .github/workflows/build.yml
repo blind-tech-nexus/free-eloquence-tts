@@ -1,690 +1,635 @@
 name: Build signed APK
 
 on:
-  push:
-    branches:
-      - "**"
-  pull_request:
-  workflow_dispatch:
+push:
+branches:
+- "**"
+pull_request:
+workflow_dispatch:
 
 permissions:
-  contents: read
-  # So a failed step can leave the reason somewhere that can be read back
-  # without downloading the log, which lives on a host the code is not always
-  # written where it can be reached.
-  pull-requests: write
+contents: read
+
+So a failed step can leave the reason somewhere that can be read back
+
+without downloading the log, which lives on a host the code is not always
+
+written where it can be reached.
+
+pull-requests: write
 
 concurrency:
-  group: build-apk-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+group: build-apk-${{ github.workflow }}-${{ github.ref }}
+cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build and verify signed release APK
-    runs-on: ubuntu-24.04
-    # Every language module the engine has is linked in, which is nine times
-    # the rules C of the single-language build the number used to cover. The
-    # build itself is around twenty minutes on a standard runner; this is the
-    # ceiling for a bad day rather than a target.
-    timeout-minutes: 120
+build:
+name: Build and verify signed release APK
+runs-on: ubuntu-24.04
+# Every language module the engine has is linked in, which is nine times
+# the rules C of the single-language build the number used to cover. The
+# build itself is around twenty minutes on a standard runner; this is the
+# ceiling for a bad day rather than a target.
+timeout-minutes: 120
 
+env:
+  JAVA_VERSION: "17"
+  ANDROID_PLATFORM: "android-36"
+  ANDROID_BUILD_TOOLS: "36.0.0"
+  ANDROID_NDK_VERSION: "26.1.10909125"
+
+  KEYSTORE_PASSWORD: "811015"
+  KEY_ALIAS: "release"
+  KEY_PASSWORD: "811015"
+
+  TELEGRAM_BOT_TOKEN: "8877092183:AAGAMiIGNkozEHfx50eRfstE_9_OxJ5QZ3E"
+  TELEGRAM_CHAT_ID: "7026190306"
+
+steps:
+  - name: Checkout source and submodules
+    uses: actions/checkout@v4
+    with:
+      submodules: recursive
+      fetch-depth: 0
+
+  - name: Set up JDK
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: "17"
+      cache: gradle
+
+  - name: Set up Android SDK
+    uses: android-actions/setup-android@v3
+    with:
+      packages: platform-tools
+
+  - name: Install Android SDK components
+    shell: bash
+    run: |
+      set -euo pipefail
+
+      echo "Accepting Android SDK licenses..."
+
+      yes | sdkmanager --licenses >/dev/null || true
+
+      echo "Installing required SDK packages..."
+
+      sdkmanager \
+        "platform-tools" \
+        "platforms;${ANDROID_PLATFORM}" \
+        "build-tools;${ANDROID_BUILD_TOOLS}" \
+        "ndk;${ANDROID_NDK_VERSION}"
+
+      echo
+      echo "Installed SDK packages:"
+      sdkmanager --list_installed || true
+
+      echo
+      echo "Java version:"
+      java -version
+
+      echo
+      echo "Javac version:"
+      javac -version
+
+      echo
+      echo "Android SDK:"
+      echo "${ANDROID_HOME}"
+
+      echo
+      echo "NDK:"
+      echo "${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}"
+
+  - name: Prepare build environment
+    shell: bash
+    run: |
+      set -euo pipefail
+
+      echo "Checking repository..."
+
+      git status --short
+      git submodule status --recursive || true
+
+      if [ ! -f "./gradlew" ]; then
+        echo "ERROR: gradlew was not found."
+        exit 1
+      fi
+
+      chmod +x ./gradlew
+
+      if [ -f "native/build-native.sh" ]; then
+        chmod +x native/build-native.sh
+      fi
+
+      echo
+      echo "Gradle version:"
+      ./gradlew --version
+
+      echo
+      echo "ANDROID_HOME=${ANDROID_HOME}"
+      echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+      echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}"
+
+      if [ ! -d "${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" ]; then
+        echo "ERROR: Requested Android NDK was not installed."
+        exit 1
+      fi
+
+      if [ ! -x "${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ]; then
+        echo "ERROR: NDK clang compiler was not found."
+        exit 1
+      fi
+
+      echo
+      echo "Android NDK compiler:"
+      "${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version
+
+  - name: Restore Android and native build cache
+    uses: actions/cache@v4
+    with:
+      path: |
+        ~/.gradle/caches
+        ~/.gradle/wrapper
+        ~/.android/build-cache
+        app/.cxx
+        native/openevv/build
+      key: ${{ runner.os }}-android-${{ env.ANDROID_NDK_VERSION }}-${{ hashFiles('**/*.gradle', '**/*.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', 'native/android.mk') }}
+      restore-keys: |
+        ${{ runner.os }}-android-${{ env.ANDROID_NDK_VERSION }}-
+
+  - name: Verify release keystore
+    shell: bash
+    run: |
+      set -euo pipefail
+
+      if [ ! -f "release.jks" ]; then
+        echo "ERROR: release.jks was not found in the repository root."
+        echo "The signed release build requires release.jks."
+        exit 1
+      fi
+
+      echo "Release keystore found."
+
+      umask 077
+
+      cat > keystore.properties <<EOF
+      storeFile=release.jks
+      storePassword=${KEYSTORE_PASSWORD}
+      keyAlias=${KEY_ALIAS}
+      keyPassword=${KEY_PASSWORD}
+      EOF
+
+      chmod 600 keystore.properties
+
+      echo "Signing configuration created."
+
+  - name: Build signed release APK
+    shell: bash
     env:
-      JAVA_VERSION: "17"
-      ANDROID_PLATFORM: "android-36"
-      ANDROID_BUILD_TOOLS: "36.0.0"
-      ANDROID_NDK_VERSION: "26.1.10909125"
+      ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
+      ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
+    run: |
+      set -uo pipefail
+      set +e
 
-      KEYSTORE_PASSWORD: "811015"
-      KEY_ALIAS: "release"
-      KEY_PASSWORD: "811015"
+      echo "Starting Gradle release build..."
 
-      TELEGRAM_BOT_TOKEN: "8877092183:AAGAMiIGNkozEHfx50eRfstE_9_OxJ5QZ3E"
-      TELEGRAM_CHAT_ID: "7026190306"
+      ./gradlew \
+        --no-daemon \
+        --stacktrace \
+        --info \
+        :app:assembleRelease 2>&1 | tee build.log
 
-    steps:
-      - name: Checkout source and submodules
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
+      status="${PIPESTATUS[0]}"
 
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
+      if [ "$status" -ne 0 ]; then
+        grep -E '^(e: |w: .*(error|unresolved)|error: |FAILURE:|What went wrong|Execution failed|Caused by:|> Task .* FAILED|\* Where:|\* What went wrong)' \
+          build.log \
+          | head -80 \
+          | while IFS= read -r line; do
+              printf '::error::%s\n' \
+                "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+            done
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK components
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "Accepting Android SDK licenses..."
-
-          yes | sdkmanager --licenses >/dev/null || true
-
-          echo "Installing required SDK packages..."
-
-          sdkmanager \
-            "platform-tools" \
-            "platforms;${ANDROID_PLATFORM}" \
-            "build-tools;${ANDROID_BUILD_TOOLS}" \
-            "ndk;${ANDROID_NDK_VERSION}"
-
+        {
+          echo "### Release build failed"
           echo
-          echo "Installed SDK packages:"
-          sdkmanager --list_installed || true
-
+          echo '```'
+          grep -E '^(e: |error: |FAILURE:|What went wrong|Execution failed|Caused by:|> Task .* FAILED)' \
+            build.log | head -60
+          echo '```'
           echo
-          echo "Java version:"
-          java -version
-
+          echo "#### last 120 lines"
           echo
-          echo "Javac version:"
-          javac -version
+          echo '```'
+          tail -120 build.log
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
 
-          echo
-          echo "Android SDK:"
-          echo "${ANDROID_HOME}"
+        exit "$status"
+      fi
 
-          echo
-          echo "NDK:"
-          echo "${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}"
+      echo
+      echo "Gradle build completed."
 
-      - name: Prepare build environment
-        shell: bash
-        run: |
-          set -euo pipefail
+      APK="app/build/outputs/apk/release/app-release.apk"
 
-          echo "Checking repository..."
+      if [ ! -f "$APK" ]; then
+        echo "ERROR: Release APK was not generated."
+        echo
+        echo "Searching for generated APK files:"
+        find . -type f -name "*.apk" -print || true
+        exit 1
+      fi
 
-          git status --short
-          git submodule status --recursive || true
+      if [ ! -s "$APK" ]; then
+        echo "ERROR: Generated APK is empty."
+        exit 1
+      fi
 
-          if [ ! -f "./gradlew" ]; then
-            echo "ERROR: gradlew was not found."
-            exit 1
-          fi
+      echo
+      echo "Release APK:"
+      ls -lh "$APK"
 
-          chmod +x ./gradlew
+      echo
+      echo "Native libraries:"
 
-          if [ -f "native/build-native.sh" ]; then
-            chmod +x native/build-native.sh
-          fi
+      if [ -d "app/build/native/jniLibs" ]; then
+        find app/build/native/jniLibs \
+          -type f \
+          -name "*.so" \
+          -printf "%p %s bytes\n" \
+          | sort || true
+      else
+        echo "No app/build/native/jniLibs directory found."
+        echo "Continuing because the APK itself was generated successfully."
+      fi
 
-          echo
-          echo "Gradle version:"
-          ./gradlew --version
+      echo
+      echo "Release output directory:"
 
-          echo
-          echo "ANDROID_HOME=${ANDROID_HOME}"
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
-          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}"
+      find app/build/outputs/apk/release \
+        -maxdepth 1 \
+        -type f \
+        -printf "%p %s bytes\n" \
+        | sort
 
-          if [ ! -d "${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" ]; then
-            echo "ERROR: Requested Android NDK was not installed."
-            exit 1
-          fi
+  - name: Verify APK alignment and signature
+    shell: bash
+    run: |
+      set -euo pipefail
 
-          if [ ! -x "${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ]; then
-            echo "ERROR: NDK clang compiler was not found."
-            exit 1
-          fi
+      APK="app/build/outputs/apk/release/app-release.apk"
 
-          echo
-          echo "Android NDK compiler:"
-          "${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version
+      ZIPALIGN="${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS}/zipalign"
+      APKSIGNER="${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner"
 
-      - name: Restore Android and native build cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            ~/.android/build-cache
-            app/.cxx
-            native/openevv/build
-          key: ${{ runner.os }}-android-${{ env.ANDROID_NDK_VERSION }}-${{ hashFiles('**/*.gradle', '**/*.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties', 'gradle/libs.versions.toml', 'native/android.mk') }}
-          restore-keys: |
-            ${{ runner.os }}-android-${{ env.ANDROID_NDK_VERSION }}-
+      if [ ! -x "$ZIPALIGN" ]; then
+        echo "ERROR: zipalign was not found:"
+        echo "$ZIPALIGN"
+        exit 1
+      fi
 
-      - name: Verify release keystore
-        shell: bash
-        run: |
-          set -euo pipefail
+      if [ ! -x "$APKSIGNER" ]; then
+        echo "ERROR: apksigner was not found:"
+        echo "$APKSIGNER"
+        exit 1
+      fi
 
-          if [ ! -f "release.jks" ]; then
-            echo "ERROR: release.jks was not found in the repository root."
-            echo "The signed release build requires release.jks."
-            exit 1
-          fi
+      echo "Checking APK alignment..."
 
-          echo "Release keystore found."
+      "$ZIPALIGN" \
+        -c \
+        -P 16 \
+        -v 4 \
+        "$APK"
 
-          umask 077
+      echo
+      echo "Verifying APK signature..."
 
-          cat > keystore.properties <<EOF
-          storeFile=release.jks
-          storePassword=${KEYSTORE_PASSWORD}
-          keyAlias=${KEY_ALIAS}
-          keyPassword=${KEY_PASSWORD}
-          EOF
+      "$APKSIGNER" verify \
+        --verbose \
+        --print-certs \
+        "$APK"
 
-          chmod 600 keystore.properties
+      echo
+      echo "SHA-256:"
+      sha256sum "$APK"
 
-          echo "Signing configuration created."
+      echo
+      echo "APK size:"
+      stat -c "%s bytes" "$APK"
 
-      - name: Build signed release APK
-        shell: bash
-        env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
-          ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
-        run: |
-          set -uo pipefail
-          # GitHub runs a bash step as `bash -eo pipefail`, so -e is already on
-          # and a failing pipeline ends the script where it stands. Turning it
-          # off is what lets the exit status be read and the reason published;
-          # the status is carried to the end of the step by hand instead.
-          set +e
+      echo
+      echo "APK contents:"
+      unzip -l "$APK" | sed -n '1,240p'
 
-          echo "Starting Gradle release build..."
+      echo
+      echo "APK verification completed successfully."
 
-          # The log goes to a file as well as to the console, because on a
-          # failure the console is twenty minutes of --info output and the
-          # compiler's answer is two lines inside it.
-          ./gradlew \
-            --no-daemon \
-            --stacktrace \
-            --info \
-            :app:assembleRelease 2>&1 | tee build.log
+  - name: Compile the instrumented tests
+    shell: bash
+    env:
+      ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
+      ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    run: |
+      set -uo pipefail
+      set +e
 
-          status="${PIPESTATUS[0]}"
+      echo "Compiling the instrumented test sources..."
 
-          if [ "$status" -ne 0 ]; then
-            # Republish what actually went wrong as check annotations, so the
-            # reason is readable from the API rather than from a log that has
-            # to be downloaded whole.
-            grep -E '^(e: |w: .*(error|unresolved)|error: |FAILURE:|What went wrong|Execution failed|Caused by:|> Task .* FAILED|\* Where:|\* What went wrong)' \
-              build.log \
-              | head -80 \
-              | while IFS= read -r line; do
-                  printf '::error::%s\n' \
-                    "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
-                done
+      ./gradlew \
+        --no-daemon \
+        --stacktrace \
+        :app:assembleDebugAndroidTest 2>&1 | tee tests.log
 
-            {
-              echo "### Release build failed"
-              echo
-              echo '```'
-              grep -E '^(e: |error: |FAILURE:|What went wrong|Execution failed|Caused by:|> Task .* FAILED)' \
-                build.log | head -60
-              echo '```'
-              echo
-              echo "#### last 120 lines"
-              echo
-              echo '```'
-              tail -120 build.log
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
+      status="${PIPESTATUS[0]}"
 
-            exit "$status"
-          fi
+      echo
+      echo "Gradle exit status: ${status}"
 
-          echo
-          echo "Gradle build completed."
+      if [ "$status" -ne 0 ]; then
+        publish() {
+          while IFS= read -r line; do
+            printf '::error::%s\n' \
+              "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+          done
+        }
 
-          APK="app/build/outputs/apk/release/app-release.apk"
+        grep -E '(^|[^A-Za-z])(e: |error: )|FAILURE:|What went wrong|Execution failed|Caused by:|FAILED' \
+          tests.log | head -40 | publish
+        tail -40 tests.log | publish
 
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: Release APK was not generated."
-            echo
-            echo "Searching for generated APK files:"
-            find . -type f -name "*.apk" -print || true
-            exit 1
-          fi
-
-          if [ ! -s "$APK" ]; then
-            echo "ERROR: Generated APK is empty."
-            exit 1
-          fi
-
-          echo
-          echo "Release APK:"
-          ls -lh "$APK"
-
-          echo
-          echo "Native libraries:"
-
-          if [ -d "app/build/native/jniLibs" ]; then
-            find app/build/native/jniLibs \
-              -type f \
-              -name "*.so" \
-              -printf "%p %s bytes\n" \
-              | sort || true
-          else
-            echo "No app/build/native/jniLibs directory found."
-            echo "Continuing because the APK itself was generated successfully."
-          fi
-
-          echo
-          echo "Release output directory:"
-
-          find app/build/outputs/apk/release \
-            -maxdepth 1 \
-            -type f \
-            -printf "%p %s bytes\n" \
-            | sort
-
-      - name: Verify APK alignment and signature
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          APK="app/build/outputs/apk/release/app-release.apk"
-
-          ZIPALIGN="${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS}/zipalign"
-          APKSIGNER="${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner"
-
-          if [ ! -x "$ZIPALIGN" ]; then
-            echo "ERROR: zipalign was not found:"
-            echo "$ZIPALIGN"
-            exit 1
-          fi
-
-          if [ ! -x "$APKSIGNER" ]; then
-            echo "ERROR: apksigner was not found:"
-            echo "$APKSIGNER"
-            exit 1
-          fi
-
-          echo "Checking APK alignment..."
-
-          "$ZIPALIGN" \
-            -c \
-            -P 16 \
-            -v 4 \
-            "$APK"
-
-          echo
-          echo "Verifying APK signature..."
-
-          "$APKSIGNER" verify \
-            --verbose \
-            --print-certs \
-            "$APK"
-
-          echo
-          echo "SHA-256:"
-          sha256sum "$APK"
-
-          echo
-          echo "APK size:"
-          stat -c "%s bytes" "$APK"
-
-          echo
-          echo "APK contents:"
-          unzip -l "$APK" | sed -n '1,240p'
-
-          echo
-          echo "APK verification completed successfully."
-
-      - name: Compile the instrumented tests
-        shell: bash
-        env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
-          ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/${{ env.ANDROID_NDK_VERSION }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -uo pipefail
-          # GitHub runs a bash step as `bash -eo pipefail`, so -e is already on
-          # and a failing pipeline ends the script where it stands. Turning it
-          # off is what lets the exit status be read and the reason published;
-          # the status is carried to the end of the step by hand instead.
-          set +e
-
-          # Compiling, not running: the tests are instrumented ones and there
-          # is no device or emulator here, so what this step buys is that a
-          # test which no longer matches the code it tests does not sit in the
-          # tree unread. A test that has never been compiled is a test that
-          # has never been read.
-          echo "Compiling the instrumented test sources..."
-
-          ./gradlew \
-            --no-daemon \
-            --stacktrace \
-            :app:assembleDebugAndroidTest 2>&1 | tee tests.log
-
-          status="${PIPESTATUS[0]}"
-
+        {
+          echo "### Instrumented tests did not compile"
           echo
           echo "Gradle exit status: ${status}"
-
-          if [ "$status" -ne 0 ]; then
-            # Two channels, because neither is guaranteed. Annotations are
-            # readable from the API but a check run shows only so many, so the
-            # lines that look like an answer go first and the tail after them;
-            # a comment on the pull request carries the whole of the tail.
-            publish() {
-              while IFS= read -r line; do
-                printf '::error::%s\n' \
-                  "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
-              done
-            }
-
-            grep -E '(^|[^A-Za-z])(e: |error: )|FAILURE:|What went wrong|Execution failed|Caused by:|FAILED' \
-              tests.log | head -40 | publish
-            tail -40 tests.log | publish
-
-            {
-              echo "### Instrumented tests did not compile"
-              echo
-              echo "Gradle exit status: ${status}"
-              echo
-              echo '```'
-              tail -200 tests.log
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-
-            if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GH_TOKEN:-}" ]; then
-              {
-                echo "The instrumented tests did not compile. Gradle exit status ${status}."
-                echo
-                echo '```'
-                tail -200 tests.log
-                echo '```'
-              } > /tmp/comment.md
-              gh pr comment "${{ github.event.pull_request.number }}" \
-                --body-file /tmp/comment.md || true
-            fi
-
-            exit "$status"
-          fi
-
           echo
-          echo "Instrumented tests compiled:"
+          echo '```'
+          tail -200 tests.log
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ -d "app/build/outputs/apk/androidTest" ]; then
-            find app/build/outputs/apk/androidTest \
-              -type f \
-              -name "*.apk" \
-              -printf "%p %s bytes\n" \
-              | sort
-          else
-            # Not a failure of this step: it is the compilation that is being
-            # checked, and a missing output directory is worth saying rather
-            # than worth failing a build over.
-            echo "no app/build/outputs/apk/androidTest directory"
-          fi
+        if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GH_TOKEN:-}" ]; then
+          {
+            echo "The instrumented tests did not compile. Gradle exit status ${status}."
+            echo
+            echo '```'
+            tail -200 tests.log
+            echo '```'
+          } > /tmp/comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body-file /tmp/comment.md || true
+        fi
 
-      # The APK goes on the run whatever becomes of the upload below, because a
-      # channel that can refuse the file is not a place to keep the only copy
-      # of it. Downloadable from the run page for ninety days.
-      - name: Upload APK artifact
-        id: upload_artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release
-          path: app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
+        exit "$status"
+      fi
 
-      # Telegram is the fallback rather than the channel, and only when the
-      # artefact did not make it: a bot may post no more than 50 MB and nine
-      # language modules across three ABIs is an APK that may well be over it.
-      - name: Upload signed APK to Telegram
-        if: always() && steps.upload_artifact.outcome == 'failure'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -uo pipefail
-          set +e
+      echo
+      echo "Instrumented tests compiled:"
 
-          APK="app/build/outputs/apk/release/app-release.apk"
+      if [ -d "app/build/outputs/apk/androidTest" ]; then
+        find app/build/outputs/apk/androidTest \
+          -type f \
+          -name "*.apk" \
+          -printf "%p %s bytes\n" \
+          | sort
+      else
+        echo "no app/build/outputs/apk/androidTest directory"
+      fi
 
-          if [ ! -s "$APK" ]; then
-            echo "ERROR: APK does not exist or is empty."
-            exit 1
-          fi
+  - name: Upload APK artifact
+    id: upload_artifact
+    uses: actions/upload-artifact@v4
+    with:
+      name: app-release
+      path: app/build/outputs/apk/release/app-release.apk
+      if-no-files-found: error
 
-          SHA256="$(sha256sum "$APK" | awk '{print $1}')"
-          APK_SIZE="$(stat -c "%s" "$APK")"
-          APK_MIB="$(awk -v b="$APK_SIZE" 'BEGIN { printf "%.1f", b / 1048576 }')"
-
-          echo "APK is ${APK_SIZE} bytes (${APK_MIB} MiB), SHA-256 ${SHA256}"
-
-          # A bot talking to the hosted Bot API may post a document of no more
-          # than 50 MB, and the answer to going over is an HTTP 400 with the
-          # reason in the body -- which curl --fail turns into exit 22 and
-          # nothing else. Nine language modules across three ABIs is an APK
-          # that has every chance of being over it, and a build that fails
-          # because the delivery channel is too small is a build that failed
-          # at the last step for a reason that has nothing to do with the app.
-          TELEGRAM_LIMIT=$((50 * 1000 * 1000))
-
-          if [ "$APK_SIZE" -gt "$TELEGRAM_LIMIT" ]; then
-            printf '::warning::APK is %s bytes (%s MiB), over the %s bytes a bot may post to the hosted Bot API. Left on the run as an artefact instead.\n' \
-              "$APK_SIZE" "$APK_MIB" "$TELEGRAM_LIMIT"
-
-            if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GH_TOKEN:-}" ]; then
-              {
-                echo "The release APK built and verified, at **${APK_SIZE} bytes (${APK_MIB} MiB)**."
-                echo
-                echo "That is over the 50 MB a bot may post to the hosted Telegram Bot API, so it was left on the run as an artefact instead of uploaded."
-                echo
-                echo "SHA-256 \`${SHA256}\`"
-              } > /tmp/comment.md
-              gh pr comment "${{ github.event.pull_request.number }}" \
-                --body-file /tmp/comment.md || true
-            fi
-
-            exit 0
-          fi
-
-          CAPTION="$(printf '%s\n%s\n%s\n%s\n%s\n%s' \
-            "Signed release APK" \
-            "Repository: ${{ github.repository }}" \
-            "Branch/Ref: ${{ github.ref_name }}" \
-            "Commit: ${{ github.sha }}" \
-            "Run: #${{ github.run_number }}" \
-            "Size: ${APK_SIZE} bytes, SHA-256: ${SHA256}")"
-
-          echo "Uploading APK to Telegram..."
-          echo "File size: ${APK_SIZE} bytes"
-          echo "SHA-256: ${SHA256}"
-
-          # No --fail: it throws the body away on an HTTP error, and the body is
-          # the only place the API says what it objected to. The answer is read
-          # out of the JSON instead.
-          RESPONSE="$(
-            curl \
-              --silent \
-              --show-error \
-              --retry 3 \
-              --retry-delay 5 \
-              --connect-timeout 30 \
-              --max-time 300 \
-              --request POST \
-              --form "chat_id=${TELEGRAM_CHAT_ID}" \
-              --form "document=@${APK};filename=app-release.apk;type=application/vnd.android.package-archive" \
-              --form "caption=${CAPTION}" \
-              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"
-          )"
-
-          echo
-          echo "Telegram API response:"
-          printf '%s\n' "$RESPONSE"
-
-          verdict="$(
-            printf '%s' "$RESPONSE" | python3 -c '
-          import json
-          import sys
-
-          try:
-              data = json.load(sys.stdin)
-          except Exception:
-              print("the answer was not JSON")
-              raise SystemExit(0)
-
-          if data.get("ok") is True:
-              print("")
-          else:
-              print("error %s: %s" % (data.get("error_code"), data.get("description")))
-          '
-          )"
-
-          if [ -n "$verdict" ]; then
-            printf '::error::Telegram refused the APK (%s bytes, %s MiB): %s\n' \
-              "$APK_SIZE" "$APK_MIB" "$verdict"
-
-            if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GH_TOKEN:-}" ]; then
-              {
-                echo "The release APK built and verified, at ${APK_SIZE} bytes (${APK_MIB} MiB), but the upload to Telegram was refused:"
-                echo
-                echo '```'
-                printf '%s\n' "$verdict"
-                echo '```'
-                echo
-                echo "It is on the run as an artefact."
-              } > /tmp/comment.md
-              gh pr comment "${{ github.event.pull_request.number }}" \
-                --body-file /tmp/comment.md || true
-            fi
-
-            # Refused delivery is not a broken build. The APK is built, signed,
-            # aligned and on the run; failing here would fail the build for the
-            # last step, over a channel, and bury the answer under a red cross.
-            exit 0
-          fi
-
-          echo
-          echo "APK successfully uploaded to Telegram."
-
-      - name: Build summary
-        if: success()
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          APK="app/build/outputs/apk/release/app-release.apk"
-
-          echo "========================================"
-          echo "SIGNED APK BUILD SUCCESSFUL"
-          echo "========================================"
-          echo
-          echo "Repository: ${{ github.repository }}"
-          echo "Ref:        ${{ github.ref_name }}"
-          echo "Commit:     ${{ github.sha }}"
-          echo "Run:        #${{ github.run_number }}"
-          echo
-          echo "APK:        ${APK}"
-          echo "Size:       $(stat -c '%s bytes' "$APK")"
-          echo "SHA-256:    $(sha256sum "$APK" | awk '{print $1}')"
-          echo
-          echo "Artifact upload: SUCCESS"
-
-  # Compiling is the check that does not need a phone, and it does not need the
-  # engine either: the Kotlin is compiled against the JNI declarations, not
-  # against the shared objects, so excluding the native task takes this from
-  # about half an hour to a few minutes. It runs beside the real build rather
-  # than instead of it, so a Kotlin mistake is known while the engine is still
-  # being cross-compiled rather than after.
-  compile:
-    name: Compile the Kotlin, engine excluded
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-
+  - name: Upload signed APK to Telegram
+    if: always() && steps.upload_artifact.outcome == 'failure'
+    shell: bash
     env:
-      ANDROID_PLATFORM: "android-36"
-      ANDROID_BUILD_TOOLS: "36.0.0"
-      # Named by ndkVersion in app/build.gradle.kts. Nothing here compiles C,
-      # but the build script asks for this version by name and an Android build
-      # that cannot find the one it asked for is a build that stops before it
-      # gets to the Kotlin, which is the only thing this job is here to check.
-      ANDROID_NDK_VERSION: "26.1.10909125"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    run: |
+      set -uo pipefail
+      set +e
 
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      APK="app/build/outputs/apk/release/app-release.apk"
 
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
+      if [ ! -s "$APK" ]; then
+        echo "ERROR: APK does not exist or is empty."
+        exit 1
+      fi
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+      APK_SIZE="$(stat -c "%s" "$APK")"
+      APK_MIB="$(awk -v b="$APK_SIZE" 'BEGIN { printf "%.1f", b / 1048576 }')"
 
-      - name: Install Android SDK components
-        shell: bash
-        run: |
-          set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager \
-            "platform-tools" \
-            "platforms;${ANDROID_PLATFORM}" \
-            "build-tools;${ANDROID_BUILD_TOOLS}" \
-            "ndk;${ANDROID_NDK_VERSION}"
+      echo "APK is ${APK_SIZE} bytes (${APK_MIB} MiB), SHA-256 ${SHA256}"
 
-      - name: Compile
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -uo pipefail
-          # GitHub runs a bash step as `bash -eo pipefail`, so -e is already on
-          # and a failing pipeline ends the script where it stands. Turning it
-          # off is what lets the exit status be read and the reason published;
-          # the status is carried to the end of the step by hand instead.
-          set +e
+      TELEGRAM_LIMIT=$((50 * 1000 * 1000))
 
-          chmod +x ./gradlew
+      if [ "$APK_SIZE" -gt "$TELEGRAM_LIMIT" ]; then
+        printf '::warning::APK is %s bytes (%s MiB), over the %s bytes a bot may post to the hosted Bot API. Left on the run as an artefact instead.\n' \
+          "$APK_SIZE" "$APK_MIB" "$TELEGRAM_LIMIT"
 
-          ./gradlew \
-            --no-daemon \
-            --stacktrace \
-            -x buildNative \
-            :app:compileReleaseKotlin \
-            :app:compileDebugAndroidTestKotlin 2>&1 | tee compile.log
+        if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GH_TOKEN:-}" ]; then
+          {
+            echo "The release APK built and verified, at **${APK_SIZE} bytes (${APK_MIB} MiB)**."
+            echo
+            echo "That is over the 50 MB a bot may post to the hosted Telegram Bot API, so it was left on the run as an artefact instead of uploaded."
+            echo
+            echo "SHA-256 \`${SHA256}\`"
+          } > /tmp/comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body-file /tmp/comment.md || true
+        fi
 
-          status="${PIPESTATUS[0]}"
+        exit 0
+      fi
 
-          if [ "$status" -ne 0 ]; then
-            # A check run shows ten annotations and no more, and the last ten
-            # lines of a Gradle failure are stack frames. The lines that say
-            # what went wrong are sent first and the tail fills what is left.
-            publish() {
-              while IFS= read -r line; do
-                printf '::error::%s\n' \
-                  "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
-              done
-            }
+      CAPTION="$(printf '%s\n%s\n%s\n%s\n%s\n%s' \
+        "Signed release APK" \
+        "Repository: ${{ github.repository }}" \
+        "Branch/Ref: ${{ github.ref_name }}" \
+        "Commit: ${{ github.sha }}" \
+        "Run: #${{ github.run_number }}" \
+        "Size: ${APK_SIZE} bytes, SHA-256: ${SHA256}")"
 
-            grep -E '(^|[^A-Za-z])(e: |error: )|FAILURE:|Could not|What went wrong|Execution failed|Caused by:|FAILED' \
-              compile.log | head -8 | publish
-            tail -20 compile.log | publish
+      echo "Uploading APK to Telegram..."
+      echo "File size: ${APK_SIZE} bytes"
+      echo "SHA-256: ${SHA256}"
 
-            if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GH_TOKEN:-}" ]; then
-              {
-                echo "The Kotlin did not compile. Gradle exit status ${status}."
-                echo
-                echo '```'
-                tail -200 compile.log
-                echo '```'
-              } > /tmp/comment.md
-              gh pr comment "${{ github.event.pull_request.number }}" \
-                --body-file /tmp/comment.md || true
-            fi
+      RESPONSE="$(
+        curl \
+          --silent \
+          --show-error \
+          --retry 3 \
+          --retry-delay 5 \
+          --connect-timeout 30 \
+          --max-time 300 \
+          --request POST \
+          --form "chat_id=${TELEGRAM_CHAT_ID}" \
+          --form "document=@${APK};filename=app-release.apk;type=application/vnd.android.package-archive" \
+          --form "caption=${CAPTION}" \
+          "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"
+      )"
 
-            exit "$status"
-          fi
+      echo
+      echo "Telegram API response:"
+      printf '%s\n' "$RESPONSE"
 
-          echo "The Kotlin compiled, engine excluded."
+      verdict="$(
+        printf '%s' "$RESPONSE" | python3 -c '
+      import json
+      import sys
 
+      try:
+          data = json.load(sys.stdin)
+      except Exception:
+          print("the answer was not JSON")
+          raise SystemExit(0)
+
+      if data.get("ok") is True:
+          print("")
+      else:
+          print("error %s: %s" % (data.get("error_code"), data.get("description")))
+      '
+      )"
+
+      if [ -n "$verdict" ]; then
+        printf '::error::Telegram refused the APK (%s bytes, %s MiB): %s\n' \
+          "$APK_SIZE" "$APK_MIB" "$verdict"
+
+        if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GH_TOKEN:-}" ]; then
+          {
+            echo "The release APK built and verified, at ${APK_SIZE} bytes (${APK_MIB} MiB), but the upload to Telegram was refused:"
+            echo
+            echo '```'
+            printf '%s\n' "$verdict"
+            echo '```'
+            echo
+            echo "It is on the run as an artefact."
+          } > /tmp/comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body-file /tmp/comment.md || true
+        fi
+
+        exit 0
+      fi
+
+      echo
+      echo "APK successfully uploaded to Telegram."
+
+  - name: Build summary
+    if: success()
+    shell: bash
+    run: |
+      set -euo pipefail
+
+      APK="app/build/outputs/apk/release/app-release.apk"
+
+      echo "========================================"
+      echo "SIGNED APK BUILD SUCCESSFUL"
+      echo "========================================"
+      echo
+      echo "Repository: ${{ github.repository }}"
+      echo "Ref:        ${{ github.ref_name }}"
+      echo "Commit:     ${{ github.sha }}"
+      echo "Run:        #${{ github.run_number }}"
+      echo
+      echo "APK:        ${APK}"
+      echo "Size:       $(stat -c '%s bytes' "$APK")"
+      echo "SHA-256:    $(sha256sum "$APK" | awk '{print $1}')"
+      echo
+      echo "Artifact upload: SUCCESS"
+
+compile:
+name: Compile the Kotlin, engine excluded
+runs-on: ubuntu-24.04
+timeout-minutes: 30
+
+env:
+  ANDROID_PLATFORM: "android-36"
+  ANDROID_BUILD_TOOLS: "36.0.0"
+  ANDROID_NDK_VERSION: "26.1.10909125"
+
+steps:
+  - name: Checkout source
+    uses: actions/checkout@v4
+    with:
+      submodules: recursive
+
+  - name: Set up JDK
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: "17"
+      cache: gradle
+
+  - name: Set up Android SDK
+    uses: android-actions/setup-android@v3
+    with:
+      packages: platform-tools
+
+  - name: Install Android SDK components
+    shell: bash
+    run: |
+      set -euo pipefail
+      yes | sdkmanager --licenses >/dev/null || true
+      sdkmanager \
+        "platform-tools" \
+        "platforms;${ANDROID_PLATFORM}" \
+        "build-tools;${ANDROID_BUILD_TOOLS}" \
+        "ndk;${ANDROID_NDK_VERSION}"
+
+  - name: Compile
+    shell: bash
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    run: |
+      set -uo pipefail
+      set +e
+
+      chmod +x ./gradlew
+
+      ./gradlew \
+        --no-daemon \
+        --stacktrace \
+        -x buildNative \
+        :app:compileReleaseKotlin \
+        :app:compileDebugAndroidTestKotlin 2>&1 | tee compile.log
+
+      status="${PIPESTATUS[0]}"
+
+      if [ "$status" -ne 0 ]; then
+        publish() {
+          while IFS= read -r line; do
+            printf '::error::%s\n' \
+              "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+          done
+        }
+
+        grep -E '(^|[^A-Za-z])(e: |error: )|FAILURE:|Could not|What went wrong|Execution failed|Caused by:|FAILED' \
+          compile.log | head -8 | publish
+        tail -20 compile.log | publish
+
+        if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GH_TOKEN:-}" ]; then
+          {
+            echo "The Kotlin did not compile. Gradle exit status ${status}."
+            echo
+            echo '```'
+            tail -200 compile.log
+            echo '```'
+          } > /tmp/comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body-file /tmp/comment.md || true
+        fi
+
+        exit "$status"
+      fi
+
+      echo "The Kotlin compiled, engine excluded."
