@@ -216,6 +216,22 @@ private fun OptimizationChoice(state: SettingsModel) {
 private fun VoiceCustomization(state: SettingsModel) {
 	SectionHeading(text = stringResource(R.string.section_voice))
 	SectionText(text = stringResource(R.string.section_voice_description))
+	val englishes = Eci.LANGUAGES.map { it.label }
+	// First, because it decides what the other two are: the nine voices are
+	// nine voices of each English, and the one this app speaks by default is
+	// the one chosen here.
+	ChoiceButton(
+		title = stringResource(R.string.language_label),
+		shown = stringResource(
+			R.string.value_selected,
+			stringResource(R.string.language_label),
+			englishes.getOrElse(state.languageIndex) { englishes[0] }
+		),
+		options = englishes,
+		chosen = state.languageIndex,
+		description = stringResource(R.string.language_description),
+		onChoose = { at -> state.chooseLanguage(Eci.LANGUAGES.getOrElse(at) { Eci.LANGUAGES[0] }.code) }
+	)
 	val voices = Eci.PRESET_NAMES.toList()
 	ChoiceButton(
 		title = stringResource(R.string.voice_label),

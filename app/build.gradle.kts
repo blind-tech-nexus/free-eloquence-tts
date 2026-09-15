@@ -10,11 +10,12 @@ plugins {
 val abis = (findProperty("evvdroid.abis") as String? ?: "arm64-v8a,armeabi-v7a,x86_64")
 	.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 val rulesForm = findProperty("evvdroid.rules") as String? ?: "c"
-// The one language module this app speaks: English (United States). Not a
-// property on purpose -- the app above has no second language anywhere in it,
-// so a module linked here beyond enus would be weight the APK carries and
-// nothing can speak in. See [Eci.ENGLISH_US].
-val languages = "lang/enus"
+// The two language modules this app speaks: English (United States) and
+// English (United Kingdom). Both are named here and both are offered above --
+// on the settings screen, in the voices the service answers with, and in what
+// a caller can ask for by locale -- so the weight of the second one is weight
+// the app can speak in. See [Eci.LANGUAGES].
+val languages = "lang/enus lang/engb"
 val nativeOut = layout.buildDirectory.dir("native/jniLibs")
 
 // The engine is built by its own Makefile rather than by CMake, because that

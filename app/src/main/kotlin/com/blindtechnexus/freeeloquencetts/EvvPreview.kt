@@ -34,6 +34,13 @@ class EvvPreview() {
 	@Volatile
 	private var generation = 0
 
+	/** Which English the samples are spoken in. One instance at a time here,
+	 *  because a screen that is tuning a voice is listening to one voice -- and
+	 *  the choice is the settings screen's, so changing it is a new instance
+	 *  and not a second one. */
+	@Volatile
+	private var english = Eci.ENGLISH_US
+
 	/** How many bytes of audio have gone to the track. Nothing in the app reads
 	 *  it; it is what lets a test say the preview really played, which is worth
 	 *  having because a preview that quietly plays nothing looks exactly like
@@ -58,9 +65,19 @@ class EvvPreview() {
 	 *  opened, which is the first thing the thread does. */
 	fun presetShape(index: Int): Map<Int, Int> = engine?.presetShape(index) ?: emptyMap()
 
-	fun open(then: (() -> Unit)? = null) {
+	fun open(language: Int = Eci.ENGLISH_US, then: (() -> Unit)? = null) {
 		work.post {
-			if (engine == null) engine = EvvEngine.open(Eci.ENGLISH_US)
+			english = language
+			if (engine == null || engine?.language != language) {
+				// Opening in the other English means giving the instance
+				// back: an engine speaks the language it was built with, so
+				// the sample in the new voice is a sample from a new
+				// instance. It happens while the screen is being set up, so
+				// the second of opening is paid once and off the main
+				// thread.
+				runCatching { engine?.close() }
+				engine = EvvEngine.open(language)
+			}
 			then?.let { Handler(android.os.Looper.getMainLooper()).post(it) }
 		}
 	}
@@ -85,7 +102,7 @@ class EvvPreview() {
 		work.post {
 			if (mine != generation) return@post
 			val e = try {
-				engine ?: EvvEngine.open(Eci.ENGLISH_US)?.also { engine = it } ?: return@post
+				engine ?: EvvEngine.open(english)?.also { engine = it } ?: return@post
 			} catch (_: Throwable) {
 				return@post
 			}

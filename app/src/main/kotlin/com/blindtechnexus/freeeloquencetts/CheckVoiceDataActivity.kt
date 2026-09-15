@@ -14,7 +14,11 @@ class CheckVoiceDataActivity : Activity() {
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		val available = ArrayList<String>()
-		if (EvvNative.loaded) available.add("${Eci.ISO3_LANGUAGE}-${Eci.ISO3_COUNTRY}")
+		if (EvvNative.loaded) {
+			for (language in Eci.LANGUAGES) {
+				available.add("${Eci.ISO3_LANGUAGE}-${language.iso3Country}")
+			}
+		}
 		val result = Intent().apply {
 			putStringArrayListExtra(TextToSpeech.Engine.EXTRA_AVAILABLE_VOICES, available)
 			putStringArrayListExtra(TextToSpeech.Engine.EXTRA_UNAVAILABLE_VOICES, ArrayList())

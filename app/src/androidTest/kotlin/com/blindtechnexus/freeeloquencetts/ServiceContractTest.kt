@@ -169,9 +169,14 @@ class ServiceContractTest {
 	fun theKeepAliveAndWakeLockConstantsAgreeWithTheCodeThatRunsOnThem() {
 		assertEquals("the notification channel must have a name", "keep_alive", KeepAlive.CHANNEL_ID)
 		assertEquals("the notification id must be stable", 1, KeepAlive.ID)
-		// The battery screen promises the notification is checked every few
-		// seconds and restored; three seconds is the few.
-		assertEquals("the notification check is not every 3 seconds", 3000L, KeepAlive.CHECK_MS)
+		// And nothing checks on a clock any more: the notification is posted
+		// by the service that holds it and by the switch that turns it on,
+		// and never looked for on a timer. The nought is the promise.
+		assertEquals(
+			"the notification must not be checked on a clock",
+			0L,
+			KeepAlive.CHECK_MS
+		)
 		// The wake lock is a ceiling, not a course: ten minutes is far longer
 		// than any utterance, so it is the framework's own bound and never the
 		// thing that ends the speech.

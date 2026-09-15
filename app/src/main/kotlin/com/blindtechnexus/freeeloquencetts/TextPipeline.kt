@@ -42,6 +42,24 @@ object TextPipeline {
 		s: Settings,
 		words: List<Pair<String, String>> = emptyList(),
 		abbreviations: List<Abbreviations.Entry> = emptyList()
+	): String = apply(raw, s, if (words.isEmpty()) WordIndex.EMPTY else WordIndex.of(words), abbreviations)
+
+	/**
+	 * The same road, with the user dictionary already an index.
+	 *
+	 * This is the one the speech service takes. The list form above builds
+	 * the index on the way in, which is right for a caller that has the pairs
+	 * and wrong for an utterance: the service holds the index already, built
+	 * off the synthesis thread by whoever changed the dictionary, and handing
+	 * it over is a reference. What the index costs a piece of text is the
+	 * piece and not the dictionary -- see [WordIndex] -- which is the whole
+	 * reason a dictionary of a million words is not a slow voice.
+	 */
+	fun apply(
+		raw: String,
+		s: Settings,
+		index: WordIndex,
+		abbreviations: List<Abbreviations.Entry> = emptyList()
 	): String {
 		if (raw.isEmpty()) return raw
 		// Every step guarded on its own, against everything: a rewrite that
@@ -53,7 +71,7 @@ object TextPipeline {
 		var text = raw
 		try { if (s.stripSsml) text = Ssml.strip(text) } catch (_: Throwable) {}
 		try { text = Emoji.apply(text, s.readEmoji) } catch (_: Throwable) {}
-		try { text = UserDictionary.apply(text, words) } catch (_: Throwable) {}
+		try { text = index.apply(text) } catch (_: Throwable) {}
 		if (s.expandAbbreviations) {
 			try { text = Abbreviations.apply(text, abbreviations) } catch (_: Throwable) {}
 		}
@@ -94,9 +112,21 @@ object TextPipeline {
 		s: Settings,
 		words: List<Pair<String, String>>,
 		abbreviations: List<Abbreviations.Entry>
+	): Sequence<TextPieces.Piece> =
+		pieces(raw, s, if (words.isEmpty()) WordIndex.EMPTY else WordIndex.of(words), abbreviations)
+
+	/** The same pieces, with the user dictionary already an index. The index
+	 *  is built once for the whole utterance rather than once per piece,
+	 *  which is what makes a long text cost a piece of work per piece even
+	 *  with a dictionary in force. */
+	fun pieces(
+		raw: String,
+		s: Settings,
+		index: WordIndex,
+		abbreviations: List<Abbreviations.Entry>
 	): Sequence<TextPieces.Piece> = TextPieces.pieceSequence(raw).map { piece ->
 		val said = try {
-			apply(piece.text, s, words, abbreviations)
+			apply(piece.text, s, index, abbreviations)
 		} catch (_: Throwable) {
 			piece.text
 		}

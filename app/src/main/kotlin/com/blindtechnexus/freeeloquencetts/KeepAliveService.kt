@@ -3,9 +3,7 @@ package com.blindtechnexus.freeeloquencetts
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 
@@ -22,35 +20,21 @@ import androidx.core.content.ContextCompat
  * So this service exists on its own. It is started when the setting is turned
  * on, by whatever is in front of the user at the time, and by the boot receiver
  * when that has been asked for; it is stopped when the setting is turned off.
- * All it does is claim the foreground and answer what the notification is
- * asked to do, which is the whole of what the protection is made of.
+ * All it does is claim the foreground and hold it, which is the whole of what
+ * the protection is made of.
  *
- * It posts the notification the same way the speech service always did -- the
- * same id, the same channel, the same look for it every few seconds in case
- * anything has taken it away -- so nothing about what a person sees changes
- * because the thing holding it up has moved.
+ * It holds it and nothing more. It used to look for its own notification every
+ * few seconds and post it again if it had gone, and that watchdog is what a
+ * phone that is mostly idle was paying for: a check every three seconds, for
+ * ever, on the chance that a notification the system does not let you swipe
+ * away had been swiped away. It is gone, and with it the handler and the clock
+ * it ran on. What is left is a service that claims once, on the way in, and
+ * answers a redelivery by claiming again -- which is what the system asking
+ * "are you still there?" is for.
  */
 class KeepAliveService : Service() {
 
-	private val handler = Handler(Looper.getMainLooper())
-
 	private var active = false
-
-	private val check = object : Runnable {
-		override fun run() {
-			if (!active) return
-			// A notification that has been swiped away leaves a foreground
-			// service that nothing protects, unless the user has refused the
-			// permission to show it at all, which is their answer rather than
-			// something to fight over every three seconds.
-			if (KeepAliveNotification.notificationsAllowed(this@KeepAliveService) &&
-				!KeepAliveNotification.isPosted(this@KeepAliveService)
-			) {
-				claim()
-			}
-			handler.postDelayed(this, KeepAlive.checkMs(this@KeepAliveService))
-		}
-	}
 
 	override fun onCreate() {
 		super.onCreate()
@@ -73,8 +57,6 @@ class KeepAliveService : Service() {
 			stopAndQuit()
 			return START_NOT_STICKY
 		}
-		handler.removeCallbacks(check)
-		handler.postDelayed(check, KeepAlive.checkMs(this))
 		return START_STICKY
 	}
 
@@ -82,11 +64,13 @@ class KeepAliveService : Service() {
 		super.onDestroy()
 		active = false
 		isRunning = false
-		handler.removeCallbacks(check)
 		KeepAliveNotification.release(this, detach = false)
 	}
 
 	override fun onBind(intent: Intent?): IBinder? = null
+
+	/** Whether the notification is up, for anything that asks. */
+	val holding: Boolean get() = active
 
 	/** Claims the foreground, which is the notification plus the standing the
 	 *  system gives whoever posts it. */
@@ -96,7 +80,6 @@ class KeepAliveService : Service() {
 	)
 
 	private fun stopAndQuit() {
-		handler.removeCallbacks(check)
 		KeepAliveNotification.cancel(this)
 		stopSelf()
 	}
@@ -107,8 +90,7 @@ class KeepAliveService : Service() {
 
 		/** The one thing worth knowing about this service from anywhere in the
 		 *  app: whether the notification is already being held up by the
-		 *  service that exists to hold it. The speech service asks, and holds
-		 *  the notification itself only while the answer is no. */
+		 *  service that exists to hold it. */
 		@Volatile
 		var isRunning = false
 			private set
@@ -116,8 +98,7 @@ class KeepAliveService : Service() {
 		/** Asks for it, and answers whether the system let it be asked for.
 		 *  Android 12 and later refuse a foreground service started from the
 		 *  background, which is what this looks like when the speech service
-		 *  is the one asking, so the answer decides whether the service that
-		 *  asked has to hold the notification itself. */
+		 *  is the one asking. */
 		fun start(context: Context): Boolean = try {
 			ContextCompat.startForegroundService(context, intent(context))
 			true

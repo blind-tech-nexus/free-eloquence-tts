@@ -11,8 +11,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Spellcheck
+import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -45,6 +47,14 @@ import androidx.compose.ui.unit.dp
  * says one thing each. The icons carry no meaning of their own -- they are
  * silent to a screen reader and the row's own words say the thing -- so there
  * is nothing here that depends on a colour, an image or a position.
+ *
+ * What is on it is what somebody would want to know before they use it rather
+ * than a list of features: that it is free and finished, that there are nine
+ * voices and two Englishes, that web pages and code are read as what they are,
+ * and that the two permissions coming next are worth allowing and are not
+ * needed to hear anything today. A welcome screen that says what the app costs
+ * and what it will ask for is a welcome screen somebody arrives at rather than
+ * one they get past.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +79,7 @@ fun WelcomeScreen(onContinue: () -> Unit) {
 			)
 			Paragraph(text = stringResource(R.string.welcome_alternative))
 			Paragraph(text = stringResource(R.string.welcome_free))
+			Paragraph(text = stringResource(R.string.welcome_intro))
 			Text(
 				text = stringResource(R.string.welcome_features),
 				style = MaterialTheme.typography.titleMedium,
@@ -82,6 +93,16 @@ fun WelcomeScreen(onContinue: () -> Unit) {
 				icon = Icons.Filled.RecordVoiceOver,
 				text = stringResource(R.string.welcome_voices),
 				description = stringResource(R.string.welcome_voices_description)
+			)
+			Feature(
+				icon = Icons.Filled.Language,
+				text = stringResource(R.string.welcome_languages),
+				description = stringResource(R.string.welcome_languages_description)
+			)
+			Feature(
+				icon = Icons.Filled.Web,
+				text = stringResource(R.string.welcome_web),
+				description = stringResource(R.string.welcome_web_description)
 			)
 			Feature(
 				icon = Icons.Filled.Code,

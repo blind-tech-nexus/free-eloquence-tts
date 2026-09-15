@@ -19,10 +19,21 @@ class SettingsModel(context: Context) {
 	private val app = context.applicationContext
 	private val settings = Settings(app)
 
-	/** The engine the sample is spoken on. There is one language, so one
-	 *  instance opened once, and nothing about it can be changed afterwards
-	 *  except the voice. */
+	/** The engine the sample is spoken on. One instance at a time, opened in
+	 *  whichever English is chosen, and nothing about it can be changed
+	 *  afterwards except the voice. */
 	private val preview: EvvPreview = EvvPreview()
+
+	/** Which English this app speaks. Two of them, and the choice is what
+	 *  every utterance from anywhere without a locale of its own is spoken
+	 *  in; see [Settings.language]. */
+	var language by mutableStateOf(settings.language)
+		private set
+
+	/** Where [language] sits in the offered list, for a button that offers
+	 *  them. */
+	val languageIndex: Int
+		get() = Eci.LANGUAGES.indexOfFirst { it.code == language }.coerceAtLeast(0)
 
 	var voice by mutableStateOf(settings.voice)
 		private set
@@ -107,7 +118,16 @@ class SettingsModel(context: Context) {
 	val gender: Int get() = shape[Eci.VOICE_GENDER] ?: Eci.defaultGender(voice)
 
 	init {
-		preview.open {
+		openPreview()
+	}
+
+	/** Opens the preview in the chosen English, and takes the voice's own
+	 *  settings from the engine once it is there. The same work happens again
+	 *  when the language changes, because the two voices are two engines and
+	 *  a slider left at one English's preset would be a lie about the
+	 *  other's. */
+	private fun openPreview() {
+		preview.open(language) {
 			// A voice's own settings are what the sliders start at, and only
 			// the engine knows them.
 			if (!settings.shapeIsCustom(settings.voice)) adoptVoice()
@@ -135,6 +155,17 @@ class SettingsModel(context: Context) {
 		if (!settings.shapeIsCustom(which)) adoptVoice()
 		shape.clear()
 		shape.putAll(settings.shape(which))
+	}
+
+	/** The other English. Everything else is left alone: the voice, the
+	 *  shape and the speed are the listener's and not the language's, and a
+	 *  screen that reset them for changing accent would be a screen nobody
+	 *  would use twice. */
+	fun chooseLanguage(code: Int) {
+		val settled = if (Eci.LANGUAGES.any { it.code == code }) code else Eci.ENGLISH_US
+		settings.language = settled
+		language = settled
+		openPreview()
 	}
 
 	fun setPercent(param: Int, percent: Int) = setShape(param, Eci.fromPercent(param, percent))
@@ -293,7 +324,7 @@ class SettingsModel(context: Context) {
 		val text = TextPipeline.apply(
 			app.getString(R.string.preview_text),
 			settings,
-			dictionary?.entries ?: emptyList(),
+			dictionary?.index ?: WordIndex.EMPTY,
 			Abbreviations.entries(app)
 		)
 		val said = Prosody.prefix(settings.phrasePrediction) +
