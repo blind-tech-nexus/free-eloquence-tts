@@ -95,6 +95,15 @@ class SettingsModel(context: Context) {
 	var numberMode by mutableStateOf(settings.numberMode)
 		private set
 
+	var readOtpDigits by mutableStateOf(settings.readOtpDigits)
+		private set
+
+	var forceLanguage by mutableStateOf(settings.forceLanguage)
+		private set
+
+	var synthesisRouting by mutableStateOf(settings.synthesisRouting)
+		private set
+
 	var stripSsml by mutableStateOf(settings.stripSsml)
 		private set
 
@@ -157,12 +166,12 @@ class SettingsModel(context: Context) {
 		shape.putAll(settings.shape(which))
 	}
 
-	/** The other English. Everything else is left alone: the voice, the
+	/** Another of the eight. Everything else is left alone: the voice, the
 	 *  shape and the speed are the listener's and not the language's, and a
-	 *  screen that reset them for changing accent would be a screen nobody
+	 *  screen that reset them for changing language would be a screen nobody
 	 *  would use twice. */
 	fun chooseLanguage(code: Int) {
-		val settled = if (Eci.LANGUAGES.any { it.code == code }) code else Eci.ENGLISH_US
+		val settled = Eci.languageOrDefault(code)
 		settings.language = settled
 		language = settled
 		openPreview()
@@ -251,6 +260,22 @@ class SettingsModel(context: Context) {
 		settings.numberMode = mode
 	}
 
+	fun chooseReadOtpDigits(on: Boolean) {
+		readOtpDigits = on
+		settings.readOtpDigits = on
+	}
+
+	fun chooseForceLanguage(on: Boolean) {
+		forceLanguage = on
+		settings.forceLanguage = on
+	}
+
+	fun chooseSynthesisRouting(route: Int) {
+		val settled = SynthesisRouting.clamp(route)
+		synthesisRouting = settled
+		settings.synthesisRouting = settled
+	}
+
 	fun chooseStripSsml(on: Boolean) {
 		stripSsml = on
 		settings.stripSsml = on
@@ -302,8 +327,9 @@ class SettingsModel(context: Context) {
 	}
 
 	fun chooseSampleRate(hz: Int) {
-		sampleRateHz = hz
-		settings.sampleRateHz = hz
+		val settled = Eci.nearestSampleRate(hz)
+		sampleRateHz = settled
+		settings.sampleRateHz = settled
 	}
 
 	fun chooseAudioOptimization(mode: Int) {
@@ -312,6 +338,16 @@ class SettingsModel(context: Context) {
 	}
 
 	// ---- hearing it ------------------------------------------------------
+
+	/** The sample in the language that will speak it: a German voice
+	 *  reading an English sentence is a sample of nothing. */
+	private fun previewTextOf(code: Int): Int = when (code) {
+		Eci.GERMAN -> R.string.preview_text_de
+		Eci.SPANISH_SPAIN, Eci.SPANISH_MEXICO -> R.string.preview_text_es
+		Eci.FRENCH_FRANCE, Eci.FRENCH_CANADA -> R.string.preview_text_fr
+		Eci.ITALIAN -> R.string.preview_text_it
+		else -> R.string.preview_text
+	}
 
 	/** Nothing here speaks by itself. Every setting is in force the moment it
 	 *  is written down, and this is how it gets heard. The sample goes through
@@ -322,7 +358,7 @@ class SettingsModel(context: Context) {
 		// that is in force rather than a fresh read of the file behind it.
 		val dictionary = runCatching { UserDictionary.snapshot(app) }.getOrNull()
 		val text = TextPipeline.apply(
-			app.getString(R.string.preview_text),
+			app.getString(previewTextOf(language)),
 			settings,
 			dictionary?.index ?: WordIndex.EMPTY,
 			Abbreviations.entries(app)

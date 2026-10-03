@@ -216,21 +216,27 @@ private fun OptimizationChoice(state: SettingsModel) {
 private fun VoiceCustomization(state: SettingsModel) {
 	SectionHeading(text = stringResource(R.string.section_voice))
 	SectionText(text = stringResource(R.string.section_voice_description))
-	val englishes = Eci.LANGUAGES.map { it.label }
+	val languages = Eci.LANGUAGES.map { it.label }
 	// First, because it decides what the other two are: the nine voices are
-	// nine voices of each English, and the one this app speaks by default is
-	// the one chosen here.
+	// nine voices of each language, and the one this app speaks by default
+	// is the one chosen here.
 	ChoiceButton(
 		title = stringResource(R.string.language_label),
 		shown = stringResource(
 			R.string.value_selected,
 			stringResource(R.string.language_label),
-			englishes.getOrElse(state.languageIndex) { englishes[0] }
+			languages.getOrElse(state.languageIndex) { languages[0] }
 		),
-		options = englishes,
+		options = languages,
 		chosen = state.languageIndex,
 		description = stringResource(R.string.language_description),
 		onChoose = { at -> state.chooseLanguage(Eci.LANGUAGES.getOrElse(at) { Eci.LANGUAGES[0] }.code) }
+	)
+	SwitchRow(
+		label = stringResource(R.string.force_language_label),
+		description = stringResource(R.string.force_language_description),
+		checked = state.forceLanguage,
+		onChange = state::chooseForceLanguage
 	)
 	val voices = Eci.PRESET_NAMES.toList()
 	ChoiceButton(
@@ -322,6 +328,20 @@ private fun VoiceQuality(state: SettingsModel) {
 		onChoose = { state.chooseSampleRate(SettingsModel.RATES[it]) },
 		description = stringResource(R.string.sample_rate_description)
 	)
+	val routes = SynthesisRouting.CHOICES.map { stringResource(routingNameOf(it)) }
+	ChoiceButton(
+		title = stringResource(R.string.routing_label),
+		shown = stringResource(
+			R.string.value_selected,
+			stringResource(R.string.routing_label),
+			stringResource(routingNameOf(state.synthesisRouting))
+		),
+		options = routes,
+		chosen = SynthesisRouting.CHOICES.indexOf(state.synthesisRouting).coerceAtLeast(0),
+		onChoose = { state.chooseSynthesisRouting(SynthesisRouting.CHOICES[it]) },
+		description = stringResource(R.string.routing_description)
+	)
+	SectionText(text = stringResource(routingDescriptionOf(state.synthesisRouting)))
 }
 
 /** The user's own dictionary and abbreviations, each with a screen of its
@@ -383,6 +403,12 @@ private fun TextReading(state: SettingsModel) {
 		chosen = Numbers.MODES.indexOf(state.numberMode).coerceAtLeast(0),
 		onChoose = { state.chooseNumberMode(Numbers.MODES[it]) },
 		description = stringResource(R.string.number_mode_description)
+	)
+	SwitchRow(
+		label = stringResource(R.string.otp_label),
+		description = stringResource(R.string.otp_description),
+		checked = state.readOtpDigits,
+		onChange = state::chooseReadOtpDigits
 	)
 	SwitchRow(
 		label = stringResource(R.string.emoji_label),
@@ -626,6 +652,20 @@ private fun numberModeNameOf(mode: Int): Int = when (mode) {
 	Numbers.PAIRS -> R.string.number_pairs
 	Numbers.TRIPLETS -> R.string.number_triplets
 	else -> R.string.number_as_is
+}
+
+private fun routingNameOf(route: Int): Int = when (route) {
+	SynthesisRouting.ACCESSIBILITY -> R.string.routing_accessibility
+	SynthesisRouting.MEDIA -> R.string.routing_media
+	SynthesisRouting.ALL -> R.string.routing_all
+	else -> R.string.routing_automatic
+}
+
+private fun routingDescriptionOf(route: Int): Int = when (route) {
+	SynthesisRouting.ACCESSIBILITY -> R.string.routing_accessibility_description
+	SynthesisRouting.MEDIA -> R.string.routing_media_description
+	SynthesisRouting.ALL -> R.string.routing_all_description
+	else -> R.string.routing_automatic_description
 }
 
 private fun spellingNameOf(mode: Int): Int = when (mode) {

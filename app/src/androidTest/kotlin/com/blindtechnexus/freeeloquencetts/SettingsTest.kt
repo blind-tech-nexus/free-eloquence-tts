@@ -127,7 +127,47 @@ class SettingsTest {
 		assertEquals("British English was not remembered", Eci.ENGLISH_UK, settings.language)
 		settings.language = 0x1234
 		assertEquals("a foreign language did not fall back", Eci.ENGLISH_US, settings.language)
+		settings.language = Eci.GERMAN
+		assertEquals("German was not remembered", Eci.GERMAN, settings.language)
 		settings.language = Eci.ENGLISH_US
+	}
+
+	/** The sample rate is always one the engine has: a number from another
+	 *  build or a hand-edited file lands on the nearest. */
+	@Test
+	fun theSampleRateIsAlwaysOneTheEngineHas() {
+		remove(Settings.KEY_SAMPLE_RATE)
+		assertEquals(Settings.DEFAULT_SAMPLE_RATE, settings.sampleRateHz)
+		settings.sampleRateHz = 22050
+		assertEquals(22050, settings.sampleRateHz)
+		settings.sampleRateHz = 23000
+		assertEquals("an off rate did not snap", 22050, settings.sampleRateHz)
+		Settings.store(InstrumentationRegistry.getInstrumentation().targetContext)
+			.edit().putInt(Settings.KEY_SAMPLE_RATE, 12345).commit()
+		assertEquals("a hand-written rate did not snap", 11025, settings.sampleRateHz)
+		remove(Settings.KEY_SAMPLE_RATE)
+	}
+
+	/** The new switches start where they should and are remembered. */
+	@Test
+	fun theCodesTheRoutingAndTheForcedLanguageAreRemembered() {
+		remove(Settings.KEY_READ_OTP_DIGITS)
+		remove(Settings.KEY_SYNTHESIS_ROUTING)
+		remove(Settings.KEY_FORCE_LANGUAGE)
+		assertTrue("codes start off", settings.readOtpDigits)
+		assertEquals(SynthesisRouting.AUTOMATIC, settings.synthesisRouting)
+		assertFalse("the language starts forced", settings.forceLanguage)
+		settings.readOtpDigits = false
+		assertFalse(settings.readOtpDigits)
+		settings.synthesisRouting = SynthesisRouting.MEDIA
+		assertEquals(SynthesisRouting.MEDIA, settings.synthesisRouting)
+		settings.synthesisRouting = 77
+		assertEquals("a bad route did not fall back", SynthesisRouting.AUTOMATIC, settings.synthesisRouting)
+		settings.forceLanguage = true
+		assertTrue(settings.forceLanguage)
+		remove(Settings.KEY_READ_OTP_DIGITS)
+		remove(Settings.KEY_SYNTHESIS_ROUTING)
+		remove(Settings.KEY_FORCE_LANGUAGE)
 	}
 
 	/** Text styles are read until somebody says otherwise, and the answer is

@@ -69,6 +69,11 @@ class SettingsActivity : ComponentActivity() {
 	 *  is no main screen behind the one that is up. */
 	private var enteredAt = Destination.MAIN
 
+	/** Whether the welcome screen on show was opened again from the main
+	 *  screen rather than by a first launch, which decides where leaving
+	 *  it goes. */
+	private var welcomeRevisited by mutableStateOf(false)
+
 	/** The imported dictionary the file screen is showing, named when it is
 	 *  opened and read by the composition. */
 	private var openDictionaryFile by mutableStateOf("")
@@ -124,7 +129,7 @@ class SettingsActivity : ComponentActivity() {
 			MaterialTheme {
 				Surface {
 					BackHandler(
-						enabled = destination != Destination.WELCOME &&
+						enabled = (destination != Destination.WELCOME || welcomeRevisited) &&
 							destination != Destination.MAIN
 					) {
 						back()
@@ -137,7 +142,11 @@ class SettingsActivity : ComponentActivity() {
 								SystemSpeechSettings.open(this@SettingsActivity)
 							},
 							onAbout = { destination = Destination.ABOUT },
-							onAudio = { destination = Destination.AUDIO }
+							onAudio = { destination = Destination.AUDIO },
+							onWelcome = {
+								welcomeRevisited = true
+								destination = Destination.WELCOME
+							}
 						)
 						Destination.SETTINGS -> SettingsScreen(
 							state = remember { settingsModel() },
@@ -232,7 +241,15 @@ class SettingsActivity : ComponentActivity() {
 				// The notification sent us here, and there is nothing behind it.
 				if (enteredAt == Destination.BATTERY) finish() else destination = Destination.SETTINGS
 			Destination.ABOUT -> destination = Destination.MAIN
-			Destination.MAIN, Destination.WELCOME -> finish()
+			// The welcome screen opened again from the main screen goes back
+			// to it; the first-launch one has nothing behind it.
+			Destination.WELCOME -> if (welcomeRevisited) {
+				welcomeRevisited = false
+				destination = Destination.MAIN
+			} else {
+				finish()
+			}
+			Destination.MAIN -> finish()
 		}
 	}
 
@@ -241,6 +258,13 @@ class SettingsActivity : ComponentActivity() {
 	 *  every other launch does, so that the first launch and the hundredth
 	 *  behave alike. */
 	private fun continueFromWelcome() {
+		if (welcomeRevisited) {
+			// Read again by choice from the main screen: back to it, and
+			// nothing asked for that was asked for already on the way in.
+			welcomeRevisited = false
+			destination = Destination.MAIN
+			return
+		}
 		firstLaunchPreferences.edit()
 			.putBoolean(FIRST_LAUNCH_COMPLETE, true)
 			.apply()

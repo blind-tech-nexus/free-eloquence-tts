@@ -40,7 +40,12 @@ object WesternText {
 		'€' to " euro ", '£' to " pounds ", '¥' to " yen ",
 		'≤' to " less than or equal to ", '≥' to " greater than or equal to ",
 		'≠' to " not equal to ", '≈' to " about ", '∞' to " infinity ",
-		'→' to " to ", '←' to " from ", '°' to " degrees "
+		'→' to " to ", '←' to " from ", '°' to " degrees ",
+		// The letters French and the odd loan word need that Latin-1 has
+		// no byte for: the ligatures and the capital y with a diaeresis
+		// are spelled out as the two letters they stand for, and said
+		// right in every one of the eight languages.
+		'œ' to "oe", 'Œ' to "OE", 'Ÿ' to "Y", 'ĳ' to "ij", 'Ĳ' to "IJ", 'ẞ' to "SS"
 	)
 
 	private const val HIGHEST = 0xFF

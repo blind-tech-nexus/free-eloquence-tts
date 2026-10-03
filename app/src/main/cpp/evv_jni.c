@@ -563,6 +563,11 @@ JNIEXPORT jint JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_read(J
 	if (in == NULL || dst == NULL)
 		return -1;
 	room = (size_t)(*env)->GetArrayLength(env, dst);
+	/* Whole samples only. A read that carried an odd number of bytes
+	   would leave half a sample in the ring, and every sample after it in
+	   the next read would be the two bytes of two different samples -- a
+	   burst of noise rather than speech. */
+	room &= ~(size_t)1;
 	if (room == 0)
 		return -1;
 	if (room > READ_MAX)
@@ -774,4 +779,37 @@ JNIEXPORT jstring JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_ver
 	eciVersion(buffer);
 	buffer[sizeof buffer - 1] = 0;
 	return (*env)->NewStringUTF(env, buffer);
+}
+
+/* The languages this build of the engine was compiled with, by the numbers
+   eciLanguageDialect takes, so the front end can check that what it offers
+   is what it has. Asked once with no room for the count and once with room
+   for the list, which is how the engine's own call works. An empty array
+   when the engine will not say. */
+JNIEXPORT jintArray JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_availableLanguages(JNIEnv* env, jclass cls) {
+	int          count = 0;
+	unsigned int found[32];
+	jintArray    out;
+	jint         values[32];
+	int          i;
+	(void)cls;
+	eciGetAvailableLanguages(NULL, &count);
+	if (count <= 0) {
+		return (*env)->NewIntArray(env, 0);
+	}
+	if (count > 32)
+		count = 32;
+	memset(found, 0, sizeof found);
+	eciGetAvailableLanguages(found, &count);
+	if (count < 0)
+		count = 0;
+	if (count > 32)
+		count = 32;
+	out = (*env)->NewIntArray(env, count);
+	if (out == NULL)
+		return NULL;
+	for (i = 0; i < count; i++)
+		values[i] = (jint)found[i];
+	(*env)->SetIntArrayRegion(env, out, 0, count, values);
+	return out;
 }

@@ -10,12 +10,16 @@ plugins {
 val abis = (findProperty("evvdroid.abis") as String? ?: "arm64-v8a,armeabi-v7a,x86_64")
 	.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 val rulesForm = findProperty("evvdroid.rules") as String? ?: "c"
-// The two language modules this app speaks: English (United States) and
-// English (United Kingdom). Both are named here and both are offered above --
-// on the settings screen, in the voices the service answers with, and in what
-// a caller can ask for by locale -- so the weight of the second one is weight
-// the app can speak in. See [Eci.LANGUAGES].
-val languages = "lang/enus lang/engb"
+// The eight language modules this app speaks, which are the eight IBM
+// finished: English (United States) and (United Kingdom), German, Spanish
+// (Spain) and (Mexico), French (France) and (Canada), and Italian. All eight
+// are offered above -- on the settings screen, in the voices the service
+// answers with, and in what a caller can ask for by locale -- so the weight of
+// each is weight the app can speak in. See [Eci.LANGUAGES], which lists the
+// same eight and is checked against this by a test. The Japanese and the
+// unfinished Polish modules are left out on purpose. American English stays
+// first: the engine's Makefile takes the first as its default language.
+val languages = "lang/enus lang/engb lang/dede lang/eses lang/esus lang/frfr lang/frca lang/itit"
 val nativeOut = layout.buildDirectory.dir("native/jniLibs")
 
 // The engine is built by its own Makefile rather than by CMake, because that

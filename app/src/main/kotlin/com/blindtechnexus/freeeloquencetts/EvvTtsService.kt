@@ -10,7 +10,6 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
 import android.speech.tts.Voice
 import android.util.Log
-import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
@@ -126,6 +125,16 @@ class EvvTtsService : TextToSpeechService() {
 	 *  the next when the size it asked for has not moved. */
 	private var chunk: ByteArray? = null
 
+	/** The app's own player, for the routes that have this app play the
+	 *  speech itself (see [SynthesisRouting]). Made on the first utterance
+	 *  that wants it and kept for the life of the service. */
+	private var player: SynthesisRouting.Player? = null
+
+	/** Whether the utterance being spoken is going through [player], so a
+	 *  finish knows to wait for the sound to be heard first. */
+	@Volatile
+	private var playingItself = false
+
 	/** Utterances being driven right now, so that the idle timer can tell a
 	 *  quiet engine from a working one. */
 	private val speaking = AtomicInteger()
@@ -231,6 +240,8 @@ class EvvTtsService : TextToSpeechService() {
 		main.removeCallbacks(closeIdle)
 		keepAlive?.release()
 		keepAlive = null
+		try { player?.release() } catch (_: Throwable) {}
+		player = null
 		val held = synchronized(engineLock) {
 			val given = engines.values.toList()
 			engines.clear()
@@ -306,54 +317,46 @@ class EvvTtsService : TextToSpeechService() {
 	/**
 	 * What this engine answers when it is asked about a language.
 	 *
-	 * Two languages, honestly advertised, and one voice in each. American and
-	 * British English are both here, so each answers for itself what it
-	 * really is: country-available where the country was named, and available
-	 * where only the language was. Any other English is the American voice
-	 * under another flag, so it is available. And anything else -- another
-	 * language, nothing at all -- is available too, because the engine speaks
-	 * every utterance it is given in one of the two rather than refusing it.
-	 * That last answer is what keeps a TTS router such as Auto TTS routing:
-	 * it probes with the device's locale, and an engine that answers "not
-	 * supported" to the probe is an engine it never asks to speak, even in
-	 * English. Answering available and then speaking is the behaviour to
-	 * advertise, and it is this behaviour.
+	 * Eight languages, honestly advertised. Each of the eight answers for
+	 * itself what it really is: country-available where its country was
+	 * named, and available where only the language was, or a country the
+	 * engine has no module for -- Australian English is the American voice
+	 * under another flag, Swiss German the German one. And anything else --
+	 * a language the engine has no module for, nothing at all -- is
+	 * available too, because the engine speaks every utterance it is given
+	 * in one of the eight rather than refusing it. That last answer is what
+	 * keeps a TTS router such as Auto TTS routing: it probes with the
+	 * device's locale, and an engine that answers "not supported" to the
+	 * probe is an engine it never asks to speak, even in English. Answering
+	 * available and then speaking is the behaviour to advertise, and it is
+	 * this behaviour.
 	 */
 	private fun availabilityOf(lang: String?, country: String?): Int {
-		if (isEnglish(lang)) {
-			return if (isUnitedStates(country) || isUnitedKingdom(country)) {
-				TextToSpeech.LANG_COUNTRY_AVAILABLE
-			} else {
-				TextToSpeech.LANG_AVAILABLE
-			}
-		}
-		return TextToSpeech.LANG_AVAILABLE
+		val spoken = Eci.languageFor(lang, country) ?: return TextToSpeech.LANG_AVAILABLE
+		return if (spoken.inCountry(country)) TextToSpeech.LANG_COUNTRY_AVAILABLE else TextToSpeech.LANG_AVAILABLE
 	}
 
-	private fun isEnglish(lang: String?): Boolean =
-		lang != null && (lang.equals("eng", ignoreCase = true) || lang.equals("en", ignoreCase = true))
-
-	private fun isUnitedStates(country: String?): Boolean =
-		country != null && (country.equals("USA", ignoreCase = true) || country.equals("US", ignoreCase = true))
-
-	private fun isUnitedKingdom(country: String?): Boolean =
-		country != null && (country.equals("GBR", ignoreCase = true) || country.equals("GB", ignoreCase = true))
-
 	/**
-	 * Which of the two a request is to be spoken in.
+	 * Which of the eight a request is to be spoken in.
 	 *
-	 * The caller's own answer when it named one the engine has -- a screen
-	 * reader that asked for en-GB is telling this service which English its
-	 * page is in -- and the settings screen's answer when it did not, or
-	 * named something neither instance speaks. So a reader who has chosen
+	 * The settings screen's answer when the language is forced there. Else
+	 * the caller's own answer when it named one the engine has -- a screen
+	 * reader that asked for de-DE is telling this service which language
+	 * its page is in -- and the settings screen's answer when it did not, or
+	 * named something no instance speaks. So a reader who has chosen
 	 * English (United Kingdom) hears British English from everything that
-	 * does not say otherwise, and hears American English from the one app
-	 * that asks for it, which is the behaviour with no surprises in it.
+	 * does not say otherwise, and hears German from the one app that asks
+	 * for it, which is the behaviour with no surprises in it.
 	 */
 	private fun languageFor(request: SynthesisRequest, s: Settings): Int {
-		if (isEnglish(request.language) && isUnitedKingdom(request.country)) return Eci.ENGLISH_UK
-		if (isEnglish(request.language) && isUnitedStates(request.country)) return Eci.ENGLISH_US
-		return s.language
+		if (s.forceLanguage) return s.language
+		// The voice the caller chose by name says which language it is in,
+		// and says it more exactly than the locale beside it: a caller that
+		// picked deu-DEU-Reed out of the list wants German whatever its
+		// page's locale is.
+		val named = request.voiceName
+		if (!named.isNullOrEmpty()) Eci.languageOfVoiceName(named)?.let { return it.code }
+		return Eci.languageFor(request.language, request.country)?.code ?: s.language
 	}
 
 	override fun onIsLanguageAvailable(lang: String?, country: String?, variant: String?): Int =
@@ -374,14 +377,16 @@ class EvvTtsService : TextToSpeechService() {
 
 	/** The language a caller's own words name, for the calls that are asked
 	 *  about a language without an utterance to go with it. */
-	private fun languageFor(lang: String?, country: String?): Int = when {
-		isEnglish(lang) && isUnitedKingdom(country) -> Eci.ENGLISH_UK
-		isEnglish(lang) && isUnitedStates(country) -> Eci.ENGLISH_US
-		else -> settings?.language ?: Eci.ENGLISH_US
+	private fun languageFor(lang: String?, country: String?): Int {
+		val s = settings
+		if (s != null && s.forceLanguage) return s.language
+		return Eci.languageFor(lang, country)?.code ?: s?.language ?: Eci.ENGLISH_US
 	}
 
-	override fun onGetLanguage(): Array<String> =
-		arrayOf(Eci.ISO3_LANGUAGE, Eci.countryOf(settings?.language ?: Eci.ENGLISH_US), "")
+	override fun onGetLanguage(): Array<String> {
+		val spoken = Eci.languageOf(settings?.language ?: Eci.ENGLISH_US)
+		return arrayOf(spoken.iso3Language, spoken.iso3Country, "")
+	}
 
 	// ---- voices ----------------------------------------------------------
 
@@ -407,7 +412,7 @@ class EvvTtsService : TextToSpeechService() {
 		// is for.
 		val out = ArrayList<Voice>(Eci.PRESET_NAMES.size * Eci.LANGUAGES.size)
 		for (language in Eci.LANGUAGES) {
-			val locale = Locale(Eci.ISO2_LANGUAGE, Eci.iso2CountryOf(language.code))
+			val locale = language.locale()
 			for (preset in Eci.PRESET_NAMES.indices) {
 				try {
 					out.add(
@@ -457,14 +462,9 @@ class EvvTtsService : TextToSpeechService() {
 	 *  -- a router's own name, a name from another engine -- is answered with
 	 *  the settings screen's language, which is the voice that speaks. */
 	private fun languageFor(name: String): Int {
-		val upper = name.uppercase()
-		return if (upper.contains("GBR") || upper.contains("-GB-") || upper.startsWith("EN-GB")) {
-			Eci.ENGLISH_UK
-		} else if (upper.contains("USA") || upper.contains("US-") || upper.startsWith("EN-US")) {
-			Eci.ENGLISH_US
-		} else {
-			settings?.language ?: Eci.ENGLISH_US
-		}
+		val s = settings
+		if (s != null && s.forceLanguage) return s.language
+		return Eci.languageOfVoiceName(name)?.code ?: s?.language ?: Eci.ENGLISH_US
 	}
 
 	override fun onGetDefaultVoiceNameFor(lang: String?, country: String?, variant: String?): String = try {
@@ -600,8 +600,12 @@ class EvvTtsService : TextToSpeechService() {
 		// the end of the text behind the next utterance, and the next
 		// utterance is what the person is waiting for.
 		feeder?.cancel()
-		// Every instance, because there may be two and only one of them is
-		// speaking. An abort costs a lock and a flag when nothing is being
+		// The sound this app is playing itself, if it is, stops where it
+		// stands: this is the one half of a stop that reaches samples
+		// already made, and only on the routes where they are ours.
+		try { player?.cut() } catch (_: Throwable) {}
+		// Every instance, because there may be several and only one of them
+		// is speaking. An abort costs a lock and a flag when nothing is being
 		// said in it, which is nothing against getting the wrong one back
 		// and leaving a voice running that nobody asked for.
 		for (held in synchronized(engineLock) { engines.values.toList() }) {
@@ -634,8 +638,9 @@ class EvvTtsService : TextToSpeechService() {
 				}
 				return
 			}
-			// The language is the caller's when it named one of the two,
-			// and the settings screen's when it did not. Everything else
+			// The language is the caller's when it named one of the eight,
+			// and the settings screen's when it did not or when the screen
+			// forces its own. Everything else
 			// about the voice is the settings screen's and not the
 			// caller's: a caller holds the Voice it was given however many
 			// times the setting moves underneath it, so a router forwarding
@@ -733,6 +738,20 @@ class EvvTtsService : TextToSpeechService() {
 			val opening = Opening(callback, target.sampleRateHz)
 			val pace = Pace(target.sampleRateHz * BYTES_PER_SAMPLE)
 			val buffer = bufferFor(callback)
+			// Where the sound goes. Under Automatic the samples are the
+			// framework's and this app plays nothing; under the other
+			// three this app plays them itself, and hands them on as well
+			// only under All. A player that would not open falls back to
+			// the framework, so a route that cannot be taken is still a
+			// voice and not silence.
+			val route = s.synthesisRouting
+			var toFramework = SynthesisRouting.handsToFramework(route)
+			var own: SynthesisRouting.Player? = null
+			if (SynthesisRouting.playsItself(route)) {
+				own = playerFor(route, target.sampleRateHz, request)
+				if (own == null) toFramework = true
+			}
+			playingItself = own != null
 			val prosody = Prosody.prefix(s.phrasePrediction)
 			val lead = Pacing.DEFAULT_MS.toLong()
 			val replacements = substitutions()
@@ -789,7 +808,7 @@ class EvvTtsService : TextToSpeechService() {
 							}
 							return
 						}
-						when (pump(target, callback, pace, opening, buffer, optimizer, Stability.ENGINE_SILENCE_MS, lead)) {
+						when (pump(target, callback, pace, opening, buffer, optimizer, Stability.ENGINE_SILENCE_MS, lead, own, toFramework)) {
 							Pump.Next -> Unit
 							Pump.Over -> { remember(pace); finish(callback, opening); return }
 							// Gone while still wanted is a framework that
@@ -1051,6 +1070,13 @@ class EvvTtsService : TextToSpeechService() {
 	 * such as AutoTTS asked here.
 	 */
 	private fun finish(callback: SynthesisCallback, opening: Opening) {
+		// An utterance this app played itself is finished when it has been
+		// heard, not when it was made: the finish waits for the last of it,
+		// and a stop ends the wait at once.
+		if (playingItself) {
+			playingItself = false
+			try { if (!stopped) player?.drain() } catch (_: Throwable) {}
+		}
 		// Every call guarded: the framework end of the callback can die at
 		// any moment -- a caller gone, a binder torn down -- and a dead
 		// framework throwing back is not an engine fault and must not read
@@ -1083,7 +1109,9 @@ class EvvTtsService : TextToSpeechService() {
 		buffer: ByteArray,
 		optimizer: AudioOptimizer,
 		silenceMs: Int,
-		leadMs: Long
+		leadMs: Long,
+		own: SynthesisRouting.Player? = null,
+		toFramework: Boolean = true
 	): Pump {
 		while (!stopped) {
 			val n = target.read(buffer, silenceMs)
@@ -1119,12 +1147,22 @@ class EvvTtsService : TextToSpeechService() {
 				target.stop()
 				return Pump.Gone
 			}
-			if (!deliver(callback, buffer, n)) {
+			if (own != null && !own.write(buffer, n)) {
+				// Cut from under it, or a player that died: the utterance
+				// is over either way, and the framework still gets its
+				// finish from the caller.
+				target.stop()
+				return Pump.Over
+			}
+			if (toFramework && !deliver(callback, buffer, n)) {
 				target.stop()
 				return Pump.Gone
 			}
 			pace.handed(n)
-			if (!hold(pace, leadMs)) return Pump.Over
+			// The track paces an utterance this app plays itself -- a write
+			// into a full track waits -- so the hold is for the framework's
+			// samples alone.
+			if (toFramework && !hold(pace, leadMs)) return Pump.Over
 		}
 		return Pump.Next
 	}
@@ -1300,10 +1338,34 @@ class EvvTtsService : TextToSpeechService() {
 			callback.maxBufferSize
 		} catch (_: Throwable) {
 			DEFAULT_CHUNK
-		}.coerceIn(MIN_CHUNK, MAX_CHUNK)
+		}.coerceIn(MIN_CHUNK, MAX_CHUNK).let { it - (it and 1) }
+		// Always a whole number of samples: a buffer of an odd number of
+		// bytes would split the last sample between two reads, and every
+		// sample after it in the second read would be the two bytes of two
+		// different samples -- a click on every chunk boundary.
 		val held = chunk
 		if (held != null && held.size == want) return held
 		return ByteArray(want).also { chunk = it }
+	}
+
+	/** The app's own player, ready for an utterance at [rateHz] on the
+	 *  channel [route] names, or null when there is no player to be had. */
+	private fun playerFor(route: Int, rateHz: Int, request: SynthesisRequest): SynthesisRouting.Player? {
+		val held = player ?: SynthesisRouting.Player().also { player = it }
+		// The volume the caller asked for is the one thing of the caller's
+		// that still applies to a sound this app plays itself: the framework
+		// would have applied it, so this app does.
+		val volume = try {
+			request.params?.getFloat(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_VOLUME, 1f) ?: 1f
+		} catch (_: Throwable) {
+			1f
+		}
+		val ready = try {
+			held.begin(rateHz, SynthesisRouting.usageOf(route), volume)
+		} catch (_: Throwable) {
+			false
+		}
+		return if (ready) held else null
 	}
 
 	/** Tells the framework an utterance has begun, once, and not before there is

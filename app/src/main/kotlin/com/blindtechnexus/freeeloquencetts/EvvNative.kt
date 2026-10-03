@@ -68,6 +68,11 @@ internal object EvvNative {
 
 	external fun version(): String
 
+	/** The languages this build of the engine carries, by the numbers
+	 *  eciLanguageDialect takes -- the ones the build script named. What
+	 *  [Eci.LANGUAGES] offers must be among them, and a test says so. */
+	external fun availableLanguages(): IntArray
+
 	/** Which of the engine's upsampling methods new converters run on: one of
 	 *  the [Eci.UPSAMPLE_HOLD], [Eci.UPSAMPLE_LINEAR], [Eci.UPSAMPLE_CUBIC] or
 	 *  [Eci.UPSAMPLE_SINC] values. Process-wide and read when a converter is

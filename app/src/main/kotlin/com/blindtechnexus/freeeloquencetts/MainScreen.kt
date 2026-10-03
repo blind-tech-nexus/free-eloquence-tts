@@ -21,11 +21,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 
 /**
- * What the launcher opens, and the four things worth doing from here.
+ * What the launcher opens, and the five things worth doing from here.
  *
  * This is the screen somebody arrives at with a screen reader on and no idea
  * what the app is, so it is written to be listened to in order: what the app
- * is, then four things to do, each with the reason for it said before the
+ * is, then five things to do, each with the reason for it said before the
  * button that does it. Nothing depends on a colour, an icon or a position.
  *
  * The order of a description and its button matters. A reader swipes forward
@@ -45,7 +45,8 @@ fun MainScreen(
 	onConfigure: () -> Unit,
 	onOpenSystemSpeechSettings: () -> Boolean,
 	onAbout: () -> Unit,
-	onAudio: () -> Unit
+	onAudio: () -> Unit,
+	onWelcome: () -> Unit = {}
 ) {
 	// Resolved here rather than where it is used: the click that needs it is
 	// not a composition, and a stringResource there would not compile.
@@ -91,6 +92,11 @@ fun MainScreen(
 				description = stringResource(R.string.main_audio_description),
 				action = stringResource(R.string.main_audio_action),
 				onClick = onAudio
+			)
+			Step(
+				description = stringResource(R.string.main_welcome_description),
+				action = stringResource(R.string.main_welcome_action),
+				onClick = onWelcome
 			)
 		}
 	}

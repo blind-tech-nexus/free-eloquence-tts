@@ -94,9 +94,9 @@ class EvvEngine private constructor(@Volatile private var handle: Long, val lang
 		 */
 		const val MAX_SPEAK_CHARS = 256 * 1024
 
-		/** Makes an instance speaking [language], which is [Eci.ENGLISH_US]:
-		 *  the build carries that one module and the engine opens nothing
-		 *  else. Answers null rather than throwing, whatever went wrong: a
+		/** Makes an instance speaking [language], one of the [Eci.LANGUAGES]
+		 *  this build carries modules for; the engine opens nothing else.
+		 *  Answers null rather than throwing, whatever went wrong: a
 		 *  caller that cannot have an engine must get that answer, not lose
 		 *  the thread -- and on the framework's synthesis thread, losing it
 		 *  is losing the voice. */
@@ -162,9 +162,17 @@ class EvvEngine private constructor(@Volatile private var handle: Long, val lang
 		} catch (_: Throwable) {
 			-1
 		}
-		if (took != -1) {
-			sampleRateHz = Eci.sampleRateHz(index)
+		if (took == -1) return
+		// The rate the engine is now at is asked for rather than assumed:
+		// an engine that took the call and settled on another index -- an
+		// older native build that knows the first four -- is still an
+		// engine whose true rate is the one the framework must be told.
+		val now = try {
+			EvvNative.getParam(handle, Eci.PARAM_SAMPLE_RATE)
+		} catch (_: Throwable) {
+			index
 		}
+		sampleRateHz = Eci.sampleRateHz(if (now in Eci.SAMPLE_RATES.indices) now else index)
 	}
 
 	/** Which of the engine's upsampling methods this instance runs on: one of

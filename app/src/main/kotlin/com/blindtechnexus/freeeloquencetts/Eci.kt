@@ -89,8 +89,11 @@ object Eci {
 	fun sampleRateHz(index: Int): Int =
 		SAMPLE_RATES.getOrElse(index) { SAMPLE_RATES[1] }
 
+	/** The engine's index for [hz], snapped to the nearest rate the engine
+	 *  has, so a rate from a preference or a caller is never the wrong one
+	 *  by default. */
 	fun sampleRateIndex(hz: Int): Int {
-		val at = SAMPLE_RATES.indexOf(hz)
+		val at = SAMPLE_RATES.indexOf(nearestSampleRate(hz))
 		return if (at >= 0) at else 1
 	}
 
@@ -175,63 +178,124 @@ object Eci {
 	fun defaultGender(index: Int): Int = if (index == LUNA_INDEX) 1 else 0
 
 	/**
-	 * The two languages this app speaks: English as it is spoken in the
-	 * United States, and English as it is spoken in the United Kingdom.
+	 * The eight languages this app speaks: the eight IBM finished, which are
+	 * the eight whose modules are compiled into this build.
 	 *
 	 * The numbers are the engine's own -- `eciGeneralAmericanEnglish` and
-	 * `eciBritishEnglish` in its src/include/eci.h -- and the modules behind
-	 * them are the engine's own directories, `lang/enus` and `lang/engb`,
-	 * which the build script names and the Makefile compiles. The words are
-	 * IBM's and not ours: the family is the top half, the code set the third
-	 * byte and the dialect the bottom one, so the two differ in one bit and
+	 * the rest in its include/eci.h -- and the modules behind them are the
+	 * engine's own directories, `lang/enus` and the rest, which the build
+	 * script names and the Makefile compiles. The words are IBM's and not
+	 * ours: the family is the top half, the code set the third byte and the
+	 * dialect the bottom one, so the two Englishes differ in one bit and
 	 * speak in two accents.
 	 *
-	 * Both are carried, both are offered, and neither is closed to make room
-	 * for the other: a screen reader that reads an American page and then a
-	 * British one must not pay a second of silence between them, which is
-	 * what remaking an instance costs. See [EvvTtsService].
+	 * Every one of them is carried, every one is offered, and none is closed
+	 * to make room for another: a screen reader that reads an English page
+	 * and then a German one must not pay a second of silence between them,
+	 * which is what remaking an instance costs. See [EvvTtsService].
 	 */
 	const val ENGLISH_US = 0x00010000
 	const val ENGLISH_UK = 0x00010001
+	const val SPANISH_SPAIN = 0x00020000
+	const val SPANISH_MEXICO = 0x00020001
+	const val FRENCH_FRANCE = 0x00030000
+	const val FRENCH_CANADA = 0x00030001
+	const val GERMAN = 0x00040000
+	const val ITALIAN = 0x00050000
 
-	/** One language the app speaks: the engine's own number for it, the two
-	 *  spellings Android asks about, and what to call it on a screen. */
+	/** One language the app speaks: the engine's own number for it, the
+	 *  spellings Android asks about in both lengths, the BCP-47 tag a
+	 *  [java.util.Locale] is built from, and what to call it on a screen.
+	 *  [module] is the engine's directory under lang/, which is the one
+	 *  the build script names. */
 	class Language(
 		val code: Int,
-		val iso3Country: String,
+		val iso2Language: String,
+		val iso3Language: String,
 		val iso2Country: String,
-		val label: String
-	)
+		val iso3Country: String,
+		val label: String,
+		val module: String
+	) {
+		/** The tag a locale or a voice name is built from: en-US, fr-CA. */
+		val tag: String get() = "$iso2Language-$iso2Country"
 
-	/** Both of them, the American first, which is what every list that does
-	 *  not say otherwise is ordered by. */
+		fun locale(): java.util.Locale = java.util.Locale(iso2Language, iso2Country)
+
+		/** Whether Android's words for a language, in either length and in
+		 *  either case, name this one's language. */
+		fun speaks(lang: String?): Boolean =
+			lang != null && (lang.equals(iso2Language, true) || lang.equals(iso3Language, true))
+
+		/** Whether Android's words for a country name this one's. */
+		fun inCountry(country: String?): Boolean =
+			country != null && (country.equals(iso2Country, true) || country.equals(iso3Country, true))
+	}
+
+	/** All eight, the American first, which is what every list that does
+	 *  not say otherwise is ordered by, and then the rest in the engine's
+	 *  own order. */
 	val LANGUAGES = listOf(
-		Language(ENGLISH_US, "USA", "US", "English (United States)"),
-		Language(ENGLISH_UK, "GBR", "GB", "English (United Kingdom)")
+		Language(ENGLISH_US, "en", "eng", "US", "USA", "English (United States)", "enus"),
+		Language(ENGLISH_UK, "en", "eng", "GB", "GBR", "English (United Kingdom)", "engb"),
+		Language(SPANISH_SPAIN, "es", "spa", "ES", "ESP", "Spanish (Spain)", "eses"),
+		Language(SPANISH_MEXICO, "es", "spa", "MX", "MEX", "Spanish (Mexico)", "esus"),
+		Language(FRENCH_FRANCE, "fr", "fra", "FR", "FRA", "French (France)", "frfr"),
+		Language(FRENCH_CANADA, "fr", "fra", "CA", "CAN", "French (Canada)", "frca"),
+		Language(GERMAN, "de", "deu", "DE", "DEU", "German", "dede"),
+		Language(ITALIAN, "it", "ita", "IT", "ITA", "Italian", "itit")
 	)
 
-	/** The ISO-3 language both of them answer to, which is what Android asks
-	 *  about. */
+	/** The ISO-3 language of the default voice, which is what Android
+	 *  asked about when there was one language. */
 	const val ISO3_LANGUAGE = "eng"
 
-	/** The two-letter language, for a [java.util.Locale]. */
+	/** The two-letter language of the default voice. */
 	const val ISO2_LANGUAGE = "en"
 
 	/** The ISO-3 country of [language], or the American one for a number
-	 *  this build does not know: an answer that is always one of the two
+	 *  this build does not know: an answer that is always one of the eight
 	 *  supported rather than nothing at all. */
-	fun countryOf(language: Int): String =
-		LANGUAGES.firstOrNull { it.code == language }?.iso3Country ?: "USA"
+	fun countryOf(language: Int): String = languageOf(language).iso3Country
 
 	/** The same question with the two letters [java.util.Locale] wants. */
-	fun iso2CountryOf(language: Int): String =
-		LANGUAGES.firstOrNull { it.code == language }?.iso2Country ?: "US"
+	fun iso2CountryOf(language: Int): String = languageOf(language).iso2Country
 
-	/** The one of the two [code] names, or the American one for anything
+	/** The one of the eight [code] names, or the American one for anything
 	 *  else, so that a preference written by another build or edited by hand
 	 *  is a voice rather than a refusal. */
 	fun languageOf(code: Int): Language =
 		LANGUAGES.firstOrNull { it.code == code } ?: LANGUAGES[0]
+
+	/** [code] when it is one of the eight, [ENGLISH_US] otherwise. */
+	fun languageOrDefault(code: Int): Int =
+		if (LANGUAGES.any { it.code == code }) code else ENGLISH_US
+
+	/** Whether [code] is one of the eight. */
+	fun knowsLanguage(code: Int): Boolean = LANGUAGES.any { it.code == code }
+
+	/**
+	 * The language Android's words name, or null when they name none of
+	 * the eight.
+	 *
+	 * A language and a country that match a module exactly -- en and GB,
+	 * fra and CAN -- are that module. A language alone, or a language with
+	 * a country no module has -- en-AU, es-AR, fr-BE, de-CH -- is the first
+	 * module of that language, which is the mother country's: the American
+	 * English, the Castilian Spanish, the French of France. A language the
+	 * engine has no module for is null, and what the caller does with null
+	 * is its business; the service speaks the settings screen's language.
+	 */
+	fun languageFor(lang: String?, country: String?): Language? {
+		if (lang.isNullOrEmpty()) return null
+		var family: Language? = null
+		for (language in LANGUAGES) {
+			if (!language.speaks(lang)) continue
+			if (language.inCountry(country)) return language
+			if (family == null) family = language
+		}
+		return family
+	}
 
 	/** The ISO-3 country the default voice name is built from, kept as its
 	 *  own name because it is what the service answered before there were
@@ -239,10 +303,54 @@ object Eci {
 	const val ISO3_COUNTRY = "USA"
 
 	/** What a name of one of this app's voices is built from: the engine's
-	 *  language, a dash, the country and the preset. The same shape as the
-	 *  American one has always had, extended to the British one. */
-	fun voiceName(preset: Int, language: Int = ENGLISH_US): String =
-		"eng-" + countryOf(language) + "-" + PRESET_NAMES[preset]
+	 *  language, a dash, the country and the preset -- eng-USA-Reed,
+	 *  deu-DEU-Reed. The same shape as the American one has always had,
+	 *  extended to the other seven. */
+	fun voiceName(preset: Int, language: Int = ENGLISH_US): String {
+		val spoken = languageOf(language)
+		return spoken.iso3Language + "-" + spoken.iso3Country + "-" + PRESET_NAMES[preset]
+	}
+
+	/**
+	 * The language a voice name belongs to, read out of the name itself, or
+	 * null when the name is not one of this app's.
+	 *
+	 * This app's names are three letters, a dash, three letters, a dash and
+	 * a preset; a locale tag such as en-GB or de-DE in front of anything is
+	 * read too, because a router that builds its own names builds them out
+	 * of the locale. A name that is neither -- a name from another engine
+	 * -- is nobody's, and the caller falls back to the settings screen's
+	 * language, which is the voice that speaks.
+	 */
+	fun languageOfVoiceName(name: String): Language? {
+		val parts = name.split('-', '_')
+		if (parts.size < 2) return null
+		return languageFor(parts[0], parts[1])
+	}
+
+	/**
+	 * The rate the engine has that is nearest to [hz], for a number that
+	 * came from a preference or a caller rather than from the list.
+	 *
+	 * A rate the engine does not have is a rate the audio would be labelled
+	 * with and not the rate it was made at, and every word would come out
+	 * at the wrong pitch and pace. Nearest by distance in hertz, and the
+	 * default of eleven thousand and twenty five for anything that is not a
+	 * positive number at all.
+	 */
+	fun nearestSampleRate(hz: Int): Int {
+		if (hz <= 0) return SAMPLE_RATES[1]
+		var best = SAMPLE_RATES[1]
+		var distance = Int.MAX_VALUE
+		for (rate in SAMPLE_RATES) {
+			val away = kotlin.math.abs(rate - hz)
+			if (away < distance) {
+				distance = away
+				best = rate
+			}
+		}
+		return best
+	}
 
 	/**
 	 * How the engine raises its own eleven thousand and twenty five hertz to a

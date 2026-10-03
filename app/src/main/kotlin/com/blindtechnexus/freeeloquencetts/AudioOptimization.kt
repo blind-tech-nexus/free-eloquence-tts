@@ -129,18 +129,28 @@ class AudioOptimizer(mode: Int, sampleRateHz: Int) {
 	private val highest = AudioOptimization.maxGain(this.mode)
 	private val top = AudioOptimization.ceiling(this.mode)
 
-	/** How quickly the gain comes back up after ducking, per chunk. Slow on
-	 *  purpose: a gain that hurries back up breathes, and breathing is heard.
-	 *  Volume hurries a little, because staying ducked is staying quiet, which
-	 *  is the one thing that mode refuses to do. */
-	private val release: Float = if (this.mode == AudioOptimization.VOLUME) 0.25f else 0.10f
+	/** How long the gain takes to come most of the way back up after
+	 *  ducking, in seconds. Slow on purpose: a gain that hurries back up
+	 *  breathes, and breathing is heard. Volume hurries a little, because
+	 *  staying ducked is staying quiet, which is the one thing that mode
+	 *  refuses to do. */
+	private val releaseSeconds: Float = if (this.mode == AudioOptimization.VOLUME) 0.06f else 0.15f
 
-	// Kept for the documentation it carries: the rate this instance runs at.
-	// The chain itself is rate-independent -- a blocker, a gain and a
-	// limiter have no frequency in them -- so this is read by nobody and
-	// serves as the promise that it stays that way.
-	@Suppress("unused")
+	/** The rate this instance runs at. Two of the three stages have time in
+	 *  them -- the blocker has a corner frequency and the gain has a release
+	 *  -- and both are fixed in seconds and hertz here and turned into
+	 *  per-sample and per-chunk numbers from the rate, so the chain sounds
+	 *  the same at eight thousand hertz and at forty-eight. The old fixed
+	 *  numbers were right at eleven thousand and twenty five and wrong
+	 *  everywhere else: the blocker's corner climbed to nearly forty hertz
+	 *  at forty-eight thousand, under the lowest of a male voice, and the
+	 *  release ran four times faster because the chunks were four times
+	 *  shorter. */
 	private val rateHz = sampleRateHz.coerceAtLeast(1)
+
+	/** The blocker's pole for this rate: R = exp(-2 pi f / rate), with f
+	 *  the corner, so the corner is the same frequency at every rate. */
+	private val blockerR: Float = blockerFor(rateHz)
 
 	private var blockedIn = 0.0f
 	private var blockedOut = 0.0f
@@ -167,8 +177,12 @@ class AudioOptimizer(mode: Int, sampleRateHz: Int) {
 			if (over > peak) peak = over
 		}
 		val want = gainFor(peak, target, lowest, highest)
-		// Attack at once, release slowly: see the chain above.
-		gain = if (want < gain) want else gain + (want - gain) * release
+		// Attack at once, release slowly: see the chain above. The release
+		// is a fraction of the way per chunk, and the fraction is the
+		// chunk's own length against the release time, so a chunk of a
+		// tenth of a second moves the gain as far as ten chunks of a
+		// hundredth would, at any rate.
+		gain = if (want < gain) want else gain + (want - gain) * releaseFor(samples, rateHz, releaseSeconds)
 		val applying = gain
 		for (at in 0 until samples) {
 			val low = chunk[at * 2].toInt() and 0xFF
@@ -178,7 +192,7 @@ class AudioOptimizer(mode: Int, sampleRateHz: Int) {
 			// The blocker: y[n] = x[n] - x[n-1] + R * y[n-1], with R a hair
 			// under one. Standard one-pole, flat everywhere but the very
 			// bottom, where it falls steeply to nothing.
-			val out = v - blockedIn + BLOCKER_R * blockedOut
+			val out = v - blockedIn + blockerR * blockedOut
 			blockedIn = v
 			blockedOut = out
 			v = out * applying
@@ -194,10 +208,32 @@ class AudioOptimizer(mode: Int, sampleRateHz: Int) {
 	}
 
 	companion object {
-		/** The blocker's pole. 0.995 at eleven thousand hertz is three
-		 *  decibels down at nine hertz: everything a voice carries passes,
-		 *  and a steady offset does not. */
+		/** The blocker's corner, in hertz: three decibels down here, flat
+		 *  above. Nine hertz, which is what the old fixed pole of 0.995 gave
+		 *  at the engine's own eleven thousand and twenty five: everything a
+		 *  voice carries passes, and a steady offset does not. */
+		const val BLOCKER_HZ = 9.0
+
+		/** The old fixed pole, kept as the number the corner was taken
+		 *  from and as what [blockerFor] answers at the engine's own rate. */
 		const val BLOCKER_R = 0.995f
+
+		/** The one-pole blocker's coefficient for [rateHz], which puts the
+		 *  corner at [BLOCKER_HZ] whatever the rate. */
+		fun blockerFor(rateHz: Int): Float =
+			kotlin.math.exp(-2.0 * Math.PI * BLOCKER_HZ / rateHz.coerceAtLeast(1)).toFloat()
+
+		/** How far, as a fraction of the distance, the gain moves back up
+		 *  over a chunk of [samples] at [rateHz], for a release that takes
+		 *  [seconds] to get most of the way: one minus e to the minus the
+		 *  chunk's length over the release time. A whole release time in one
+		 *  chunk moves it sixty-three per cent of the way, which is what the
+		 *  time constant means. */
+		fun releaseFor(samples: Int, rateHz: Int, seconds: Float): Float {
+			if (samples <= 0 || seconds <= 0f) return 1.0f
+			val span = samples.toDouble() / rateHz.coerceAtLeast(1)
+			return (1.0 - kotlin.math.exp(-span / seconds)).toFloat().coerceIn(0f, 1f)
+		}
 
 		/**
 		 * The gain that puts [peak] at [target], inside [minGain] and

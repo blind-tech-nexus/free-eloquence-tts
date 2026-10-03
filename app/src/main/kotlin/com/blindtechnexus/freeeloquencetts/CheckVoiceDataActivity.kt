@@ -7,7 +7,7 @@ import android.speech.tts.TextToSpeech
 
 /**
  * What Android asks before it will use the engine. Everything is in the APK,
- * so the one voice is already there and nothing is missing.
+ * so the eight languages are already there and nothing is missing.
  */
 class CheckVoiceDataActivity : Activity() {
 
@@ -16,7 +16,7 @@ class CheckVoiceDataActivity : Activity() {
 		val available = ArrayList<String>()
 		if (EvvNative.loaded) {
 			for (language in Eci.LANGUAGES) {
-				available.add("${Eci.ISO3_LANGUAGE}-${language.iso3Country}")
+				available.add("${language.iso3Language}-${language.iso3Country}")
 			}
 		}
 		val result = Intent().apply {

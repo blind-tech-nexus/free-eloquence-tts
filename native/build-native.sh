@@ -16,11 +16,15 @@ engine="$here/openevv"
 ABIS=${ABIS:-"arm64-v8a armeabi-v7a x86_64"}
 API=${API:-21}
 RULES=${RULES:-c}
-# The two language modules this app speaks: English (United States) and
-# English (United Kingdom). Both are named here and both are offered by the
-# front end above, so the second one is a voice the app can be asked for and
-# not weight carried for nothing.
-LANGS="lang/enus lang/engb"
+# The eight language modules this app speaks, which are the eight IBM
+# finished: English (United States) and (United Kingdom), German, Spanish
+# (Spain) and (Mexico), French (France) and (Canada), and Italian. Every
+# one named here is offered by the front end above -- see Eci.LANGUAGES,
+# which must list the same eight -- so each is a voice the app can be asked
+# for and not weight carried for nothing. The Japanese and the unfinished
+# Polish modules are left out on purpose. American English stays first:
+# the Makefile takes the first as the engine's default language.
+LANGS=${LANGS:-"lang/enus lang/engb lang/dede lang/eses lang/esus lang/frfr lang/frca lang/itit"}
 OUT=${OUT:-"$root/app/build/native/jniLibs"}
 JOBS=${JOBS:-$(nproc 2>/dev/null || echo 4)}
 

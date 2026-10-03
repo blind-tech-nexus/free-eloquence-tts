@@ -59,32 +59,64 @@ class Settings(context: Context) {
 		set(value) = prefs.edit().putInt(KEY_VOICE, value).apply()
 
 	/**
-	 * Which English this app speaks unless a caller says otherwise: one of
-	 * [Eci.ENGLISH_US] and [Eci.ENGLISH_UK].
+	 * Which language this app speaks unless a caller says otherwise: the
+	 * engine's own number for one of the eight in [Eci.LANGUAGES].
 	 *
 	 * American English is what it has always been and what it stays by
-	 * default. British English is a whole module of the engine compiled into
-	 * this build -- `lang/engb`, named in the build script beside `lang/enus`
-	 * -- so choosing it is not a flag over one voice: it is the other voice,
-	 * with its own presets, its own dictionary and its own idea of how a
-	 * vowel is said.
+	 * default. Each of the others is a whole module of the engine compiled
+	 * into this build -- named in the build script beside `lang/enus` -- so
+	 * choosing one is not a flag over one voice: it is another voice, with
+	 * its own presets, its own dictionary and its own idea of how a vowel is
+	 * said.
 	 *
 	 * A number no build knows answers with American English rather than with
 	 * silence, so a preference written by another version, or by hand, is a
 	 * voice either way.
 	 */
 	var language: Int
-		get() = prefs.getInt(KEY_LANGUAGE, Eci.ENGLISH_US).let {
-			if (Eci.LANGUAGES.any { spoken -> spoken.code == it }) it else Eci.ENGLISH_US
-		}
-		set(value) = prefs.edit().putInt(
-			KEY_LANGUAGE,
-			if (Eci.LANGUAGES.any { spoken -> spoken.code == value }) value else Eci.ENGLISH_US
-		).apply()
+		get() = Eci.languageOrDefault(prefs.getInt(KEY_LANGUAGE, Eci.ENGLISH_US))
+		set(value) = prefs.edit().putInt(KEY_LANGUAGE, Eci.languageOrDefault(value)).apply()
 
+	/**
+	 * The rate the engine is run at, in hertz, and always one of the seven
+	 * the engine can be run at ([Eci.SAMPLE_RATES]).
+	 *
+	 * Snapped on the way in and on the way out, because a rate the engine
+	 * does not have is a rate the audio is labelled with and not the rate it
+	 * was made at: the engine would fall back to its default and every word
+	 * would come out too fast or too slow, in pitch and pace both. A number
+	 * written by another build or by hand lands on the nearest rate the
+	 * engine does have, which is the closest thing to what was asked for.
+	 */
 	var sampleRateHz: Int
-		get() = prefs.getInt(KEY_SAMPLE_RATE, DEFAULT_SAMPLE_RATE)
-		set(value) = prefs.edit().putInt(KEY_SAMPLE_RATE, value).apply()
+		get() = Eci.nearestSampleRate(prefs.getInt(KEY_SAMPLE_RATE, DEFAULT_SAMPLE_RATE))
+		set(value) = prefs.edit().putInt(KEY_SAMPLE_RATE, Eci.nearestSampleRate(value)).apply()
+
+	/**
+	 * Where the sound goes. One of the [SynthesisRouting] choices.
+	 *
+	 * [SynthesisRouting.AUTOMATIC] by default, which is what every speech
+	 * engine does: the app that asked for speech is handed the samples and
+	 * plays them where it chose to. The other three have this app play the
+	 * speech itself, on the accessibility channel, on the media channel, or
+	 * on the accessibility channel beside whatever the asking app does.
+	 */
+	var synthesisRouting: Int
+		get() = SynthesisRouting.clamp(prefs.getInt(KEY_SYNTHESIS_ROUTING, SynthesisRouting.AUTOMATIC))
+		set(value) = prefs.edit().putInt(KEY_SYNTHESIS_ROUTING, SynthesisRouting.clamp(value)).apply()
+
+	/**
+	 * Whether the language chosen here is spoken whatever language the
+	 * asking app names.
+	 *
+	 * Off by default, because an app that asks for German usually has German
+	 * text. On, every request is spoken in [language]: for the person whose
+	 * screen reader keeps switching languages on them, or whose phone is set
+	 * to a language they would rather not hear this engine attempt.
+	 */
+	var forceLanguage: Boolean
+		get() = prefs.getBoolean(KEY_FORCE_LANGUAGE, false)
+		set(value) = prefs.edit().putBoolean(KEY_FORCE_LANGUAGE, value).apply()
 
 	/** How the samples are finished before they are handed over. One of the
 	 *  [AudioOptimization] modes, and not a voice's business: it is the
@@ -107,8 +139,15 @@ class Settings(context: Context) {
 
 	/** How runs of digits are read. One of the [Numbers] levels. */
 	var numberMode: Int
-		get() = prefs.getInt(KEY_NUMBER_MODE, Numbers.AS_IS).coerceIn(Numbers.AS_IS, Numbers.TRIPLETS)
-		set(value) = prefs.edit().putInt(KEY_NUMBER_MODE, value.coerceIn(Numbers.AS_IS, Numbers.TRIPLETS)).apply()
+		get() = Numbers.clamp(prefs.getInt(KEY_NUMBER_MODE, Numbers.AS_IS))
+		set(value) = prefs.edit().putInt(KEY_NUMBER_MODE, Numbers.clamp(value)).apply()
+
+	/** Whether a one-time code is said a digit at a time, whatever the
+	 *  number mode (see [Otp]). On by default: a code is for typing, and
+	 *  "four hundred ninety-two thousand" is not how anybody types. */
+	var readOtpDigits: Boolean
+		get() = prefs.getBoolean(KEY_READ_OTP_DIGITS, true)
+		set(value) = prefs.edit().putBoolean(KEY_READ_OTP_DIGITS, value).apply()
 
 	/** Whether SSML and other XML-like tags are stripped before the text is
 	 *  read. On by default, since the engine's own SSML reader is not turned
@@ -442,6 +481,9 @@ class Settings(context: Context) {
 	companion object {
 		const val KEY_VOICE = "voice_preset"
 		const val KEY_LANGUAGE = "language_dialect"
+		const val KEY_FORCE_LANGUAGE = "force_language"
+		const val KEY_SYNTHESIS_ROUTING = "synthesis_routing"
+		const val KEY_READ_OTP_DIGITS = "read_otp_digits"
 		const val KEY_SAMPLE_RATE = "sample_rate_hz"
 		const val KEY_AUDIO_OPTIMIZATION = "audio_optimization"
 		const val KEY_ABBREVIATIONS = "abbreviations"

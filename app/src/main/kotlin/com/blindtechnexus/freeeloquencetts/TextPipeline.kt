@@ -20,7 +20,10 @@ package com.blindtechnexus.freeeloquencetts
  * a named operator is a word the symbol pass has nothing to say about. Then
  * the fixes for the words the engine spells out, and the thousands commas
  * those leave behind, so a number is a run of digits again before it is
- * regrouped. The digits are regrouped next. The single capital letters come
+ * regrouped. The one-time codes are found next, before the digits are
+ * regrouped, because a code is spelled out whatever the number mode is and
+ * because the words that mark one are easier to see while the digits are
+ * still a run. The digits are regrouped after. The single capital letters come
  * after the fixes, because they can add the engine's own backtick annotations,
  * which no rewrite may walk into. Spelling comes after the capitals and not
  * before them, because a word spelled out is nothing but single capitals
@@ -77,6 +80,9 @@ object TextPipeline {
 		}
 		try { text = CodeReading.apply(text, s.codeOptions()) } catch (_: Throwable) {}
 		try { text = TextFixes.apply(text) } catch (_: Throwable) {}
+		if (s.readOtpDigits) {
+			try { text = Otp.apply(text) } catch (_: Throwable) {}
+		}
 		try { text = Numbers.apply(text, s.numberMode) } catch (_: Throwable) {}
 		try { text = CapitalLetters.apply(text, s.capitalMode) } catch (_: Throwable) {}
 		try { text = Spelling.apply(text, s.spellingMode) } catch (_: Throwable) {}
