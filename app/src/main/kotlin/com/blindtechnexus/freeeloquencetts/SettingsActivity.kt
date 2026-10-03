@@ -135,7 +135,7 @@ class SettingsActivity : ComponentActivity() {
 						back()
 					}
 					when (destination) {
-						Destination.WELCOME -> WelcomeScreen(onContinue = ::continueFromWelcome)
+						Destination.WELCOME -> WelcomeScreen(onContinue = ::continueFromWelcome, revisit = welcomeRevisited)
 						Destination.MAIN -> MainScreen(
 							onConfigure = { destination = Destination.SETTINGS },
 							onOpenSystemSpeechSettings = {

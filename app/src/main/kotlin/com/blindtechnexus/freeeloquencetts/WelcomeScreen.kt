@@ -12,7 +12,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Pin
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Speaker
 import androidx.compose.material.icons.filled.Spellcheck
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.Button
@@ -58,7 +60,7 @@ import androidx.compose.ui.unit.dp
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WelcomeScreen(onContinue: () -> Unit) {
+fun WelcomeScreen(onContinue: () -> Unit, revisit: Boolean = false) {
 	Scaffold(
 		topBar = { ScreenTopBar(title = stringResource(R.string.app_name)) }
 	) { inset ->
@@ -119,8 +121,21 @@ fun WelcomeScreen(onContinue: () -> Unit) {
 				text = stringResource(R.string.welcome_dictionaries),
 				description = stringResource(R.string.welcome_dictionaries_description)
 			)
+			Feature(
+				icon = Icons.Filled.Pin,
+				text = stringResource(R.string.welcome_codes),
+				description = stringResource(R.string.welcome_codes_description)
+			)
+			Feature(
+				icon = Icons.Filled.Speaker,
+				text = stringResource(R.string.welcome_routing),
+				description = stringResource(R.string.welcome_routing_description)
+			)
 			Gap(8.dp)
-			Paragraph(text = stringResource(R.string.welcome_permissions))
+			// The permissions are asked for on the way past this screen the
+			// first time; read again from the main screen, there is nothing
+			// coming next to warn about.
+			if (!revisit) Paragraph(text = stringResource(R.string.welcome_permissions))
 			Paragraph(text = stringResource(R.string.welcome_about))
 			Gap(16.dp)
 			Button(
@@ -128,7 +143,7 @@ fun WelcomeScreen(onContinue: () -> Unit) {
 				modifier = Modifier.fillMaxWidth()
 			) {
 				Text(
-					text = stringResource(R.string.welcome_continue),
+					text = stringResource(if (revisit) R.string.welcome_back_to_main else R.string.welcome_continue),
 					style = MaterialTheme.typography.labelLarge
 				)
 			}
