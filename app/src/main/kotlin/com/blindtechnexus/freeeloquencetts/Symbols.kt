@@ -168,19 +168,25 @@ object Symbols {
 	fun apply(text: String, mode: Int, custom: String): String {
 		if (text.isEmpty()) return text
 		if (mode == SOME) {
-			// SOME originally left text to engine, but isolated comma would be spoken as "comma"
-			// by engine. Requirement: remove comma from SOME mode, so isolated commas become silence.
-			var hasIsolatedComma = false
+			// SOME leaves the engine to its own business, with one
+			// exception: a comma standing on its own is a symbol to the
+			// engine and is said as the word "comma", which nobody writing
+			// prose meant. A comma with a letter or a digit beside it is
+			// punctuation and stays -- the engine makes its pause and says
+			// nothing -- so only the lone ones are dropped. This is a
+			// single scan and answers the same string when there is
+			// nothing to do, which is almost every text.
+			var lone = -1
 			for (i in text.indices) {
-				if (text[i] == ',' && !attached(text, i)) { hasIsolatedComma = true; break }
+				if (text[i] == ',' && isLone(text, i)) { lone = i; break }
 			}
-			if (!hasIsolatedComma) return text
+			if (lone < 0) return text
 			val sb = StringBuilder(text.length)
 			for (i in text.indices) {
 				val c = text[i]
-				if (c == ',' && !attached(text, i)) sb.append(' ') else sb.append(c)
+				if (c == ',' && isLone(text, i)) sb.append(' ') else sb.append(c)
 			}
-			return COLLAPSE.replace(sb.toString().trim(), " ")
+			return collapse(sb)
 		}
 		var relevant = false
 		for (at in text.indices) {
@@ -266,6 +272,35 @@ object Symbols {
 		val out = StringBuilder(text.length)
 		for (c in text) out.append(PLAIN[c] ?: c)
 		return out.toString()
+	}
+
+	/** Whether the character at [at] stands on its own rather than being
+	 *  punctuation between two words: no letter and no digit on either side.
+	 *  A comma between digits is part of a number and is never lone. */
+	private fun isLone(text: String, at: Int): Boolean {
+		val before = if (at > 0) text[at - 1] else ' '
+		val after = if (at + 1 < text.length) text[at + 1] else ' '
+		return !before.isLetterOrDigit() && !after.isLetterOrDigit()
+	}
+
+	/** Runs of spaces, which a removal can leave behind, folded to one and
+	 *  the ends trimmed. No regular expression: this runs on text that may
+	 *  be a whole article. */
+	private fun collapse(text: StringBuilder): String {
+		val out = StringBuilder(text.length)
+		var spaced = true
+		for (i in text.indices) {
+			val c = text[i]
+			if (c == ' ') {
+				if (!spaced) { out.append(' '); spaced = true }
+			} else {
+				out.append(c)
+				spaced = false
+			}
+		}
+		var end = out.length
+		while (end > 0 && out[end - 1] == ' ') end--
+		return if (end == out.length) out.toString() else out.substring(0, end)
 	}
 
 	/** Whether the character at [at] has something other than space beside it. */

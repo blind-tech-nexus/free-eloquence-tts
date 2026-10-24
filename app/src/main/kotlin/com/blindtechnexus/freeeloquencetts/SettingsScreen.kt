@@ -84,7 +84,8 @@ fun SettingsScreen(
 	onBack: () -> Unit,
 	onOpenDictionary: () -> Unit,
 	onOpenAbbreviations: () -> Unit,
-	onOpenBattery: () -> Unit
+	onOpenBattery: () -> Unit,
+	onOpenRouting: () -> Unit
 ) {
 	val context = LocalContext.current
 	var notice by remember { mutableStateOf("") }
@@ -106,7 +107,7 @@ fun SettingsScreen(
 			LiveNotice(text = notice, horizontal = 16.dp)
 			VoiceCustomization(state)
 			VoiceBehaviours(state)
-			VoiceQuality(state)
+			VoiceQuality(state, onOpenRouting)
 			DictionarySection(
 				onOpen = onOpenDictionary,
 				onOpenAbbreviations = onOpenAbbreviations,
@@ -310,7 +311,7 @@ private fun VoiceBehaviours(state: SettingsModel) {
 
 /** How the samples themselves are made. */
 @Composable
-private fun VoiceQuality(state: SettingsModel) {
+private fun VoiceQuality(state: SettingsModel, onOpenRouting: () -> Unit) {
 	SectionHeading(text = stringResource(R.string.section_quality))
 	SectionText(text = stringResource(R.string.section_quality_description))
 	OptimizationChoice(state)
@@ -328,20 +329,18 @@ private fun VoiceQuality(state: SettingsModel) {
 		onChoose = { state.chooseSampleRate(SettingsModel.RATES[it]) },
 		description = stringResource(R.string.sample_rate_description)
 	)
-	val routes = SynthesisRouting.CHOICES.map { stringResource(routingNameOf(it)) }
-	ChoiceButton(
-		title = stringResource(R.string.routing_label),
-		shown = stringResource(
-			R.string.value_selected,
-			stringResource(R.string.routing_label),
-			stringResource(routingNameOf(state.synthesisRouting))
+	// The routes are a screen of their own, not a list in a dialog: thirteen
+	// of them with a sentence each is a list a screen reader has to walk from
+	// the top every time it is opened. The row says what is in force now and
+	// the screen is where it is changed.
+	ActionRow(
+		label = stringResource(R.string.routing_label),
+		description = stringResource(
+			R.string.routing_open_description,
+			stringResource(routeNameOf(state.synthesisRouting))
 		),
-		options = routes,
-		chosen = SynthesisRouting.CHOICES.indexOf(state.synthesisRouting).coerceAtLeast(0),
-		onChoose = { state.chooseSynthesisRouting(SynthesisRouting.CHOICES[it]) },
-		description = stringResource(R.string.routing_description)
+		onClick = onOpenRouting
 	)
-	SectionText(text = stringResource(routingDescriptionOf(state.synthesisRouting)))
 }
 
 /** The user's own dictionary and abbreviations, each with a screen of its
@@ -652,20 +651,6 @@ private fun numberModeNameOf(mode: Int): Int = when (mode) {
 	Numbers.PAIRS -> R.string.number_pairs
 	Numbers.TRIPLETS -> R.string.number_triplets
 	else -> R.string.number_as_is
-}
-
-private fun routingNameOf(route: Int): Int = when (route) {
-	SynthesisRouting.ACCESSIBILITY -> R.string.routing_accessibility
-	SynthesisRouting.MEDIA -> R.string.routing_media
-	SynthesisRouting.ALL -> R.string.routing_all
-	else -> R.string.routing_automatic
-}
-
-private fun routingDescriptionOf(route: Int): Int = when (route) {
-	SynthesisRouting.ACCESSIBILITY -> R.string.routing_accessibility_description
-	SynthesisRouting.MEDIA -> R.string.routing_media_description
-	SynthesisRouting.ALL -> R.string.routing_all_description
-	else -> R.string.routing_automatic_description
 }
 
 private fun spellingNameOf(mode: Int): Int = when (mode) {

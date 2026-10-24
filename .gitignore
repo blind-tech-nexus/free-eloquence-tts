@@ -13,9 +13,10 @@ local.properties
 captures/
 output-metadata.json
 
-# The engine is built out of the submodule in place, so its objects and
-# libraries land inside it.
+# The engine is vendored and built in place, so its objects and libraries
+# land inside its tree. They are not sources and do not belong in git.
 native/openevv/build/
+native/openevv/**/build/
 
 # Signing
 *.jks

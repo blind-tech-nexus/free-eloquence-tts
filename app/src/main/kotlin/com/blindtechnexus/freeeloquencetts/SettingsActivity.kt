@@ -23,7 +23,7 @@ import androidx.compose.ui.res.stringResource
 
 /** Which of the screens is up. */
 internal enum class Destination {
-	WELCOME, MAIN, SETTINGS, ABOUT, DICTIONARY, DICTIONARY_FILE, ABBREVIATIONS, BATTERY, AUDIO
+	WELCOME, MAIN, SETTINGS, ABOUT, DICTIONARY, DICTIONARY_FILE, ABBREVIATIONS, BATTERY, AUDIO, ROUTING
 }
 
 /**
@@ -33,7 +33,7 @@ internal enum class Destination {
  * activity of its own and a lot that suffers from having one: a screen reader
  * announces the departure and the arrival of every activity, an engine preview
  * opened for the settings screen would be closed and reopened by a trip to the
- * about screen, and a back stack of four activities is four things to be
+ * about screen, and a back stack of ten activities is ten things to be
  * somewhere inside when the phone answers. So the screens are a state and the
  * back key moves it.
  *
@@ -68,6 +68,11 @@ class SettingsActivity : ComponentActivity() {
 	/** Where the activity came in, which is where the back key goes when there
 	 *  is no main screen behind the one that is up. */
 	private var enteredAt = Destination.MAIN
+
+	/** Where the audio routing screen was opened from, so that back goes
+	 *  there: the main screen and the settings screen both offer it, and a
+	 *  route chosen from the settings must not throw the settings away. */
+	private var routingFrom = Destination.MAIN
 
 	/** Whether the welcome screen on show was opened again from the main
 	 *  screen rather than by a first launch, which decides where leaving
@@ -143,6 +148,10 @@ class SettingsActivity : ComponentActivity() {
 							},
 							onAbout = { destination = Destination.ABOUT },
 							onAudio = { destination = Destination.AUDIO },
+							onRouting = {
+								routingFrom = Destination.MAIN
+								destination = Destination.ROUTING
+							},
 							onWelcome = {
 								welcomeRevisited = true
 								destination = Destination.WELCOME
@@ -153,7 +162,11 @@ class SettingsActivity : ComponentActivity() {
 							onBack = ::back,
 							onOpenDictionary = { destination = Destination.DICTIONARY },
 							onOpenAbbreviations = { destination = Destination.ABBREVIATIONS },
-							onOpenBattery = { destination = Destination.BATTERY }
+							onOpenBattery = { destination = Destination.BATTERY },
+							onOpenRouting = {
+								routingFrom = Destination.SETTINGS
+								destination = Destination.ROUTING
+							}
 						)
 						Destination.DICTIONARY -> DictionaryScreen(
 							onBack = ::back,
@@ -174,6 +187,7 @@ class SettingsActivity : ComponentActivity() {
 						)
 						Destination.ABOUT -> AboutScreen(onBack = ::back)
 						Destination.AUDIO -> AudioGeneratorScreen(onBack = ::back)
+						Destination.ROUTING -> AudioRoutingScreen(onBack = ::back)
 					}
 					// Not over the welcome screen, which has a job of its own
 					// to finish first, and one at a time: two dialogs up at
@@ -237,6 +251,7 @@ class SettingsActivity : ComponentActivity() {
 				destination = Destination.SETTINGS
 			Destination.DICTIONARY_FILE -> destination = Destination.DICTIONARY
 			Destination.AUDIO -> destination = Destination.MAIN
+			Destination.ROUTING -> destination = routingFrom
 			Destination.BATTERY ->
 				// The notification sent us here, and there is nothing behind it.
 				if (enteredAt == Destination.BATTERY) finish() else destination = Destination.SETTINGS

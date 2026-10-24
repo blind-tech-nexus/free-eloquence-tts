@@ -10,9 +10,12 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
 import android.speech.tts.Voice
 import android.util.Log
+import java.util.ArrayDeque
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -39,8 +42,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * behind the request and not one document behind it.
  *
  * The samples travel from the engine to the framework in one buffer, as big as
- * the framework asks for and kept from one utterance to the next, and the
- * engine is not held back in slices any more than [Pacing] requires. A request
+ * the framework asks for and owned by the utterance rather than shared by the
+ * service, and the engine is not held back in slices any more than [Pacing]
+ * requires. A request
  * for silence does not wait out a slice: it wakes the wait, so the next
  * element can start as soon as the engine has dropped what it was making.
  *
@@ -119,21 +123,12 @@ class EvvTtsService : TextToSpeechService() {
 	 *  settings screen's -- and has to reach the work without waiting for
 	 *  the thread that owns it. */
 	@Volatile
-	private var feeder: Prefetcher? = null
-
-	/** The buffer the framework is filled from, kept from one utterance to
-	 *  the next when the size it asked for has not moved. */
-	private var chunk: ByteArray? = null
+	private var feeder: TextSource? = null
 
 	/** The app's own player, for the routes that have this app play the
 	 *  speech itself (see [SynthesisRouting]). Made on the first utterance
 	 *  that wants it and kept for the life of the service. */
 	private var player: SynthesisRouting.Player? = null
-
-	/** Whether the utterance being spoken is going through [player], so a
-	 *  finish knows to wait for the sound to be heard first. */
-	@Volatile
-	private var playingItself = false
 
 	/** Utterances being driven right now, so that the idle timer can tell a
 	 *  quiet engine from a working one. */
@@ -739,10 +734,11 @@ class EvvTtsService : TextToSpeechService() {
 			val pace = Pace(target.sampleRateHz * BYTES_PER_SAMPLE)
 			val buffer = bufferFor(callback)
 			// Where the sound goes. Under Automatic the samples are the
-			// framework's and this app plays nothing; under the other
-			// three this app plays them itself, and hands them on as well
-			// only under All. A player that would not open falls back to
-			// the framework, so a route that cannot be taken is still a
+			// framework's and this app plays nothing; under every other
+			// route this app plays them itself, and hands them on as well
+			// only under Accessibility and the app. A player that would
+			// not open, or that is busy with another utterance, falls back
+			// to the framework, so a route that cannot be taken is still a
 			// voice and not silence.
 			val route = s.synthesisRouting
 			var toFramework = SynthesisRouting.handsToFramework(route)
@@ -751,7 +747,6 @@ class EvvTtsService : TextToSpeechService() {
 				own = playerFor(route, target.sampleRateHz, request)
 				if (own == null) toFramework = true
 			}
-			playingItself = own != null
 			val prosody = Prosody.prefix(s.phrasePrediction)
 			val lead = Pacing.DEFAULT_MS.toLong()
 			val replacements = substitutions()
@@ -769,8 +764,26 @@ class EvvTtsService : TextToSpeechService() {
 			// catches everything: the utterance ends finished, the engine is
 			// given back, and the thread that drove it goes back to the
 			// framework unharmed.
-			val work = Prefetcher(rawText, s, replacements, prosody)
+			// A line is prepared here, where it stands; a document is
+			// prepared on a thread of its own, a piece or two ahead. The
+			// difference is a context switch in front of the first syllable
+			// of everything a screen reader says.
+			val work: TextSource = if (rawText.length <= INLINE_MAX_CHARS) {
+				InlineText(rawText, s, replacements, prosody)
+			} else {
+				Prefetcher(rawText, s, replacements, prosody)
+			}
 			feeder = work
+			// Every utterance starts and ends the framework's callback, and
+			// an utterance this app plays itself still starts and ends it:
+			// that is what keeps a client -- and a request to write a file,
+			// which cannot be told apart from a request to speak -- with an
+			// answer instead of a hang. What the framework is handed under
+			// those routes is silence of the same length as what is heard,
+			// so the file is the right length and the right thing to find
+			// in it is nothing. One buffer of zeroes for the utterance, not
+			// one per piece.
+			val silent = if (!toFramework) ByteArray(buffer.size) else null
 			try {
 				// Pieces that threw, in a row. One bad piece is skipped and
 				// the utterance goes on; a run of them is an engine that
@@ -808,9 +821,9 @@ class EvvTtsService : TextToSpeechService() {
 							}
 							return
 						}
-						when (pump(target, callback, pace, opening, buffer, optimizer, Stability.ENGINE_SILENCE_MS, lead, own, toFramework)) {
+						when (pump(target, callback, pace, opening, buffer, optimizer, Stability.ENGINE_SILENCE_MS, lead, own, toFramework, silent)) {
 							Pump.Next -> Unit
-							Pump.Over -> { remember(pace); finish(callback, opening); return }
+							Pump.Over -> { remember(pace); finish(callback, opening, own != null); return }
 							// Gone while still wanted is a framework that
 							// stopped taking samples without asking for
 							// silence -- a dead binder, a torn-down callback.
@@ -822,7 +835,7 @@ class EvvTtsService : TextToSpeechService() {
 							// framework being past answering.
 							Pump.Gone -> {
 								remember(pace)
-								if (!stopped) finish(callback, opening)
+								if (!stopped) finish(callback, opening, own != null)
 								return
 							}
 						}
@@ -842,13 +855,13 @@ class EvvTtsService : TextToSpeechService() {
 						markSuspect(target.language)
 						if (failures >= MAX_PIECE_FAILURES) {
 							remember(pace)
-							finish(callback, opening)
+							finish(callback, opening, own != null)
 							return
 						}
 					}
 				}
 				remember(pace)
-				finish(callback, opening)
+				finish(callback, opening, own != null)
 			} catch (failed: Throwable) {
 				Log.e(TAG, "the utterance failed and was finished anyway", failed)
 				markSuspect(target.language)
@@ -858,7 +871,7 @@ class EvvTtsService : TextToSpeechService() {
 					// The engine is being given back anyway.
 				}
 				remember(pace)
-				finish(callback, opening)
+				finish(callback, opening, own != null)
 			} finally {
 				// Nothing of this utterance may outlive it: the prepared
 				// text goes, and the reference to it goes with it, so a stop
@@ -872,20 +885,106 @@ class EvvTtsService : TextToSpeechService() {
 		}
 	}
 
+	/** Where the prepared pieces of an utterance come from: a precomputed
+	 *  list for short text, a queue fed by another thread for long text. */
+	private interface TextSource {
+		/** The next piece ready to be spoken, or null when the utterance has
+		 *  no more. Never blocks for longer than the piece being prepared. */
+		fun take(): String?
+
+		/** Drops whatever is left, now. Answers at once. */
+		fun cancel()
+	}
+
+	/** The words of a piece as the engine is handed them: the prosody
+	 *  prefix, the shortened pauses the settings ask for, and the short
+	 *  boundary pause a cut in the middle of a sentence earns. */
+	private fun audioFor(piece: TextPieces.Piece, last: Boolean, s: Settings, prosody: String): String {
+		var audio = try {
+			prosody + Pauses.apply(piece.text, s.pauses, last)
+		} catch (_: Throwable) {
+			prosody + piece.text
+		}
+		if (piece.forced && !last) audio += Pauses.AT_A_BOUNDARY
+		return audio
+	}
+
 	/**
-	 * The text of an utterance, made one piece ahead of the speech.
+	 * The text of a short utterance, prepared where it stands.
 	 *
-	 * This is where the pipeline runs now, and running it here rather than on
-	 * the synthesis thread is the whole of what makes a long text sound
-	 * continuous and a swipe land at once. Three properties, and each of them
-	 * is a delay that is not paid any more:
+	 * Almost everything a screen reader says is a line: "screen locked",
+	 * "charging, 42 percent", "message from Sam". Handing one of those to a
+	 * thread and waking back for it costs two context switches and a
+	 * condition variable, which is small in absolute terms and is paid in
+	 * front of the first syllable of every single thing said. Below
+	 * [INLINE_MAX_CHARS] the whole of the text is rewritten and cut right
+	 * here, on the synthesis thread, and the engine starts with no hand-off
+	 * at all. The work is a pass over a few dozen characters; it is cheaper
+	 * than the wake-up it replaces.
 	 *
-	 * - The next piece is prepared while the one before it is being spoken,
-	 *   so the engine is never idle waiting for text that is ready a
-	 *   millisecond later than it is needed.
-	 * - One piece at a time and no further, so a document is not cut and
-	 *   rewritten in full behind a person who is about to swipe away the
-	 *   first sentence of it.
+	 * Cancelling is a flag and a clear. Nothing was ever handed to another
+	 * thread, so there is nothing to wait for.
+	 */
+	private inner class InlineText(
+		raw: String,
+		s: Settings,
+		replacements: Substitutions,
+		prosody: String
+	) : TextSource {
+
+		private val pieces = ArrayDeque<String>(4)
+
+		@Volatile
+		private var cancelled = false
+
+		init {
+			try {
+				// The whole road first and the cut after, because a sentence
+				// the rewritten text says ends in a better place than the
+				// one the caller's text does.
+				val text = try {
+					TextPipeline.apply(raw, s, replacements.index, replacements.abbreviations)
+				} catch (_: Throwable) {
+					raw
+				}
+				val list = TextPieces.pieces(text)
+				for (index in list.indices) {
+					val piece = list[index]
+					val audio = audioFor(piece, index == list.lastIndex, s, prosody)
+					if (!EvvEngine.isBlankSpeech(audio)) pieces.addLast(audio)
+				}
+			} catch (broken: Throwable) {
+				Log.e(TAG, "the text of a short utterance could not be prepared", broken)
+			}
+		}
+
+		@Synchronized
+		override fun take(): String? = if (cancelled) null else pieces.pollFirst()
+
+		@Synchronized
+		override fun cancel() {
+			cancelled = true
+			pieces.clear()
+		}
+	}
+
+	/**
+	 * The text of a long utterance, made a piece or two ahead of the speech.
+	 *
+	 * This is where the pipeline runs for a document, and running it here
+	 * rather than on the synthesis thread is the whole of what makes a long
+	 * text sound continuous and a swipe land at once. Three properties, and
+	 * each of them is a delay that is not paid any more:
+	 *
+	 * - The next pieces are prepared while the one before them is being
+	 *   spoken, so the engine is never idle waiting for text that is ready a
+	 *   millisecond later than it is needed. Two pieces are kept ready,
+	 *   which is more than enough: preparing one costs a fraction of the
+	 *   time the engine takes to say one, and a queue that never fills is a
+	 *   producer that never blocks.
+	 * - A bounded number of pieces is prepared and no more, so a document is
+	 *   not cut and rewritten in full behind a person who is about to swipe
+	 *   away the first sentence of it.
 	 * - [cancel] stops the work where it stands. A stopped utterance leaves
 	 *   no thread grinding through the rest of a chapter, which is what the
 	 *   next utterance would otherwise have been waiting behind.
@@ -899,14 +998,14 @@ class EvvTtsService : TextToSpeechService() {
 		s: Settings,
 		replacements: Substitutions,
 		prosody: String
-	) {
+	) : TextSource {
 
-		private val gate = Object()
+		/** Prepared pieces waiting to be spoken. Small on purpose: it is a
+		 *  lead of text, not a queue of a document, and a stop throws it
+		 *  away. */
+		private val queue = ArrayBlockingQueue<String>(PREFETCH_DEPTH)
 
-		private var ready: String? = null
-
-		private var finished = false
-
+		@Volatile
 		private var cancelled = false
 
 		private var future: Future<*>? = null
@@ -922,10 +1021,7 @@ class EvvTtsService : TextToSpeechService() {
 				// Nowhere to prepare the text: the consumer is told there is
 				// none rather than being left waiting for a thread the
 				// executor would not give.
-				synchronized(gate) {
-					finished = true
-					gate.notifyAll()
-				}
+				queue.offer(TEXT_END)
 			}
 		}
 
@@ -950,21 +1046,16 @@ class EvvTtsService : TextToSpeechService() {
 				while (!isCancelled()) {
 					val following = next(pieces)
 					val last = following == null
-					var audio = try {
-						prosody + Pauses.apply(held.text, s.pauses, last)
-					} catch (_: Throwable) {
-						prosody + held.text
-					}
-					if (held.forced && !last) audio += Pauses.AT_A_BOUNDARY
-					if (!EvvEngine.isBlankSpeech(audio)) publish(audio)
+					val audio = audioFor(held, last, s, prosody)
+					if (!EvvEngine.isBlankSpeech(audio) && !publish(audio)) return
 					held = following ?: break
 				}
 			} catch (broken: Throwable) {
 				// A piece that could not be prepared is a piece that is not
 				// said, and the utterance around it is finished normally.
-				Log.e(TAG, "the text of an utterance could not be prepared", broken)
+				if (!isCancelled()) Log.e(TAG, "the text of an utterance could not be prepared", broken)
 			} finally {
-				finish()
+				publish(TEXT_END)
 			}
 		}
 
@@ -974,67 +1065,62 @@ class EvvTtsService : TextToSpeechService() {
 			null
 		}
 
+		/** Hands one piece over, waiting only while the queue is full --
+		 *  which is the engine telling the text thread to wait, and never the
+		 *  other way around. */
+		private fun publish(audio: String): Boolean {
+			while (!cancelled) {
+				try {
+					if (queue.offer(audio, PUBLISH_WAIT_MS, TimeUnit.MILLISECONDS)) return true
+				} catch (_: InterruptedException) {
+					Thread.currentThread().interrupt()
+					return false
+				}
+			}
+			return false
+		}
+
 		/** The next prepared piece, or nothing when the utterance is over.
 		 *  Blocks only while the piece is being prepared, which is the work
 		 *  the engine is not waiting on because it is speaking the one
-		 *  before it. */
-		fun take(): String? {
-			synchronized(gate) {
-				while (ready == null && !finished && !cancelled) {
-					try {
-						gate.wait(WAIT_MS)
-					} catch (stopping: InterruptedException) {
-						Thread.currentThread().interrupt()
-						return null
-					}
+		 *  before it. The wait is bounded: a text thread that has died without
+		 *  saying so is a finished utterance, not a service that hangs. */
+		override fun take(): String? {
+			val deadline = System.nanoTime() + MAX_TEXT_WAIT_MS * 1_000_000L
+			while (!cancelled) {
+				val left = (deadline - System.nanoTime()) / 1_000_000L
+				if (left <= 0L) {
+					Log.e(TAG, "the text of an utterance stopped arriving")
+					cancel()
+					return null
 				}
-				val held = ready
-				ready = null
-				gate.notifyAll()
-				return held
+				val item = try {
+					queue.poll(minOf(left, WAIT_MS), TimeUnit.MILLISECONDS)
+				} catch (stopping: InterruptedException) {
+					Thread.currentThread().interrupt()
+					return null
+				} ?: continue
+				if (item == TEXT_END) return null
+				return item
 			}
-		}
-
-		private fun publish(audio: String) {
-			synchronized(gate) {
-				while (ready != null && !cancelled) {
-					try {
-						gate.wait(WAIT_MS)
-					} catch (stopping: InterruptedException) {
-						Thread.currentThread().interrupt()
-						return
-					}
-				}
-				if (cancelled) return
-				ready = audio
-				gate.notifyAll()
-			}
-		}
-
-		private fun finish() {
-			synchronized(gate) {
-				finished = true
-				gate.notifyAll()
-			}
+			return null
 		}
 
 		private fun isCancelled(): Boolean = cancelled || Thread.currentThread().isInterrupted
 
 		/** Drops whatever is being prepared, now. Answers at once: the work
-		 *  is on another thread and stopping it is a flag and an interrupt,
-		 *  never a wait for it to notice. */
-		fun cancel() {
-			synchronized(gate) {
-				cancelled = true
-				ready = null
-				finished = true
-				gate.notifyAll()
-			}
+		 *  is on another thread and stopping it is a flag, an interrupt and a
+		 *  cleared queue, never a wait for it to notice. */
+		override fun cancel() {
+			cancelled = true
+			queue.clear()
+			queue.offer(TEXT_END)
 			try {
 				future?.cancel(true)
 			} catch (_: Throwable) {
 			}
 		}
+
 	}
 
 	/**
@@ -1069,13 +1155,19 @@ class EvvTtsService : TextToSpeechService() {
 	 * and goes quiet, and the quiet is what was reported when another engine
 	 * such as AutoTTS asked here.
 	 */
-	private fun finish(callback: SynthesisCallback, opening: Opening) {
+	private fun finish(callback: SynthesisCallback, opening: Opening, playedItself: Boolean) {
 		// An utterance this app played itself is finished when it has been
 		// heard, not when it was made: the finish waits for the last of it,
-		// and a stop ends the wait at once.
-		if (playingItself) {
-			playingItself = false
+		// and a stop ends the wait at once. Whether it did is the
+		// utterance's own answer and not a field of the service: two
+		// callers can be mid-utterance at once, and one of them finishing
+		// must not drain the other's sound or clear its flag.
+		if (playedItself) {
 			try { if (!stopped) player?.drain() } catch (_: Throwable) {}
+			// The player stays open for the next utterance -- opening one
+			// costs tens of milliseconds -- but it stops being this
+			// utterance's, so the next one on another thread can have it.
+			try { player?.end() } catch (_: Throwable) {}
 		}
 		// Every call guarded: the framework end of the callback can die at
 		// any moment -- a caller gone, a binder torn down -- and a dead
@@ -1111,7 +1203,11 @@ class EvvTtsService : TextToSpeechService() {
 		silenceMs: Int,
 		leadMs: Long,
 		own: SynthesisRouting.Player? = null,
-		toFramework: Boolean = true
+		toFramework: Boolean = true,
+		/** What the framework is handed when [toFramework] is off: a
+		 *  buffer of zeroes the same size as [buffer], so the callback is
+		 *  answered with silence rather than with nothing. */
+		silent: ByteArray? = null
 	): Pump {
 		while (!stopped) {
 			val n = target.read(buffer, silenceMs)
@@ -1154,7 +1250,10 @@ class EvvTtsService : TextToSpeechService() {
 				target.stop()
 				return Pump.Over
 			}
-			if (toFramework && !deliver(callback, buffer, n)) {
+			// The real samples under Automatic and under the route that
+			// hands them on as well, silence under the rest: the callback is
+			// answered either way.
+			if (!deliver(callback, if (toFramework) buffer else (silent ?: ByteArray(n)), n)) {
 				target.stop()
 				return Pump.Gone
 			}
@@ -1343,9 +1442,13 @@ class EvvTtsService : TextToSpeechService() {
 		// bytes would split the last sample between two reads, and every
 		// sample after it in the second read would be the two bytes of two
 		// different samples -- a click on every chunk boundary.
-		val held = chunk
-		if (held != null && held.size == want) return held
-		return ByteArray(want).also { chunk = it }
+		//
+		// Owned by the utterance rather than shared. The framework speaks
+		// one utterance at a time from one client, but two clients -- a
+		// screen reader and an app's own speech -- are two threads, and a
+		// buffer kept on the service is two threads writing each other's
+		// audio. Four kilobytes is nothing against that.
+		return ByteArray(want)
 	}
 
 	/** The app's own player, ready for an utterance at [rateHz] on the
@@ -1430,13 +1533,37 @@ class EvvTtsService : TextToSpeechService() {
 		const val WAIT_MS = 50L
 
 		/** How long a text has to be before it goes through the pipeline a
-		 *  piece at a time rather than all at once. Ten thousand characters is
-		 *  a couple of pages, which is where "the whole of it rewritten before
+		 *  piece at a time rather than all at once. Two thousand characters is
+		 *  a screen or two, which is where "the whole of it rewritten before
 		 *  the first syllable" stops being a few milliseconds and starts being
 		 *  a wait somebody can hear; below it the single pass is cheaper than
 		 *  the per-piece calls and cuts the rewritten text rather than the
 		 *  caller's, which is the better of the two. */
-		const val STREAM_FROM_CHARS = 10000
+		const val STREAM_FROM_CHARS = 2000
+
+		/** Below this many characters the whole utterance is prepared on the
+		 *  synthesis thread. A line of a screen reader is a few dozen; a
+		 *  paragraph is not, and a paragraph wants the other thread. */
+		const val INLINE_MAX_CHARS = 320
+
+		/** How many prepared pieces wait for the engine. Two is a lead of a
+		 *  piece or two of text, which is far more than the text thread needs
+		 *  and far less than a stop would have to throw away. */
+		const val PREFETCH_DEPTH = 2
+
+		/** How long the producer waits for room in the queue before looking
+		 *  at the cancel flag again. */
+		const val PUBLISH_WAIT_MS = 50L
+
+		/** The longest a prepared piece may take to arrive before the
+		 *  utterance is finished rather than waiting for ever. Ten seconds is
+		 *  thousands of times the cost of preparing a piece; reaching it means
+		 *  the text thread has died. */
+		const val MAX_TEXT_WAIT_MS = 10_000L
+
+		/** What the text thread puts in the queue to say there is no more.
+		 *  An utterance is never this string. */
+		const val TEXT_END = "\u0000end\u0000"
 
 		/** What [EvvNative.read] answers when the engine has gone quiet rather
 		 *  than finished, which is the difference between a piece that ended and

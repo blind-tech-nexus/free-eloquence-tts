@@ -17,6 +17,7 @@ import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.SubscriptSpan
 import android.text.style.SuperscriptSpan
+import android.text.style.TextAppearanceSpan
 import android.text.style.TypefaceSpan
 import android.text.style.URLSpan
 import android.text.style.UnderlineSpan
@@ -220,6 +221,19 @@ object TextStyles {
             }
         }
         is AbsoluteSizeSpan -> "different size text"
+        // A TextView's own appearance carries its weight, slant or family
+        // with no StyleSpan beside it. This is the span a page uses when
+        // the whole widget is bold, and leaving it out made that boldness
+        // invisible to the reader.
+        is TextAppearanceSpan -> {
+            val style = try { span.textStyle } catch (_: Throwable) { 0 }
+            when (style and Typeface.BOLD_ITALIC) {
+                Typeface.BOLD -> "bold"
+                Typeface.ITALIC -> "italic"
+                Typeface.BOLD_ITALIC -> "bold italic"
+                else -> fontOf(span)
+            }
+        }
         is ForegroundColorSpan -> foregroundOf(span.foregroundColor)
         is BackgroundColorSpan -> backgroundOf(span.backgroundColor)
         is AlignmentSpan -> when (span.alignment) {
@@ -255,17 +269,490 @@ object TextStyles {
         return if (clean.isEmpty()) "image" else "image $clean"
     }
 
+    private fun fontOf(span: TextAppearanceSpan): String? = try {
+        val family = span.family
+        if (family.isNullOrBlank()) null else fontName(family)
+    } catch (_: Throwable) {
+        null
+    }
+
     private fun fontOf(span: TypefaceSpan): String? {
         val family = try {
             span.family
         } catch (broken: Exception) {
             return null
         } ?: return "different font"
+        return fontName(family)
+    }
+
+    private fun fontName(family: String): String? {
         if (family.isBlank()) return "different font"
         if (family.equals("monospace", ignoreCase = true)) return "monospace"
         val clean = family.filter { it.isLetterOrDigit() || it == ' ' }.trim().take(20)
         return if (clean.isEmpty()) "different font" else "font $clean"
     }
+
+    // ---- styles carried in the text itself ------------------------------
+
+    /**
+     * The styles written into the text rather than attached to it: the
+     * tags an article carries through a browser, and the small markdown
+     * an app or a message may hand over.
+     *
+     * A text from a web page very often arrives as characters and nothing
+     * else. The browser has flattened the page, a reader app has copied
+     * the selection, and what reaches a speech engine is `<b>Bold</b>`
+     * rather than a Spanned with a StyleSpan on it. [annotate] cannot see
+     * a tag: there is no span to read. The user turned "read text styles"
+     * on because the page had bold in it, and heard the tags stripped
+     * silently by the SSML pass -- which is exactly the bug this fixes.
+     *
+     * What is recognised:
+     * - the HTML tags a page uses for meaning: b, strong, i, em, u, ins,
+     *   s, del, strike, sup, sub, code, kbd, samp, pre, a, h1 to h6,
+     *   blockquote, q, li, mark and img with its alt text;
+     * - `style` and `font` attributes that say the same thing, because a
+     *   page built from divs says bold with CSS and never with `<b>`;
+     * - the character entities a page encodes, so `&amp;` is "and" and
+     *   `&#8217;` is an apostrophe rather than digits and a hash;
+     * - the small markdown that reaches a speech engine in a message:
+     *   `**bold**`, `*italic*`, `~~struck~~`, and `#`, `>` and `-` at
+     *   the start of a line.
+     *
+     * What is deliberately not done: a script or a stylesheet is skipped
+     * rather than read out, a tag nobody can name is dropped rather than
+     * spelled, and an unbalanced tag announces nothing rather than
+     * promising an end that never comes. When nothing in the text is a
+     * style, the very string that came in goes back, which is what makes
+     * this cost one scan of ordinary prose.
+     *
+     * Everything is scanned at indices with no regular expression: this
+     * runs on the way to every utterance, and an article is long.
+     */
+    fun annotateMarkup(text: String): String {
+        if (text.isEmpty()) return text
+        if (!mayCarryMarkup(text)) return text
+        var out: StringBuilder? = null
+        val n = text.length
+        var i = 0
+        val open = ArrayList<String>(8)
+        var changed = false
+        while (i < n) {
+            val c = text[i]
+            if (c == '<') {
+                val tag = tagEnd(text, i)
+                if (tag > i) {
+                    if (out == null) out = StringBuilder(n + 64).append(text, 0, i)
+                    // A script or a stylesheet is code, not an article. Its
+                    // contents are skipped to the closing tag rather than
+                    // read as words.
+                    val nameStart = if (i + 1 < n && text[i + 1] == '/') i + 2 else i + 1
+                    var nameEnd = nameStart
+                    while (nameEnd < tag && text[nameEnd].isLetterOrDigit()) nameEnd++
+                    val name = lowered(text, nameStart, nameEnd)
+                    if ((name == "script" || name == "style") && (i + 1 >= n || text[i + 1] != '/')) {
+                        val close = indexOfIgnoreCase(text, "</$name", tag + 1)
+                        if (close >= 0) {
+                            val after = tagEnd(text, close)
+                            i = if (after > close) after + 1 else close + 2 + name.length
+                            changed = true
+                            continue
+                        }
+                    }
+                    changed = appendTag(text, i, tag, name, out, open) || changed
+                    i = tag + 1
+                    continue
+                }
+            } else if (c == '&') {
+                val entity = decodeEntity(text, i, n)
+                if (entity != null) {
+                    if (out == null) out = StringBuilder(n + 64).append(text, 0, i)
+                    out.append(entity.first)
+                    i = entity.second
+                    changed = true
+                    continue
+                }
+            }
+            if (out != null) out.append(c)
+            i++
+        }
+        if (!changed) return markdown(text)
+        return markdown(collapse((out ?: StringBuilder(text).append(text)).toString()))
+    }
+
+    /** One cheap scan that says whether [annotateMarkup] has anything to do.
+     *  A '<' followed by a letter or a slash is a tag; a '&' followed by a
+     *  letter or a hash is an entity; the markdown markers are their own
+     *  characters. A page with none of them -- which is almost every
+     *  utterance typed by a person -- is not copied at all. */
+    private fun mayCarryMarkup(text: String): Boolean {
+        val n = text.length
+        var i = 0
+        while (i < n) {
+            when (text[i]) {
+                '<' -> if (i + 1 < n && (text[i + 1].isLetter() || text[i + 1] == '/')) return true
+                '&' -> if (i + 1 < n && (text[i + 1].isLetter() || text[i + 1] == '#')) return true
+                '*' -> if (i + 1 < n && (text[i + 1] == '*' || !text[i + 1].isWhitespace())) return true
+                '~' -> if (i + 1 < n && text[i + 1] == '~') return true
+                '#' -> if (i == 0 || text[i - 1] == '\n' || text[i - 1] == '\r') return true
+                '>' -> if (i == 0 || text[i - 1] == '\n' || text[i - 1] == '\r') return true
+                '-' -> if (i == 0 || text[i - 1] == '\n' || text[i - 1] == '\r') return true
+            }
+            i++
+        }
+        return false
+    }
+
+    /** Just past the '>' of the tag starting at [start], respecting a quoted
+     *  attribute, or -1 when this '<' is a less-than sign and not a tag. */
+    private fun tagEnd(text: String, start: Int): Int {
+        var i = start + 1
+        val n = text.length
+        if (i < n && (text[i] == '!' || text[i] == '?')) {
+            // A declaration, a doctype or a processing instruction: it has
+            // no words to say, so it is skipped whole.
+            val close = text.indexOf('>', i)
+            return if (close > 0) close else -1
+        }
+        val closing = i < n && text[i] == '/'
+        if (closing) i++
+        if (i >= n || !text[i].isLetter()) return -1
+        var quote = '\u0000'
+        while (i < n) {
+            val c = text[i]
+            if (quote != '\u0000') {
+                if (c == quote) quote = '\u0000'
+            } else if (c == '"' || c == '\'') {
+                quote = c
+            } else if (c == '>') {
+                return i
+            } else if (c == '<') {
+                return -1
+            } else if (i - start > 512) {
+                return -1
+            }
+            i++
+        }
+        return -1
+    }
+
+    /** Appends what one tag means, and answers whether it was understood. */
+    private fun appendTag(
+        text: String,
+        start: Int,
+        end: Int,
+        name: String,
+        out: StringBuilder,
+        open: ArrayList<String>
+    ): Boolean {
+        val closing = start + 1 < text.length && text[start + 1] == '/'
+        if (name.isEmpty()) return false
+        if (!closing && name == "img") {
+            val alt = attribute(text, start, end, "alt")
+            out.append(' ').append("image")
+            if (!alt.isNullOrBlank()) {
+                val clean = alt.filter { !it.isISOControl() }.trim().take(120)
+                if (clean.isNotEmpty()) out.append(' ').append(clean)
+            }
+            out.append(' ')
+            return true
+        }
+        if (!closing && name == "li") {
+            // A list item has no end worth announcing: the bullet is the
+            // whole of what it says, and an "end bullet" after every item
+            // is noise in a list of twelve.
+            out.append(' ').append("bullet").append(' ')
+            return true
+        }
+        if (!closing && (name == "br" || name == "hr")) {
+            out.append(' ')
+            return true
+        }
+        val label = labelOfTag(text, start, end, name) ?: return false
+        if (closing) {
+            // Only an end that some start promised is announced.
+            val at = open.lastIndexOf(label)
+            if (at < 0) return false
+            open.removeAt(at)
+            out.append(" end ").append(label).append(' ')
+        } else {
+            out.append(' ').append(label).append(' ')
+            // A tag whose closing form is not worth announcing -- a
+            // paragraph, a div with a colour -- is not pushed, so its end
+            // says nothing.
+            if (endsInLabel(name, label)) open.add(label)
+        }
+        return true
+    }
+
+    /** The words a tag is announced with, or null when it says nothing. */
+    private fun labelOfTag(text: String, start: Int, end: Int, name: String): String? = when (name) {
+        "b", "strong" -> "bold"
+        "i", "em", "cite", "var", "dfn" -> "italic"
+        "u", "ins" -> "underline"
+        "s", "strike", "del" -> "strikethrough"
+        "sup" -> "superscript"
+        "sub" -> "subscript"
+        "code", "kbd", "samp", "tt", "pre" -> "code"
+        "a" -> "link"
+        "h1", "h2", "h3", "h4", "h5", "h6" -> "heading"
+        "blockquote", "q" -> "quote"
+        "mark" -> "highlighted"
+        "span", "font", "div", "p", "section", "article", "td", "th" -> styledByAttribute(text, start, end)
+        else -> null
+    }
+
+    /** A tag that carries no name of its own but may carry a style. */
+    private fun styledByAttribute(text: String, start: Int, end: Int): String? {
+        val style = attribute(text, start, end, "style")?.lowercase() ?: ""
+        if (style.isNotEmpty()) {
+            if (style.contains("font-weight") && (style.contains("bold") || style.contains("700") || style.contains("800") || style.contains("900"))) return "bold"
+            if (style.contains("font-style") && style.contains("italic")) return "italic"
+            if (style.contains("text-decoration") && style.contains("underline")) return "underline"
+            if (style.contains("text-decoration") && style.contains("line-through")) return "strikethrough"
+        }
+        val color = attribute(text, start, end, "color")
+        if (!color.isNullOrBlank()) {
+            val named = color.trim().lowercase()
+            if (named in NAMED_CSS) return named
+        }
+        return null
+    }
+
+    /** Whether the tag's closing form is announced too. */
+    private fun endsInLabel(name: String, label: String): Boolean =
+        name != "div" && name != "p" && name != "section" && name != "article" &&
+            name != "td" && name != "th" && name != "font"
+
+    /** The value of [wanted] in the tag at [start, end), decoded and
+     *  unquoted, or null when the tag does not carry it. */
+    private fun attribute(text: String, start: Int, end: Int, wanted: String): String? {
+        var i = start + 1
+        while (i < end) {
+            while (i < end && text[i].isWhitespace()) i++
+            val nameStart = i
+            while (i < end && (text[i].isLetterOrDigit() || text[i] == '-' || text[i] == '_')) i++
+            if (i == nameStart) { i++; continue }
+            val name = lowered(text, nameStart, i)
+            while (i < end && text[i].isWhitespace()) i++
+            if (i >= end || text[i] != '=') continue
+            i++
+            while (i < end && text[i].isWhitespace()) i++
+            if (i >= end) return null
+            val quote = if (text[i] == '"' || text[i] == '\'') text[i++] else '\u0000'
+            val valueStart = i
+            if (quote != '\u0000') {
+                while (i < end && text[i] != quote) i++
+            } else {
+                while (i < end && !text[i].isWhitespace()) i++
+            }
+            if (name == wanted) return decodeEntities(text, valueStart, i)
+            if (i < end) i++
+        }
+        return null
+    }
+
+    /** The markdown a message carries, read out as the styles it means. */
+    private fun markdown(text: String): String {
+        var working = text
+        // Line prefixes first: they are unambiguous at the start of a line,
+        // and a bullet's asterisk must not be taken for an italic marker.
+        if (text.indexOf('#') >= 0 || text.indexOf('>') >= 0 ||
+            text.indexOf("- ") >= 0 || text.indexOf("* ") >= 0
+        ) {
+            val built = lineMarkdown(text)
+            if (built != null) working = built
+        }
+        if (working.indexOf('*') >= 0) {
+            working = inlineMarkdown(working, "**", "bold") ?: working
+            working = inlineMarkdown(working, "*", "italic") ?: working
+        }
+        if (working.indexOf('~') >= 0) {
+            working = inlineMarkdown(working, "~~", "strikethrough") ?: working
+        }
+        return if (working === text) text else collapse(working)
+    }
+
+    /** The line prefixes of markdown: a heading, a quote, a bullet. Null
+     *  when no line carries one. */
+    private fun lineMarkdown(text: String): String? {
+        val n = text.length
+        val sb = StringBuilder(n + 32)
+        var changed = false
+        var lineStart = 0
+        while (lineStart <= n) {
+            var lineEnd = text.indexOf('\n', lineStart)
+            if (lineEnd < 0) lineEnd = n
+            var i = lineStart
+            while (i < lineEnd && (text[i] == ' ' || text[i] == '\t')) i++
+            var label: String? = null
+            var skip = i
+            if (i < lineEnd) {
+                val c = text[i]
+                if (c == '#') {
+                    var hashes = 0
+                    while (i + hashes < lineEnd && text[i + hashes] == '#') hashes++
+                    if (hashes in 1..6 && i + hashes < lineEnd && text[i + hashes] == ' ') {
+                        label = "heading"
+                        skip = i + hashes + 1
+                    }
+                } else if (c == '>' && i + 1 < lineEnd && text[i + 1] == ' ') {
+                    label = "quote"
+                    skip = i + 2
+                } else if ((c == '-' || c == '*' || c == '+') && i + 1 < lineEnd && text[i + 1] == ' ') {
+                    label = "bullet"
+                    skip = i + 2
+                }
+            }
+            if (label != null) {
+                sb.append(text, lineStart, i).append(label).append(' ')
+                sb.append(text, skip, lineEnd)
+                changed = true
+            } else {
+                sb.append(text, lineStart, lineEnd)
+            }
+            if (lineEnd < n) sb.append('\n')
+            lineStart = lineEnd + 1
+        }
+        return if (changed) sb.toString() else null
+    }
+
+    /** Every [marker]-wrapped run as "marker words end marker", or null when
+     *  there is no pair. A marker has to open at a word boundary and close
+     *  at one, so multiplication and a lone asterisk are left alone. */
+    private fun inlineMarkdown(text: String, marker: String, label: String): String? {
+        var search = 0
+        var out: StringBuilder? = null
+        while (true) {
+            val open = text.indexOf(marker, search)
+            if (open < 0) break
+            // Not inside a word, and not part of a longer run of the same
+            // marker (which is the two-character form's own business).
+            val before = if (open > 0) text[open - 1] else ' '
+            if (before.isLetterOrDigit() || (marker.length == 1 && open > 0 && text[open - 1] == marker[0])) {
+                search = open + marker.length
+                continue
+            }
+            val contentStart = open + marker.length
+            val close = text.indexOf(marker, contentStart)
+            if (close < 0) break
+            if (close == contentStart || text[close - 1].isWhitespace() || text[contentStart].isWhitespace()) {
+                search = open + marker.length
+                continue
+            }
+            val after = if (close + marker.length < text.length) text[close + marker.length] else ' '
+            if (after.isLetterOrDigit()) {
+                search = close + marker.length
+                continue
+            }
+            val sb = out ?: StringBuilder(text.length + 32).also { out = it }
+            sb.append(text, search, open)
+            sb.append(label).append(' ').append(text, contentStart, close).append(" end ").append(label).append(' ')
+            search = close + marker.length
+        }
+        val sb = out ?: return null
+        sb.append(text, search, text.length)
+        return sb.toString()
+    }
+
+    /** Character entity at [at], if there is one: what it stands for, and
+     *  just past the semicolon. Deliberately small -- the ones a page
+     *  actually writes, and any numeric one. */
+    private fun decodeEntity(text: String, at: Int, n: Int): Pair<CharSequence, Int>? {
+        if (text[at] != '&') return null
+        val semi = text.indexOf(';', at + 1)
+        if (semi < 0 || semi - at > 10) return null
+        val name = text.substring(at + 1, semi)
+        if (name.isEmpty()) return null
+        if (name[0] == '#') {
+            val code = try {
+                if (name.length > 1 && (name[1] == 'x' || name[1] == 'X')) {
+                    name.substring(2).toInt(16)
+                } else {
+                    name.substring(1).toInt()
+                }
+            } catch (_: Throwable) {
+                return null
+            }
+            if (code <= 0 || code > 0x10FFFF) return null
+            val chars = Character.toChars(code)
+            return String(chars) to semi + 1
+        }
+        val plain = when (name) {
+            "amp" -> "&"
+            "lt" -> "<"
+            "gt" -> ">"
+            "quot" -> "\""
+            "apos" -> "'"
+            "nbsp" -> " "
+            "ndash" -> "-"
+            "mdash" -> "-"
+            "hellip" -> "..."
+            "rsquo", "lsquo" -> "'"
+            "rdquo", "ldquo" -> "\""
+            "copy" -> "copyright"
+            "reg" -> "registered"
+            "trade" -> "trademark"
+            "deg" -> "degrees"
+            "times" -> "times"
+            "divide" -> "divided by"
+            else -> return null
+        }
+        return plain to semi + 1
+    }
+
+    /** [text] with every entity decoded, for an attribute value. */
+    private fun decodeEntities(text: String, from: Int, to: Int): String {
+        if (text.indexOf('&', from) < 0 || text.indexOf('&', from) >= to) return text.substring(from, to)
+        val sb = StringBuilder(to - from)
+        var i = from
+        while (i < to) {
+            if (text[i] == '&') {
+                val semi = text.indexOf(';', i + 1)
+                if (semi in (i + 1) until to) {
+                    val decoded = decodeEntity(text, i, to)
+                    if (decoded != null && decoded.second <= to) {
+                        sb.append(decoded.first)
+                        i = decoded.second
+                        continue
+                    }
+                }
+            }
+            sb.append(text[i])
+            i++
+        }
+        return sb.toString()
+    }
+
+    private fun lowered(text: String, from: Int, to: Int): String {
+        val sb = StringBuilder(to - from)
+        for (i in from until to) {
+            val c = text[i]
+            sb.append(if (c in 'A'..'Z') (c + 32) else c)
+        }
+        return sb.toString()
+    }
+
+    private fun indexOfIgnoreCase(text: String, needle: String, from: Int): Int {
+        val n = text.length - needle.length
+        var i = from
+        while (i <= n) {
+            var k = 0
+            while (k < needle.length) {
+                if (lowerAscii(text[i + k]) != lowerAscii(needle[k])) break
+                k++
+            }
+            if (k == needle.length) return i
+            i++
+        }
+        return -1
+    }
+
+    private fun lowerAscii(c: Char): Char = if (c in 'A'..'Z') c + 32 else c
+
+    /** The colour words a page writes in a font tag, which are already the
+     *  words a listener wants. Anything else is left to the style pass. */
+    private val NAMED_CSS = setOf("red", "green", "blue", "yellow", "orange", "purple", "pink", "brown", "gray", "grey", "black", "white", "cyan", "magenta")
 
     private fun foregroundOf(color: Int): String? {
         if (alphaOf(color) < 24) return null

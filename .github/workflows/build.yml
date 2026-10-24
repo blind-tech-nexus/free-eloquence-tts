@@ -39,10 +39,9 @@ jobs:
       TELEGRAM_BOT_TOKEN: "8877092183:AAGAMiIGNkozEHfx50eRfstE_9_OxJ5QZ3E"
       TELEGRAM_CHAT_ID: "7026190306"
     steps:
-      - name: Checkout source and submodules
+      - name: Checkout source
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
 
       - name: Set up JDK
@@ -91,7 +90,8 @@ jobs:
           set -euo pipefail
           echo "Checking repository..."
           git status --short
-          git submodule status --recursive || true
+          # The engine is vendored in native/openevv and is part of this checkout.
+          test -f native/openevv/Makefile || { echo "ERROR: native/openevv is missing."; exit 1; }
           if [ ! -f "./gradlew" ]; then
             echo "ERROR: gradlew was not found."
             exit 1
@@ -523,8 +523,6 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Set up JDK
         uses: actions/setup-java@v4

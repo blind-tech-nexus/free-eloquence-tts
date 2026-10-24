@@ -24,6 +24,18 @@ class SymbolsTest {
 		assertEquals("Hello, world. 50% (yes)", Symbols.apply("Hello, world. 50% (yes)", Symbols.SOME, ""))
 	}
 
+	/** The one exception at *Some*, which is otherwise the engine untouched:
+	 *  a comma standing on its own has nothing along-side it to punctuate, so
+	 *  the engine says the word "comma". Only the lone ones go; a comma with
+	 *  a letter or a digit beside it is punctuation and keeps its pause. */
+	@Test
+	fun someDropsACommaStandingOnItsOwn() {
+		assertEquals("Hello world", Symbols.apply("Hello , world", Symbols.SOME, ""))
+		assertEquals("one two", Symbols.apply("one ,, two", Symbols.SOME, ""))
+		assertEquals("Hello, world", Symbols.apply("Hello, world", Symbols.SOME, ""))
+		assertEquals("1,000", Symbols.apply("1,000", Symbols.SOME, ""))
+	}
+
 	@Test
 	fun allNamesThePunctuationTheEngineLeavesSilent() {
 		assertEquals("Hello comma world dot", Symbols.apply("Hello, world.", Symbols.ALL, ""))

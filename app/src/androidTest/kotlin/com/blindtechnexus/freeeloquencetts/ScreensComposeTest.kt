@@ -81,6 +81,24 @@ class ScreensComposeTest {
 		}
 	}
 
+	/** Every route the engine can be told to play on is on the screen that
+	 *  chooses it, and every one of them is a stop of its own. A route that
+	 *  was in the table and missing from the screen would be a setting nobody
+	 *  could choose. */
+	@Test
+	fun theRoutingScreenBuildsItselfAndOffersEveryRoute() {
+		compose.setContent {
+			MaterialTheme {
+				AudioRoutingScreen(onBack = {})
+			}
+		}
+		// The title is both the bar and the first heading, so it is the rows
+		// that are counted: one stop per route, with the route's own name.
+		for (route in SynthesisRouting.CHOICES) {
+			compose.onNodeWithText(context.getString(routeNameOf(route))).assertExists()
+		}
+	}
+
 	@Test
 	fun theAboutScreenBuildsItselfAndOffersAnUpdateCheck() {
 		compose.setContent {

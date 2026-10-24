@@ -62,28 +62,47 @@ if [ ! -x "$clang" ]; then
 	exit 1
 fi
 if [ ! -f "$engine/Makefile" ]; then
-	echo "native/openevv is empty; run: git submodule update --init --recursive" >&2
+	echo "native/openevv has no Makefile; the engine tree is vendored in this repository" >&2
 	exit 1
 fi
 
 # What the engine needs before it is right on this architecture. Each is a bug
 # in openevv rather than a change for Android, and each is written up in its
-# own file; the submodule stays as upstream left it.
+# own file; the vendored tree carries it already, and the loop below is what
+# keeps an older checkout in step.
+# The engine is vendored in this repository rather than checked out as a
+# submodule, so a patch is applied with this repository's own git and told
+# where the vendored tree sits. Where there is no git -- a source archive, a
+# CI checkout that fetched a tarball -- patch(1) is the fallback. Both forms
+# are idempotent: an already-applied patch is recognised and skipped, which is
+# the ordinary case now that the tree in version control carries the patch.
 for patch in "$here"/patches/*.patch; do
 	[ -e "$patch" ] || continue
-	if git -C "$engine" apply --reverse --check "$patch" >/dev/null 2>&1; then
-		continue
-	fi
-	if ! git -C "$engine" apply --whitespace=nowarn "$patch"; then
-		# Two builds racing here both see it unapplied and both try it. The
-		# loser has nothing left to do rather than nothing to say.
-		if git -C "$engine" apply --reverse --check "$patch" >/dev/null 2>&1; then
+	name=$(basename "$patch")
+	if command -v git >/dev/null 2>&1 && git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
+		if git -C "$root" apply --directory=native/openevv --reverse --check "$patch" >/dev/null 2>&1; then
 			continue
 		fi
-		echo "could not apply $(basename "$patch") to native/openevv" >&2
-		exit 1
+		if git -C "$root" apply --directory=native/openevv --whitespace=nowarn "$patch"; then
+			echo "applied $name"
+			continue
+		fi
+		# Two builds racing here both see it unapplied and both try it. The
+		# loser has nothing left to do rather than nothing to say.
+		if git -C "$root" apply --directory=native/openevv --reverse --check "$patch" >/dev/null 2>&1; then
+			continue
+		fi
+	else
+		if patch -R -p1 -s -f -d "$engine" --dry-run <"$patch" >/dev/null 2>&1; then
+			continue
+		fi
+		if patch -p1 -s -f -d "$engine" <"$patch"; then
+			echo "applied $name"
+			continue
+		fi
 	fi
-	echo "applied $(basename "$patch")"
+	echo "could not apply $name to native/openevv" >&2
+	exit 1
 done
 
 # Every directory the engine's headers sit in, the same set its Makefile builds

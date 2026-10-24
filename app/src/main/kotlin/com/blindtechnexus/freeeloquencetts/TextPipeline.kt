@@ -7,7 +7,11 @@ package com.blindtechnexus.freeeloquencetts
  * preview on the settings screen, so what "Speak a sample" says is what a
  * caller hears. The order matters and is deliberate.
  *
- * The SSML tags come out first, while the text is still the caller's. Emoji
+ * The styles the page wrote into the text are read out first, while the tags
+ * that carry them are still there to be seen: "read text styles" on a web
+ * article is a tag pass and not only a span pass, because a browser hands the
+ * characters over without the spans (see [TextStyles.annotateMarkup]). The
+ * SSML tags come out straight after, while the text is still the caller's. Emoji
  * and emoticons are then named or dropped, so their names go through the rest
  * of the road as ordinary words. The user's own dictionary runs next, on the
  * words as they were written, so a replacement is the spelling the rest of
@@ -72,6 +76,18 @@ object TextPipeline {
 		// regular expression is still one step's failure, and the text it
 		// was given is still speakable without it.
 		var text = raw
+		// The styles a page wrote into the text, before the tags are
+		// stripped: a browser hands `<b>bold</b>` over as characters, and
+		// the SSML pass would take the tag away without a word about it.
+		// Reading them here is what makes "read text styles" work on a web
+		// article and not only on a Spanned. See [TextStyles.annotateMarkup].
+		// Not in code mode: there a line that opens with '#' is a comment
+		// and a line that opens with '*' is a pointer, and reading them as
+		// a heading and a bullet is the one thing the style pass would get
+		// wrong about source code.
+		try {
+			if (s.readTextStyles && !s.codeMode) text = TextStyles.annotateMarkup(text)
+		} catch (_: Throwable) {}
 		try { if (s.stripSsml) text = Ssml.strip(text) } catch (_: Throwable) {}
 		try { text = Emoji.apply(text, s.readEmoji) } catch (_: Throwable) {}
 		try { text = index.apply(text) } catch (_: Throwable) {}
