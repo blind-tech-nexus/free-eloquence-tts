@@ -2,6 +2,8 @@ package com.blindtechnexus.freeeloquencetts
 
 import android.content.Context
 import android.content.SharedPreferences
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * What the settings screen wrote, read back for the engine.
@@ -36,6 +38,15 @@ class Settings(context: Context) {
 
 	private val watcher = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> revision++ }
 
+	/** Parsed custom profiles are cached by their stored JSON. Speech reads the
+	 * active shape for every utterance; parsing a JSON array there would turn a
+	 * convenience feature into avoidable synthesis latency. */
+	@Volatile
+	private var customProfilesRaw: String? = null
+
+	@Volatile
+	private var customProfilesCache: List<CustomVoiceProfile> = emptyList()
+
 	init {
 		carryOverTheOldKeys()
 		prefs.registerOnSharedPreferenceChangeListener(watcher)
@@ -56,7 +67,118 @@ class Settings(context: Context) {
 
 	var voice: Int
 		get() = prefs.getInt(KEY_VOICE, 0).coerceIn(0, Eci.PRESET_NAMES.lastIndex)
-		set(value) = prefs.edit().putInt(KEY_VOICE, value).apply()
+		set(value) = prefs.edit().putInt(KEY_VOICE, value.coerceIn(Eci.PRESET_NAMES.indices)).apply()
+
+	// ---- custom voice profiles ------------------------------------------
+
+	/** The listener-created voices, in the order they were saved. Malformed
+	 * entries are skipped individually so one damaged profile never hides the
+	 * others or prevents speech. */
+	fun customVoices(): List<CustomVoiceProfile> {
+		val raw = prefs.getString(KEY_CUSTOM_VOICES, "[]") ?: "[]"
+		if (raw == customProfilesRaw) return customProfilesCache
+		val parsed = ArrayList<CustomVoiceProfile>()
+		try {
+			val array = JSONArray(raw)
+			for (at in 0 until array.length()) {
+				val item = array.optJSONObject(at) ?: continue
+				val id = item.optString("id").trim()
+				val name = item.optString("name").trim()
+				if (id.isEmpty() || name.isEmpty()) continue
+				val base = item.optInt("base", 0).coerceIn(Eci.PRESET_NAMES.indices)
+				val values = LinkedHashMap<Int, Int>()
+				val shape = item.optJSONObject("shape")
+				if (shape != null) {
+					for (param in SHAPE) {
+						val key = param.toString()
+						if (shape.has(key)) values[param] = Eci.clampVoice(param, shape.optInt(key))
+					}
+				}
+				parsed.add(CustomVoiceProfile(id, name, base, values).normalized())
+			}
+		} catch (_: Throwable) {
+			// The empty list is a usable answer and the presets remain.
+		}
+		customProfilesRaw = raw
+		customProfilesCache = parsed.toList()
+		return customProfilesCache
+	}
+
+	/** Adds or replaces one profile. Profiles are deliberately few and small,
+	 * so rewriting the compact array is cheaper and safer than maintaining a
+	 * web of per-profile preference keys. */
+	fun saveCustomVoice(profile: CustomVoiceProfile) {
+		val settled = profile.normalized()
+		if (settled.id.isEmpty() || settled.name.isEmpty()) return
+		val profiles = customVoices().toMutableList()
+		val at = profiles.indexOfFirst { it.id == settled.id }
+		if (at >= 0) profiles[at] = settled else profiles.add(settled)
+		writeCustomVoices(profiles)
+	}
+
+	fun deleteCustomVoice(id: String) {
+		val profiles = customVoices().filterNot { it.id == id }
+		if (profiles.size == customVoices().size) return
+		writeCustomVoices(profiles)
+		if (prefs.getString(KEY_ACTIVE_CUSTOM_VOICE, null) == id) {
+			prefs.edit().remove(KEY_ACTIVE_CUSTOM_VOICE).apply()
+		}
+	}
+
+	/** Which custom profile is selected, or null for a built-in preset. A stale
+	 * id is treated as no selection, which is important after restoring an old
+	 * preferences file without its custom-profile data. */
+	var activeCustomVoiceId: String?
+		get() {
+			val id = prefs.getString(KEY_ACTIVE_CUSTOM_VOICE, null) ?: return null
+			return id.takeIf { wanted -> customVoices().any { it.id == wanted } }
+		}
+		set(value) {
+			val edit = prefs.edit()
+			if (value != null && customVoices().any { it.id == value }) {
+				edit.putString(KEY_ACTIVE_CUSTOM_VOICE, value)
+			} else {
+				edit.remove(KEY_ACTIVE_CUSTOM_VOICE)
+			}
+			edit.apply()
+		}
+
+	fun activeCustomVoice(): CustomVoiceProfile? {
+		val id = activeCustomVoiceId ?: return null
+		return customVoices().firstOrNull { it.id == id }
+	}
+
+	/** The preset and complete shape the engine should speak right now. */
+	val activeVoicePreset: Int
+		get() = activeCustomVoice()?.baseVoice ?: voice
+
+	fun activeVoiceShape(): Map<Int, Int> {
+		val custom = activeCustomVoice()
+		if (custom == null) return shape(voice)
+		val out = LinkedHashMap(custom.shape)
+		if (!out.containsKey(Eci.VOICE_SPEED)) out[Eci.VOICE_SPEED] = speed
+		return out
+	}
+
+	private fun writeCustomVoices(profiles: List<CustomVoiceProfile>) {
+		val array = JSONArray()
+		for (profile in profiles.take(MAX_CUSTOM_VOICES)) {
+			val settled = profile.normalized()
+			val values = JSONObject()
+			for ((param, value) in settled.shape) values.put(param.toString(), value)
+			array.put(
+				JSONObject()
+					.put("id", settled.id)
+					.put("name", settled.name)
+					.put("base", settled.baseVoice)
+					.put("shape", values)
+			)
+		}
+		val raw = array.toString()
+		customProfilesRaw = raw
+		customProfilesCache = profiles.take(MAX_CUSTOM_VOICES).map { it.normalized() }
+		prefs.edit().putString(KEY_CUSTOM_VOICES, raw).apply()
+	}
 
 	/**
 	 * Which language this app speaks unless a caller says otherwise: the
@@ -480,6 +602,9 @@ class Settings(context: Context) {
 
 	companion object {
 		const val KEY_VOICE = "voice_preset"
+		const val KEY_CUSTOM_VOICES = "custom_voice_profiles"
+		const val KEY_ACTIVE_CUSTOM_VOICE = "active_custom_voice"
+		const val MAX_CUSTOM_VOICES = 24
 		const val KEY_LANGUAGE = "language_dialect"
 		const val KEY_FORCE_LANGUAGE = "force_language"
 		const val KEY_SYNTHESIS_ROUTING = "synthesis_routing"

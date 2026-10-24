@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,15 +12,22 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -120,7 +128,7 @@ fun SettingsScreen(
 					state.resetVoice()
 					notice = context.getString(
 						R.string.voice_reset,
-						Eci.PRESET_NAMES.getOrElse(state.voice) { "" }
+						state.voiceProfileName
 					)
 				}
 			)
@@ -211,15 +219,12 @@ private fun OptimizationChoice(state: SettingsModel) {
 	}
 }
 
-/** Which voice speaks, and whether it is a man or a woman. */
+/** Language, profile and gender: the choices used most often. */
 @Composable
 private fun VoiceCustomization(state: SettingsModel) {
 	SectionHeading(text = stringResource(R.string.section_voice))
 	SectionText(text = stringResource(R.string.section_voice_description))
 	val languages = Eci.LANGUAGES.map { it.label }
-	// First, because it decides what the other two are: the nine voices are
-	// nine voices of each language, and the one this app speaks by default
-	// is the one chosen here.
 	ChoiceButton(
 		title = stringResource(R.string.language_label),
 		shown = stringResource(
@@ -238,18 +243,62 @@ private fun VoiceCustomization(state: SettingsModel) {
 		checked = state.forceLanguage,
 		onChange = state::chooseForceLanguage
 	)
-	val voices = Eci.PRESET_NAMES.toList()
+	val voices = state.voiceProfileNames
 	ChoiceButton(
 		title = stringResource(R.string.voice_label),
 		shown = stringResource(
 			R.string.value_selected,
 			stringResource(R.string.voice_label),
-			voices.getOrElse(state.voice) { "" }
+			state.voiceProfileName
 		),
 		options = voices,
-		chosen = state.voice,
-		onChoose = state::chooseVoice
+		chosen = state.selectedVoiceProfile,
+		description = stringResource(R.string.voice_description),
+		onChoose = state::chooseVoiceProfile
 	)
+
+	var creating by remember { mutableStateOf(false) }
+	Described(description = stringResource(R.string.create_voice_description)) {
+		OutlinedButton(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) {
+			Icon(Icons.Filled.Add, contentDescription = null)
+			Text(
+				text = stringResource(R.string.create_voice_action),
+				modifier = Modifier.padding(start = 8.dp)
+			)
+		}
+	}
+	if (creating) CustomVoiceDialog(state = state, onDismiss = { creating = false })
+
+	var confirmDelete by remember { mutableStateOf(false) }
+	if (state.activeCustomVoiceId != null) {
+		SectionText(text = stringResource(R.string.custom_voice_autosave))
+		Described(description = stringResource(R.string.delete_voice_description)) {
+			OutlinedButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {
+				Icon(Icons.Filled.Delete, contentDescription = null)
+				Text(
+					text = stringResource(R.string.delete_voice_action),
+					modifier = Modifier.padding(start = 8.dp)
+				)
+			}
+		}
+	}
+	if (confirmDelete) {
+		AlertDialog(
+			onDismissRequest = { confirmDelete = false },
+			title = { Text(stringResource(R.string.delete_voice_title)) },
+			text = { Text(stringResource(R.string.delete_voice_message, state.voiceProfileName)) },
+			confirmButton = {
+				TextButton(onClick = {
+					state.deleteActiveCustomVoice()
+					confirmDelete = false
+				}) { Text(stringResource(R.string.delete_voice_action)) }
+			},
+			dismissButton = {
+				TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) }
+			}
+		)
+	}
+
 	val genders = listOf(
 		stringResource(R.string.gender_male),
 		stringResource(R.string.gender_female)
@@ -263,7 +312,138 @@ private fun VoiceCustomization(state: SettingsModel) {
 		),
 		options = genders,
 		chosen = state.gender,
+		description = stringResource(R.string.gender_description),
 		onChoose = { state.setShape(Eci.VOICE_GENDER, it) }
+	)
+}
+
+/** Creates a named profile from a preset and a complete set of voice controls. */
+@Composable
+private fun CustomVoiceDialog(state: SettingsModel, onDismiss: () -> Unit) {
+	var name by remember { mutableStateOf("") }
+	var base by remember { mutableStateOf(state.voice.coerceIn(Eci.PRESET_NAMES.indices)) }
+	var draft by remember { mutableStateOf(state.draftShape(base)) }
+	var error by remember { mutableStateOf("") }
+	val invalidName = stringResource(R.string.create_voice_name_error)
+	AlertDialog(
+		onDismissRequest = onDismiss,
+		title = { Text(stringResource(R.string.create_voice_title)) },
+		text = {
+			Column(
+				modifier = Modifier
+					.fillMaxWidth()
+					.heightIn(max = 520.dp)
+					.verticalScroll(rememberScrollState())
+			) {
+				OutlinedTextField(
+					value = name,
+					onValueChange = { name = it.take(CustomVoiceProfile.MAX_NAME_LENGTH); error = "" },
+					label = { Text(stringResource(R.string.custom_voice_name)) },
+					singleLine = true,
+					modifier = Modifier.fillMaxWidth()
+				)
+				if (error.isNotEmpty()) {
+					Text(
+						text = error,
+						color = MaterialTheme.colorScheme.error,
+						style = MaterialTheme.typography.bodyMedium,
+						modifier = Modifier.padding(top = 6.dp)
+					)
+				}
+				Text(
+					text = stringResource(R.string.custom_voice_base),
+					style = MaterialTheme.typography.titleMedium,
+					modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+				)
+				Column(modifier = Modifier.selectableGroup()) {
+					Eci.PRESET_NAMES.forEachIndexed { at, voiceName ->
+						Row(
+							modifier = Modifier
+								.fillMaxWidth()
+								.selectable(
+									selected = base == at,
+									onClick = {
+										base = at
+										draft = state.draftShape(at)
+									},
+									role = Role.RadioButton
+								)
+								.padding(vertical = 6.dp),
+							verticalAlignment = Alignment.CenterVertically
+						) {
+							RadioButton(selected = base == at, onClick = null)
+							Text(voiceName, modifier = Modifier.padding(start = 8.dp))
+						}
+					}
+				}
+				Text(
+					text = stringResource(R.string.gender_label),
+					style = MaterialTheme.typography.titleMedium,
+					modifier = Modifier.padding(top = 12.dp)
+				)
+				val genders = listOf(
+					stringResource(R.string.gender_male),
+					stringResource(R.string.gender_female)
+				)
+				Row(modifier = Modifier.fillMaxWidth().selectableGroup()) {
+					genders.forEachIndexed { at, label ->
+						Row(
+							modifier = Modifier
+								.weight(1f)
+								.selectable(
+									selected = (draft[Eci.VOICE_GENDER] ?: 0) == at,
+									onClick = { draft = draft + (Eci.VOICE_GENDER to at) },
+									role = Role.RadioButton
+								)
+								.padding(vertical = 8.dp),
+							verticalAlignment = Alignment.CenterVertically
+						) {
+							RadioButton(selected = (draft[Eci.VOICE_GENDER] ?: 0) == at, onClick = null)
+							Text(label)
+						}
+					}
+				}
+				for (param in Settings.BEHAVIOURS) {
+					val percent = Eci.toPercent(param, draft[param] ?: 0)
+					val paramName = stringResource(setActionOf(param))
+					val percentSpoken = stringResource(R.string.percent_spoken, percent)
+					Text(
+						text = stringResource(R.string.custom_voice_parameter, paramName, percent),
+						style = MaterialTheme.typography.bodyLarge,
+						modifier = Modifier.padding(top = 8.dp)
+					)
+					Slider(
+						value = percent.toFloat(),
+						onValueChange = {
+							draft = draft + (param to Eci.fromPercent(param, it.roundToInt()))
+						},
+						valueRange = 0f..100f,
+						modifier = Modifier.semantics {
+							contentDescription = paramName
+							stateDescription = percentSpoken
+						}
+					)
+				}
+				OutlinedButton(
+					onClick = { state.sayDraft(base, draft) },
+					modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+				) {
+					Text(stringResource(R.string.preview_custom_voice))
+				}
+			}
+		},
+		confirmButton = {
+			TextButton(
+				onClick = {
+					if (state.createCustomVoice(name, base, draft)) onDismiss()
+					else error = invalidName
+				},
+				enabled = name.isNotBlank()
+			) { Text(stringResource(R.string.save_voice)) }
+		},
+		dismissButton = {
+			TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+		}
 	)
 }
 
@@ -277,14 +457,10 @@ private fun VoiceCustomization(state: SettingsModel) {
 @Composable
 private fun VoiceBehaviours(state: SettingsModel) {
 	SectionHeading(text = stringResource(R.string.section_behaviour))
-	for (param in Settings.BEHAVIOURS) {
-		ParamButton(
-			label = stringResource(setActionOf(param)),
-			title = stringResource(dialogTitleOf(param)),
-			description = stringResource(descriptionOf(param)),
-			percent = state.percentOf(param),
-			onPercent = { state.setPercent(param, it) }
-		)
+	SectionText(text = stringResource(R.string.section_behaviour_description))
+	val primary = listOf(Eci.VOICE_SPEED, Eci.VOICE_PITCH_BASELINE, Eci.VOICE_VOLUME)
+	for (param in primary) {
+		VoiceParameter(state, param)
 		when (param) {
 			Eci.VOICE_SPEED -> SwitchRow(
 				label = stringResource(R.string.force_over),
@@ -306,6 +482,42 @@ private fun VoiceBehaviours(state: SettingsModel) {
 			)
 		}
 	}
+
+	var advanced by remember { mutableStateOf(false) }
+	Described(description = stringResource(R.string.advanced_parameters_description)) {
+		OutlinedButton(
+			onClick = { advanced = !advanced },
+			modifier = Modifier.fillMaxWidth()
+		) {
+			Icon(
+				imageVector = if (advanced) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+				contentDescription = null
+			)
+			Text(
+				text = stringResource(R.string.advanced_parameters),
+				modifier = Modifier.padding(start = 8.dp)
+			)
+		}
+	}
+	if (advanced) {
+		for (param in listOf(
+			Eci.VOICE_PITCH_FLUCTUATION,
+			Eci.VOICE_BREATHINESS,
+			Eci.VOICE_HEAD_SIZE,
+			Eci.VOICE_ROUGHNESS
+		)) VoiceParameter(state, param)
+	}
+}
+
+@Composable
+private fun VoiceParameter(state: SettingsModel, param: Int) {
+	ParamButton(
+		label = stringResource(setActionOf(param)),
+		title = stringResource(dialogTitleOf(param)),
+		description = stringResource(descriptionOf(param)),
+		percent = state.percentOf(param),
+		onPercent = { state.setPercent(param, it) }
+	)
 }
 
 /** How the samples themselves are made. */
@@ -477,48 +689,50 @@ private fun CodeReadingSection(state: SettingsModel) {
 		checked = state.codeMode,
 		onChange = state::chooseCodeMode
 	)
-	SwitchRow(
-		label = stringResource(R.string.code_camel_label),
-		description = stringResource(R.string.code_camel_description),
-		checked = state.codeCamelCase,
-		onChange = state::chooseCodeCamelCase
-	)
-	SwitchRow(
-		label = stringResource(R.string.code_snake_label),
-		description = stringResource(R.string.code_snake_description),
-		checked = state.codeSnakeCase,
-		onChange = state::chooseCodeSnakeCase
-	)
-	SwitchRow(
-		label = stringResource(R.string.code_operators_label),
-		description = stringResource(R.string.code_operators_description),
-		checked = state.codeOperators,
-		onChange = state::chooseCodeOperators
-	)
-	SwitchRow(
-		label = stringResource(R.string.code_braces_label),
-		description = stringResource(R.string.code_braces_description),
-		checked = state.codeBraces,
-		onChange = state::chooseCodeBraces
-	)
-	SwitchRow(
-		label = stringResource(R.string.code_indent_label),
-		description = stringResource(R.string.code_indent_description),
-		checked = state.codeIndentation,
-		onChange = state::chooseCodeIndentation
-	)
-	SwitchRow(
-		label = stringResource(R.string.code_paths_label),
-		description = stringResource(R.string.code_paths_description),
-		checked = state.codePaths,
-		onChange = state::chooseCodePaths
-	)
-	SwitchRow(
-		label = stringResource(R.string.code_urls_label),
-		description = stringResource(R.string.code_urls_description),
-		checked = state.codeUrls,
-		onChange = state::chooseCodeUrls
-	)
+	if (state.codeMode) {
+		SwitchRow(
+			label = stringResource(R.string.code_camel_label),
+			description = stringResource(R.string.code_camel_description),
+			checked = state.codeCamelCase,
+			onChange = state::chooseCodeCamelCase
+		)
+		SwitchRow(
+			label = stringResource(R.string.code_snake_label),
+			description = stringResource(R.string.code_snake_description),
+			checked = state.codeSnakeCase,
+			onChange = state::chooseCodeSnakeCase
+		)
+		SwitchRow(
+			label = stringResource(R.string.code_operators_label),
+			description = stringResource(R.string.code_operators_description),
+			checked = state.codeOperators,
+			onChange = state::chooseCodeOperators
+		)
+		SwitchRow(
+			label = stringResource(R.string.code_braces_label),
+			description = stringResource(R.string.code_braces_description),
+			checked = state.codeBraces,
+			onChange = state::chooseCodeBraces
+		)
+		SwitchRow(
+			label = stringResource(R.string.code_indent_label),
+			description = stringResource(R.string.code_indent_description),
+			checked = state.codeIndentation,
+			onChange = state::chooseCodeIndentation
+		)
+		SwitchRow(
+			label = stringResource(R.string.code_paths_label),
+			description = stringResource(R.string.code_paths_description),
+			checked = state.codePaths,
+			onChange = state::chooseCodePaths
+		)
+		SwitchRow(
+			label = stringResource(R.string.code_urls_label),
+			description = stringResource(R.string.code_urls_description),
+			checked = state.codeUrls,
+			onChange = state::chooseCodeUrls
+		)
+	}
 }
 
 /** Where the keep-alive lives, behind a button because it is a screen of its
@@ -719,24 +933,27 @@ private fun symbolDescriptionOf(mode: Int): Int = when (mode) {
  * every visit with no way past it. */
 @Composable
 internal fun Described(description: String?, control: @Composable () -> Unit) {
-	Column(
+	Surface(
 		modifier = Modifier
 			.fillMaxWidth()
-			.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp)
+			.padding(horizontal = 12.dp, vertical = 5.dp),
+		shape = MaterialTheme.shapes.medium,
+		color = MaterialTheme.colorScheme.surface,
+		tonalElevation = 1.dp
 	) {
-		// let rather than a null check: no smart cast to be lost inside a
-		// composable lambda, and nothing composed at all when there is no
-		// description, so the empty stop is not there either.
-		description?.let { said ->
-			Text(
-				text = said,
-				style = MaterialTheme.typography.bodyMedium,
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(bottom = 4.dp)
-			)
+		Column(modifier = Modifier.padding(14.dp)) {
+			description?.let { said ->
+				Text(
+					text = said,
+					style = MaterialTheme.typography.bodyMedium,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(bottom = 6.dp)
+				)
+			}
+			control()
 		}
-		control()
 	}
 }
 

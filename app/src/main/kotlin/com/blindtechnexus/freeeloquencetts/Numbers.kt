@@ -7,8 +7,8 @@ package com.blindtechnexus.freeeloquencetts
  * - AS_IS: leave every number to the engine, which says "nine hundred
  *   eighty-five thousand two hundred fifty-six" for 985256.
  * - DIGITS: a long run one digit at a time -- 985256 is "9 8 5 2 5 6".
- * - PAIRS: a long run two at a time from the left -- 985256 is "98 52 56".
- * - TRIPLETS: a long run three at a time -- 985256 is "985 256".
+ * - PAIRS: a long run two at a time, aligned from the right -- 985256 is "98 52 56".
+ * - TRIPLETS: a long run three at a time, aligned from the right -- 985256 is "985 256".
  *
  * Every engine that can be told how to read a number is told it one of these
  * three ways -- digits, pairs and triplets are the grouping every telephone
@@ -54,9 +54,10 @@ package com.blindtechnexus.freeeloquencetts
  *    sides of it; "Section 7.123456" is still a fraction, which is the
  *    safer wrong answer.
  *
- * 4. Otherwise a long run is grouped from the left, telephone style, so an
- *    odd length keeps its short group at the end: "1234567" in pairs is
- *    "12 34 56 7" and in triplets "123 456 7". A group that opens with a
+ * 4. Otherwise a long run is aligned from the right, like place values and
+ *    standard spoken-number grouping. An odd length keeps its short group at
+ *    the front: "1234567" in pairs is "1 23 45 67" and in triplets
+ *    "1 234 567". A group that opens with a
  *    zero is said a digit at a time, so the zero is heard: "0412" in pairs
  *    is "0 4 12" rather than "four twelve".
  *
@@ -374,12 +375,15 @@ object Numbers {
 			}
 			return true
 		}
-		// Rule 4: groups from the left, and the short group at the end.
+		// Rule 4: align groups from the right, leaving a short group at
+		// the front. This is how pairs and triplets are normally read and
+		// keeps the final groups stable as a number grows.
 		val group = groupSize(mode)
+		val remainder = length % group
 		var p = start
 		var first = true
 		while (p < end) {
-			val size = minOf(group, end - p)
+			val size = if (first && remainder != 0) remainder else minOf(group, end - p)
 			if (!first) out.append(' ')
 			first = false
 			if (size > 1 && text[p] == '0') {
@@ -413,10 +417,11 @@ object Numbers {
 			return true
 		}
 		val group = groupSize(mode)
+		val remainder = length % group
 		var p = 0
 		var first = true
 		while (p < length) {
-			val size = minOf(group, length - p)
+			val size = if (first && remainder != 0) remainder else minOf(group, length - p)
 			if (!first) out.append(' ')
 			first = false
 			if (size > 1 && digits[p] == '0') {

@@ -11,7 +11,7 @@ import org.junit.runner.RunWith
  * processing: the engine has no setting for it, so the modes are made out of
  * spaces. What is checked is the strong rule -- a run of up to five digits
  * is one number, a decimal point or a correctly written separator means the
- * number whole, and a run of six or more is grouped from the left -- plus the
+ * number whole, and a run of six or more is aligned from the right -- plus the
  * one repair, the comma-grouped number whose last group is zeros, which is
  * the shape this engine drops a million from.
  */
@@ -74,9 +74,9 @@ class NumbersTest {
 		// way, and this is the only spelling of it the engine reads right.
 		assertEquals("1000000", Numbers.apply("1,000,000", Numbers.AS_IS))
 		assertEquals("1 0 0 0 0 0 0", Numbers.apply("1,000,000", Numbers.DIGITS))
-		assertEquals("10 0 0 0 0 0", Numbers.apply("1,000,000", Numbers.PAIRS))
-		assertEquals("100 0 0 0 0", Numbers.apply("1,000,000", Numbers.TRIPLETS))
-		assertEquals("205000000", Numbers.apply("\$205,000,000", Numbers.AS_IS))
+		assertEquals("1 0 0 0 0 0 0", Numbers.apply("1,000,000", Numbers.PAIRS))
+		assertEquals("1 0 0 0 0 0 0", Numbers.apply("1,000,000", Numbers.TRIPLETS))
+		assertEquals("\$205000000", Numbers.apply("\$205,000,000", Numbers.AS_IS))
 		assertEquals("1000000.5", Numbers.apply("1,000,000.5", Numbers.AS_IS))
 		assertEquals("1000000", Numbers.apply("1,000,000", 42))
 	}
@@ -91,15 +91,15 @@ class NumbersTest {
 	@Test
 	fun pairsTakeTwoFromTheLeft() {
 		assertEquals("12 34 56", Numbers.apply("123456", Numbers.PAIRS))
-		// Odd length keeps the short group at the end, telephone style.
-		assertEquals("12 34 56 7", Numbers.apply("1234567", Numbers.PAIRS))
+		// Odd length keeps the short group at the front, aligned like place values.
+		assertEquals("1 23 45 67", Numbers.apply("1234567", Numbers.PAIRS))
 		assertEquals("98 76 54 32 10", Numbers.apply("9876543210", Numbers.PAIRS))
 	}
 
 	@Test
 	fun tripletsTakeThreeFromTheLeft() {
 		assertEquals("123 456", Numbers.apply("123456", Numbers.TRIPLETS))
-		assertEquals("123 456 7", Numbers.apply("1234567", Numbers.TRIPLETS))
+		assertEquals("1 234 567", Numbers.apply("1234567", Numbers.TRIPLETS))
 		assertEquals("123 456 789", Numbers.apply("123456789", Numbers.TRIPLETS))
 	}
 

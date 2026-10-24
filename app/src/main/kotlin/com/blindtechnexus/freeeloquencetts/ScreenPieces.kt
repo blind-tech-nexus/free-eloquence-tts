@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,6 +52,10 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun ScreenTopBar(title: String, onBack: (() -> Unit)? = null) {
 	CenterAlignedTopAppBar(
+		colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+			containerColor = MaterialTheme.colorScheme.surface,
+			titleContentColor = MaterialTheme.colorScheme.primary
+		),
 		title = {
 			Text(
 				text = title,
@@ -107,6 +112,7 @@ fun SectionHeading(text: String, horizontal: Dp = 16.dp) {
 	Text(
 		text = text,
 		style = MaterialTheme.typography.titleMedium,
+		color = MaterialTheme.colorScheme.primary,
 		modifier = Modifier
 			.fillMaxWidth()
 			.padding(start = horizontal, end = horizontal, top = 24.dp, bottom = 4.dp)
@@ -122,6 +128,7 @@ fun SectionText(text: String) {
 	Text(
 		text = text,
 		style = MaterialTheme.typography.bodyMedium,
+		color = MaterialTheme.colorScheme.onSurfaceVariant,
 		modifier = Modifier
 			.fillMaxWidth()
 			.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp)

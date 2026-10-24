@@ -3,6 +3,7 @@ package com.blindtechnexus.freeeloquencetts
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.os.Build
 import android.util.Log
 
 /**
@@ -48,6 +49,7 @@ object SynthesisRouting {
 	const val MEDIA = 2
 	const val ALL = 3
 	const val ALARMS = 4
+	private const val BYTES_PER_FRAME = 2
 
 	/**
 	 * The list as it is shown, and the order is deliberate: Default first,
@@ -80,6 +82,13 @@ object SynthesisRouting {
 		else -> AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
 	}
 
+	/** The direct-routing queue: fifty milliseconds or the device's required
+	 * floor, rounded to a complete 16-bit sample. Kept pure for measurement. */
+	fun playerBufferBytes(rateHz: Int, minimum: Int): Int {
+		val lowLatency = (rateHz.coerceAtLeast(1) * BYTES_PER_FRAME) / 20
+		return maxOf(minimum.coerceAtLeast(2), lowLatency).let { it + (it and 1) }
+	}
+
 	/**
 	 * The app's own player: one streaming [AudioTrack] on one channel, fed
 	 * from the synthesis thread as the samples come off the engine.
@@ -89,9 +98,8 @@ object SynthesisRouting {
 	 * says a hundred things a minute. It is remade only when the rate or
 	 * the channel moves. Writes block when the track is full, which is the
 	 * pacing: the engine makes speech much faster than it is heard and the
-	 * track holds a third of a second of it, so an utterance runs no further
-	 * ahead of the ear than that and a stop lands within a third of a second
-	 * at the worst.
+	 * track uses the smallest practical low-latency buffer, so an utterance
+	 * stays close to the ear and a stop lands promptly.
 	 */
 	class Player {
 		@Volatile
@@ -241,10 +249,14 @@ object SynthesisRouting {
 				Log.e(TAG, "no player at $rateHz Hz")
 				return null
 			}
-			// A third of a second, and never less than the system's floor.
-			val bytes = maxOf(minimum, (rateHz * BYTES_PER_FRAME) / 3).let { it + (it and 1) }
+			// Use the system floor instead of the old third-of-a-second queue.
+			// A large queue made Media routing wait to collect audio before the
+			// first syllable and made every interruption feel heavy. Fifty
+			// milliseconds is enough for smooth streaming; devices that require
+			// more already report that requirement in [minimum].
+			val bytes = playerBufferBytes(rateHz, minimum)
 			return try {
-				val built = AudioTrack.Builder()
+				val builder = AudioTrack.Builder()
 					.setAudioAttributes(
 						AudioAttributes.Builder()
 							.setUsage(usage)
@@ -260,7 +272,16 @@ object SynthesisRouting {
 					)
 					.setBufferSizeInBytes(bytes)
 					.setTransferMode(AudioTrack.MODE_STREAM)
-					.build()
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+					builder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+				}
+				val built = builder.build()
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+					// Streaming tracks normally wait for a substantial part of
+					// their buffer before starting. Speech should begin with the
+					// first frame instead.
+					runCatching { built.setStartThresholdInFrames(1) }
+				}
 				if (built.state != AudioTrack.STATE_INITIALIZED) {
 					Log.e(TAG, "the player would not initialise at $rateHz Hz")
 					try { built.release() } catch (_: Throwable) {}
@@ -276,7 +297,6 @@ object SynthesisRouting {
 
 		companion object {
 			private const val TAG = "freeeloquencetts"
-			private const val BYTES_PER_FRAME = 2
 			private const val TICK_MS = 10L
 			private const val STALL_TICKS = 100
 		}

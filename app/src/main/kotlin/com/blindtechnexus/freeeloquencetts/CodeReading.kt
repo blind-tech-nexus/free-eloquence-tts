@@ -67,7 +67,12 @@ object CodeReading {
 	 * "inequality" is not.
 	 */
 	private val OPERATORS = listOf(
+		">>>=" to "unsigned right shift equals",
 		">>>" to "unsigned right shift",
+		"<<=" to "left shift equals",
+		">>=" to "right shift equals",
+		"**=" to "power equals",
+		"//=" to "floor divide equals",
 		"..." to "dot dot dot",
 		"!==" to "bang double equals",
 		"===" to "triple equals",
@@ -92,6 +97,12 @@ object CodeReading {
 		"!!" to "bang bang",
 		"??" to "double question",
 		"?." to "question dot",
+		"**" to "power",
+		"//" to "double slash",
+		"/*" to "slash star",
+		"*/" to "star slash",
+		":=" to "colon equals",
+		"?:" to "question colon",
 		"->" to "arrow",
 		"=>" to "fat arrow",
 		"<-" to "left arrow",
@@ -130,6 +141,9 @@ object CodeReading {
 		'#' to "hash",
 		'@' to "at",
 		'$' to "dollar",
+		'\"' to "double quote",
+		'\'' to "single quote",
+		'\\' to "backslash",
 		'`' to "backtick"
 	).toMap()
 

@@ -156,10 +156,22 @@ class AudioOptimizer(mode: Int, sampleRateHz: Int) {
 	private var blockedOut = 0.0f
 	private var gain = 1.0f
 
+	/** A vowel can begin near full amplitude on its first sample. Starting a
+	 * waveform away from zero is a discontinuity, heard as the small tick that
+	 * was especially obvious before an initial O ("open"). Consonants masked
+	 * it, which is why "pocket" sounded clean. The first few milliseconds of
+	 * actual sound are raised smoothly from zero; leading digital silence does
+	 * not consume the ramp. */
+	private val onsetLength = maxOf(1, rateHz * ONSET_RAMP_MS / 1000)
+	private var onsetStarted = false
+	private var onsetAt = 0
+
 	fun reset() {
 		blockedIn = 0.0f
 		blockedOut = 0.0f
 		gain = 1.0f
+		onsetStarted = false
+		onsetAt = 0
 	}
 
 	fun process(chunk: ByteArray, count: Int): Int {
@@ -199,8 +211,23 @@ class AudioOptimizer(mode: Int, sampleRateHz: Int) {
 			// The limiter: the ceiling times the hyperbolic tangent of the
 			// signal over the ceiling. Linear for small signals, round at
 			// the top, and nothing crosses.
-			val limited = top * tanh((v / top).toDouble()).toFloat()
-			val back = (limited * 32768.0f).toInt().coerceIn(-32768, 32767)
+			// A close rational tanh approximation avoids a native transcendental
+			// call for every sample. At high output rates this removes millions
+			// of double-precision calls per second of synthesis while keeping the
+			// same smooth limiting curve.
+			val limited = top * fastTanh(v / top)
+			if (!onsetStarted && abs(limited) >= ONSET_THRESHOLD) onsetStarted = true
+			val clickFree = if (onsetStarted && onsetAt < onsetLength) {
+				val phase = (onsetAt + 1).toFloat() / onsetLength
+				// Smoothstep reaches the original signal with zero slope, so
+				// the end of the ramp cannot create a second edge of its own.
+				val ramp = phase * phase * (3f - 2f * phase)
+				onsetAt++
+				limited * ramp
+			} else {
+				limited
+			}
+			val back = (clickFree * 32768.0f).toInt().coerceIn(-32768, 32767)
 			chunk[at * 2] = (back and 0xFF).toByte()
 			chunk[at * 2 + 1] = ((back shr 8) and 0xFF).toByte()
 		}
@@ -208,6 +235,11 @@ class AudioOptimizer(mode: Int, sampleRateHz: Int) {
 	}
 
 	companion object {
+		/** A five-millisecond onset removes a discontinuity without changing a
+		 * vowel's identity or making the start of a word feel delayed. */
+		const val ONSET_RAMP_MS = 5
+		const val ONSET_THRESHOLD = 0.001f
+
 		/** The blocker's corner, in hertz: three decibels down here, flat
 		 *  above. Nine hertz, which is what the old fixed pole of 0.995 gave
 		 *  at the engine's own eleven thousand and twenty five: everything a
@@ -252,6 +284,16 @@ class AudioOptimizer(mode: Int, sampleRateHz: Int) {
 		 */
 		fun softClip(v: Float, ceiling: Float): Float =
 			ceiling * tanh((v / ceiling).toDouble()).toFloat()
+
+		/** Fast approximation of tanh for the real-time sample path. Its error
+		 * is under a few percent across the limiter's useful range and it reaches
+		 * the same fixed ceiling outside it. */
+		fun fastTanh(value: Float): Float {
+			if (value <= -3f) return -1f
+			if (value >= 3f) return 1f
+			val square = value * value
+			return value * (27f + square) / (27f + 9f * square)
+		}
 
 		/**
 		 * The peak of [samples], as a fraction of full scale. Pure, so a

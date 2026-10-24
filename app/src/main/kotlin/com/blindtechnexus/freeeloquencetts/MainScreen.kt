@@ -1,13 +1,22 @@
 package com.blindtechnexus.freeeloquencetts
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Speaker
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -16,114 +25,110 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
-/**
- * What the launcher opens, and the five things worth doing from here.
- *
- * This is the screen somebody arrives at with a screen reader on and no idea
- * what the app is, so it is written to be listened to in order: what the app
- * is, then five things to do, each with the reason for it said before the
- * button that does it. Nothing depends on a colour, an icon or a position.
- *
- * The order of a description and its button matters. A reader swipes forward
- * one node at a time, and a button reached first is a button whose purpose has
- * to be guessed and then swiped back for, so each description is the stop
- * before the thing it describes.
- *
- * The permissions are not here. They are asked for on the way in, on every
- * launch, by the activity that owns this screen: a row saying what has and has
- * not been given is a stop to swipe past on every visit for a question that is
- * asked and answered once, and the asking itself is where the explanation
- * belongs.
- */
+/** The uncluttered home screen: the four actions people return for. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
 	onConfigure: () -> Unit,
 	onOpenSystemSpeechSettings: () -> Boolean,
 	onAbout: () -> Unit,
-	onAudio: () -> Unit,
-	onWelcome: () -> Unit = {}
+	onAudio: () -> Unit
 ) {
-	// Resolved here rather than where it is used: the click that needs it is
-	// not a composition, and a stringResource there would not compile.
 	val nothingOpensSpeechSettings = stringResource(R.string.main_system_unavailable)
 	var notice by remember { mutableStateOf("") }
-	Scaffold(
-		topBar = { ScreenTopBar(title = stringResource(R.string.app_name)) }
-	) { inset ->
+	Scaffold(topBar = { ScreenTopBar(title = stringResource(R.string.app_name)) }) { inset ->
 		Column(
 			modifier = Modifier
 				.fillMaxSize()
 				.padding(inset)
 				.verticalScroll(rememberScrollState())
-				.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 24.dp)
+				.padding(horizontal = 20.dp, vertical = 12.dp)
 		) {
 			LiveNotice(text = notice)
 			Text(
 				text = stringResource(R.string.main_tagline),
-				style = MaterialTheme.typography.bodyLarge,
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(bottom = 24.dp)
+				style = MaterialTheme.typography.headlineSmall,
+				color = MaterialTheme.colorScheme.primary,
+				modifier = Modifier.padding(bottom = 6.dp)
 			)
-
-			Step(
+			Text(
+				text = stringResource(R.string.main_intro),
+				style = MaterialTheme.typography.bodyLarge,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+				modifier = Modifier.padding(bottom = 20.dp)
+			)
+			HomeAction(
+				icon = Icons.Filled.RecordVoiceOver,
+				title = stringResource(R.string.main_configure_action),
 				description = stringResource(R.string.main_configure_description),
-				action = stringResource(R.string.main_configure_action),
 				onClick = onConfigure
 			)
-			Step(
+			HomeAction(
+				icon = Icons.Filled.Settings,
+				title = stringResource(R.string.main_system_action),
 				description = stringResource(R.string.main_system_description),
-				action = stringResource(R.string.main_system_action),
 				onClick = {
 					if (!onOpenSystemSpeechSettings()) notice = nothingOpensSpeechSettings
 				}
 			)
-			Step(
-				description = stringResource(R.string.main_about_description),
-				action = stringResource(R.string.main_about_action),
-				onClick = onAbout
-			)
-			Step(
+			HomeAction(
+				icon = Icons.Filled.Speaker,
+				title = stringResource(R.string.main_audio_action),
 				description = stringResource(R.string.main_audio_description),
-				action = stringResource(R.string.main_audio_action),
 				onClick = onAudio
 			)
-			Step(
-				description = stringResource(R.string.main_welcome_description),
-				action = stringResource(R.string.main_welcome_action),
-				onClick = onWelcome
+			HomeAction(
+				icon = Icons.Filled.Info,
+				title = stringResource(R.string.main_about_action),
+				description = stringResource(R.string.main_about_description),
+				onClick = onAbout
 			)
 		}
 	}
 }
 
-/**
- * A reason, and then the button that acts on it.
- *
- * Two stops rather than one, which is deliberate: merging them would put the
- * description inside the button's own announcement every time it is reached,
- * and a description is worth hearing once rather than on every visit. They are
- * beside each other in the order they are read, which is what makes two stops
- * here as easy to follow as one.
- */
 @Composable
-private fun Step(description: String, action: String, onClick: () -> Unit) {
-	Text(
-		text = description,
-		style = MaterialTheme.typography.bodyLarge,
-		modifier = Modifier.fillMaxWidth()
-	)
-	Gap(12.dp)
-	Button(
-		onClick = onClick,
-		modifier = Modifier.fillMaxWidth()
+private fun HomeAction(
+	icon: ImageVector,
+	title: String,
+	description: String,
+	onClick: () -> Unit
+) {
+	ElevatedCard(
+		modifier = Modifier
+			.fillMaxWidth()
+			.padding(bottom = 12.dp)
+			.clickable(onClick = onClick)
+			.semantics(mergeDescendants = true) { role = Role.Button }
 	) {
-		Text(text = action, style = MaterialTheme.typography.labelLarge)
+		Row(
+			modifier = Modifier.padding(18.dp),
+			verticalAlignment = Alignment.CenterVertically
+		) {
+			Icon(
+				imageVector = icon,
+				contentDescription = null,
+				tint = MaterialTheme.colorScheme.primary,
+				modifier = Modifier.size(34.dp)
+			)
+			Column(modifier = Modifier.padding(start = 16.dp)) {
+				Text(title, style = MaterialTheme.typography.titleMedium)
+				Text(
+					description,
+					style = MaterialTheme.typography.bodyMedium,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+					modifier = Modifier.padding(top = 3.dp)
+				)
+			}
+		}
 	}
-	Gap(24.dp)
 }

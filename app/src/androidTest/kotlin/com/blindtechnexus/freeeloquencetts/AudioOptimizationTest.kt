@@ -124,6 +124,29 @@ class AudioOptimizationTest {
 	}
 
 	@Test
+	fun theFastLimiterTracksTheReferenceCurve() {
+		for (step in -30..30) {
+			val value = step / 10f
+			val fast = AudioOptimizer.fastTanh(value)
+			val reference = kotlin.math.tanh(value.toDouble()).toFloat()
+			assertEquals("at $value", reference, fast, 0.025f)
+		}
+	}
+
+	@Test
+	fun aWordBeginningWithAVowelIsRampedInWithoutAClick() {
+		val buffer = ByteArray(512 * 2)
+		// Native speech may carry silence before the first phoneme. Silence
+		// must not spend the ramp before the initial O arrives.
+		for (at in 120 until 512) putSample(buffer, at, 24000)
+		AudioOptimizer(AudioOptimization.BALANCED, 11025).process(buffer, buffer.size)
+		val first = abs(sampleAt(buffer, 120))
+		val afterRamp = abs(sampleAt(buffer, 200))
+		assertTrue("the first sample was not softened: $first vs $afterRamp", first < afterRamp / 4)
+		assertTrue("the voice never reached an audible level", afterRamp > 1000)
+	}
+
+	@Test
 	fun theChoiceIsWrittenDownAndReadBack() {
 		val context = InstrumentationRegistry.getInstrumentation().targetContext
 		val settings = Settings(context)
@@ -156,6 +179,9 @@ class AudioOptimizationTest {
 		buffer[at * 2] = (value and 0xFF).toByte()
 		buffer[at * 2 + 1] = ((value shr 8) and 0xFF).toByte()
 	}
+
+	private fun sampleAt(buffer: ByteArray, at: Int): Int =
+		(buffer[at * 2].toInt() and 0xFF) or (buffer[at * 2 + 1].toInt() shl 8)
 
 	private fun peak(buffer: ByteArray, fromSample: Int = 0): Int {
 		var loudest = 0

@@ -39,8 +39,8 @@ package com.blindtechnexus.freeeloquencetts
  * in front of the digits.
  *
  * A code written in groups -- "123 456", "123-456", "12 34 56", "1234-5678"
- * -- is one candidate when the groups are the same size, and is said with
- * a breath between the groups, which is how a person would read it out.
+ * -- is one candidate, including providers that use uneven two-to-four digit
+ * groups, and is said with a breath between the groups.
  *
  * None of this is a regular expression. The text is scanned once for
  * candidates and the words are looked for only in the window around each,
@@ -120,7 +120,7 @@ object Otp {
 
 	/** The characters that may stand between two groups of one code. */
 	private fun isGroupBreak(c: Char): Boolean =
-		c == ' ' || c == '-' || c == '\u2011' || c == '\u2013' || c == '.' || c == ',' || c == '\u00A0'
+		c == ' ' || c == '-' || c == '\u2011' || c == '\u2013' || c == '\u00A0'
 
 	private fun Char.isAsciiDigit(): Boolean = this in '0'..'9'
 
@@ -128,7 +128,6 @@ object Otp {
 	 *  was when there is nothing to do, which is most text. */
 	fun apply(text: String): String {
 		if (text.isEmpty()) return text
-		if (!hasFourDigits(text)) return text
 		val found = find(text)
 		if (found.isEmpty()) return text
 		val out = StringBuilder(text.length + found.size * 16)
@@ -163,18 +162,6 @@ object Otp {
 	fun scoreOf(text: String, candidate: Code): Int =
 		score(text, lowered(text), candidate, text.trim())
 
-	private fun hasFourDigits(text: String): Boolean {
-		var run = 0
-		for (c in text) {
-			if (c.isAsciiDigit()) {
-				if (++run >= MIN_DIGITS) return true
-			} else {
-				run = 0
-			}
-		}
-		return false
-	}
-
 	/** The text in lower case, character for character, so an index into
 	 *  one is an index into the other: String.lowercase can change the
 	 *  length of a text with certain letters in it, and a window measured in
@@ -187,8 +174,8 @@ object Otp {
 
 	/**
 	 * Every run of digits, or group of runs, that has the shape of a code:
-	 * four to eight digits in all, in one run or in two or three runs of the
-	 * same size with one break character between each, standing on its own
+	 * four to eight digits in all, in one run or in short groups separated by
+	 * a space or dash, standing on its own
 	 * rather than inside a word, a price, a decimal or a longer run.
 	 */
 	private fun candidates(text: String): List<Code> {
@@ -215,25 +202,25 @@ object Otp {
 				i = j
 				continue
 			}
-			val groups = ArrayList<String>(3)
+			val groups = ArrayList<String>(4)
 			groups.add(text.substring(i, j))
 			var end = j
-			// Groups of the same size with one break between each.
+			// Real messages use 123 456, 12-34-56 and 1234-5678, but
+			// providers also split an eight-digit code 4-2-2 or 2-2-4.
+			// Accept two-to-four digit groups whose total is still a code;
+			// context scoring below keeps telephone and account numbers out.
 			var total = first
-			while (groups.size < 3 && end + 1 < n && isGroupBreak(text[end]) && text[end + 1].isAsciiDigit()) {
+			while (groups.size < 4 && end + 1 < n && isGroupBreak(text[end]) && text[end + 1].isAsciiDigit()) {
 				var k = end + 1
 				while (k < n && text[k].isAsciiDigit()) k++
 				val size = k - end - 1
-				if (size != first || total + size > MAX_DIGITS) break
-				// A break followed by more digits than a group is a longer
-				// number ("123 4567"), and a decimal comma or point is a
-				// quantity; both are left for Numbers to decide.
+				if (size !in 2..4 || total + size > MAX_DIGITS) break
 				groups.add(text.substring(end + 1, k))
 				total += size
 				end = k
 			}
-			// A grouping that ran into another digit run was not a
-			// grouping: "123 456 7890" is a telephone number.
+			// A grouping that runs into still more digits is a longer number,
+			// not the first eight digits of a code.
 			if (groups.size > 1 && end + 1 < n && isGroupBreak(text[end]) && text[end + 1].isAsciiDigit()) {
 				i = end
 				while (i < n && (text[i].isAsciiDigit() || isGroupBreak(text[i]))) i++

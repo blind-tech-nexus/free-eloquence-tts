@@ -97,7 +97,7 @@ object MarkupStyles {
 
 	private fun tags(text: String): String {
 		val out = StringBuilder(text.length + 64)
-		val open = ArrayList<String>(8)
+			val open = ArrayList<Opened>(8)
 		var at = 0
 		var changed = false
 		val n = text.length
@@ -123,13 +123,16 @@ object MarkupStyles {
 		// ends inside a <b> does not leave the reader waiting for the end of
 		// something that never comes.
 		while (open.isNotEmpty()) {
-			out.append(" end ").append(open.removeAt(open.size - 1)).append(' ')
+			val held = open.removeAt(open.size - 1)
+			if (held.label.isNotEmpty()) out.append(" end ").append(held.label).append(' ')
 		}
 		return if (changed) tidy(out.toString()) else text
 	}
 
+	private data class Opened(val tag: String, val label: String)
+
 	/** Announces the tag whose body is [body], or says nothing about it. */
-	private fun announce(body: String, out: StringBuilder, open: MutableList<String>) {
+	private fun announce(body: String, out: StringBuilder, open: MutableList<Opened>) {
 		var at = 0
 		val n = body.length
 		if (n == 0) return
@@ -154,13 +157,28 @@ object MarkupStyles {
 			out.append(if (closing) " " else " bullet ")
 			return
 		}
-		if (name in VOID || name in BREAKS) {
+		if (name in VOID) {
+			out.append(' ')
+			return
+		}
+		if (name in BREAKS) {
+			if (closing) {
+				closeTag(name, out, open)
+			} else {
+				// A marker keeps nested layout tags distinct even when one has
+				// no audible style of its own.
+				open.add(Opened(name, ""))
+				for (label in inlineStyles(body)) {
+					out.append(' ').append(label).append(' ')
+					open.add(Opened(name, label))
+				}
+			}
 			out.append(' ')
 			return
 		}
 		val tag = TAGS[name] ?: return
 		if (closing) {
-			val found = open.lastIndexOf(tag.end)
+			val found = open.indexOfLast { it.label == tag.end }
 			if (found >= 0) {
 				open.removeAt(found)
 				out.append(" end ").append(tag.end).append(' ')
@@ -168,7 +186,73 @@ object MarkupStyles {
 			return
 		}
 		out.append(' ').append(tag.start).append(' ')
-		open.add(tag.end)
+		open.add(Opened(name, tag.end))
+	}
+
+	/** Closes inline CSS styles opened by a layout tag, inside-out. */
+	private fun closeTag(name: String, out: StringBuilder, open: MutableList<Opened>) {
+		val marker = open.indexOfLast { it.tag == name && it.label.isEmpty() }
+		if (marker < 0) return
+		var at = open.size - 1
+		while (at >= marker) {
+			val held = open.removeAt(at)
+			if (held.label.isNotEmpty()) out.append(" end ").append(held.label).append(' ')
+			at--
+		}
+	}
+
+	/** The audible parts of an inline CSS style. Browsers normally convert
+	 * these to spans, but mail and feed readers sometimes hand over raw HTML. */
+	private fun inlineStyles(body: String): List<String> {
+		val css = rawAttribute(body, "style")?.lowercase() ?: return emptyList()
+		val labels = ArrayList<String>(3)
+		for (declaration in css.split(';')) {
+			val colon = declaration.indexOf(':')
+			if (colon <= 0) continue
+			val property = declaration.substring(0, colon).trim()
+			val value = declaration.substring(colon + 1).trim()
+			when (property) {
+				"font-weight" -> {
+					val weight = value.takeWhile { it.isDigit() }.toIntOrNull() ?: 0
+					if (value.contains("bold") || weight >= 600) labels.add("bold")
+				}
+				"font-style" -> if (value.contains("italic") || value.contains("oblique")) labels.add("italic")
+				"text-decoration", "text-decoration-line" -> {
+					if (value.contains("underline")) labels.add("underline")
+					if (value.contains("line-through")) labels.add("strikethrough")
+				}
+				"color" -> cssColor(value)?.let { labels.add(it) }
+				"background", "background-color" -> cssColor(value)?.let { labels.add("highlighted $it") }
+			}
+		}
+		return labels.distinct()
+	}
+
+	private fun cssColor(value: String): String? {
+		val word = value.takeWhile { it.isLetter() }
+		if (word.isEmpty() || word == "black" || word == "white" || word == "transparent") return null
+		return word.take(20)
+	}
+
+	private fun rawAttribute(body: String, name: String): String? {
+		var at = body.indexOf(name, ignoreCase = true)
+		while (at >= 0) {
+			val beforeOk = at == 0 || !(body[at - 1].isLetterOrDigit() || body[at - 1] == '-')
+			val afterAt = at + name.length
+			val afterOk = afterAt >= body.length || !(body[afterAt].isLetterOrDigit() || body[afterAt] == '-')
+			if (beforeOk && afterOk) {
+				var i = afterAt
+				while (i < body.length && body[i].isWhitespace()) i++
+				if (i < body.length && body[i] == '=') i++ else return null
+				while (i < body.length && body[i].isWhitespace()) i++
+				if (i >= body.length || (body[i] != '\"' && body[i] != '\'')) return null
+				val quote = body[i]
+				val close = body.indexOf(quote, i + 1)
+				return if (close < 0) null else body.substring(i + 1, close)
+			}
+			at = body.indexOf(name, at + 1, ignoreCase = true)
+		}
+		return null
 	}
 
 	/**

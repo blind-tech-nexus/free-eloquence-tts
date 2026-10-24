@@ -10,6 +10,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
 import android.speech.tts.Voice
 import android.util.Log
+import java.util.ArrayDeque
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
@@ -489,7 +490,7 @@ class EvvTtsService : TextToSpeechService() {
 
 	override fun onGetDefaultVoiceNameFor(lang: String?, country: String?, variant: String?): String = try {
 		voiceName(
-			(settings?.voice ?: 0).coerceIn(Eci.PRESET_NAMES.indices),
+			(settings?.activeVoicePreset ?: 0).coerceIn(Eci.PRESET_NAMES.indices),
 			languageFor(lang, country)
 		)
 	} catch (_: Throwable) {
@@ -561,7 +562,7 @@ class EvvTtsService : TextToSpeechService() {
 		} catch (_: Throwable) {
 		}
 		try {
-			target.applyVoice(s.voice, s.shape(s.voice))
+			target.applyVoice(s.activeVoicePreset, s.activeVoiceShape())
 		} catch (_: Throwable) {
 		}
 		appliedRevisions[language] = s.revision
@@ -749,7 +750,7 @@ class EvvTtsService : TextToSpeechService() {
 			if (!s.forcePitch) target.setPitchPercent(request.pitch)
 		} catch (_: Exception) {}
 		if (s.forceVolume) {
-			try { s.shape(s.voice)[Eci.VOICE_VOLUME]?.let { v -> target.setVolume(v) } } catch (_: Exception) {}
+			try { s.activeVoiceShape()[Eci.VOICE_VOLUME]?.let { v -> target.setVolume(v) } } catch (_: Exception) {}
 		}
 		// No notification is posted here, whatever the battery screen says.
 		// The notification is the persistent one and only the persistent one:
@@ -938,7 +939,12 @@ class EvvTtsService : TextToSpeechService() {
 
 		private val gate = Object()
 
-		private var ready: String? = null
+		private val ready = ArrayDeque<String>()
+
+		/** A short screen-reader label costs less to prepare than it costs to
+		 * schedule a worker and wake this thread again. It is prepared inline;
+		 * documents still use the one-piece-ahead worker. */
+		private val inline = raw.length <= INLINE_TEXT_CHARS
 
 		private var finished = false
 
@@ -947,19 +953,23 @@ class EvvTtsService : TextToSpeechService() {
 		private var future: Future<*>? = null
 
 		init {
-			val job = try {
-				textWork.submit(Runnable { produce(raw, s, replacements, prosody) })
-			} catch (_: Throwable) {
-				null
-			}
-			future = job
-			if (job == null) {
-				// Nowhere to prepare the text: the consumer is told there is
-				// none rather than being left waiting for a thread the
-				// executor would not give.
-				synchronized(gate) {
-					finished = true
-					gate.notifyAll()
+			if (inline) {
+				produce(raw, s, replacements, prosody)
+			} else {
+				val job = try {
+					textWork.submit(Runnable { produce(raw, s, replacements, prosody) })
+				} catch (_: Throwable) {
+					null
+				}
+				future = job
+				if (job == null) {
+					// Nowhere to prepare the text: the consumer is told there is
+					// none rather than being left waiting for a thread the
+					// executor would not give.
+					synchronized(gate) {
+						finished = true
+						gate.notifyAll()
+					}
 				}
 			}
 		}
@@ -1015,7 +1025,7 @@ class EvvTtsService : TextToSpeechService() {
 		 *  before it. */
 		fun take(): String? {
 			synchronized(gate) {
-				while (ready == null && !finished && !cancelled) {
+				while (ready.isEmpty() && !finished && !cancelled) {
 					try {
 						gate.wait(WAIT_MS)
 					} catch (stopping: InterruptedException) {
@@ -1023,8 +1033,7 @@ class EvvTtsService : TextToSpeechService() {
 						return null
 					}
 				}
-				val held = ready
-				ready = null
+				val held = if (ready.isEmpty()) null else ready.removeFirst()
 				gate.notifyAll()
 				return held
 			}
@@ -1032,7 +1041,10 @@ class EvvTtsService : TextToSpeechService() {
 
 		private fun publish(audio: String) {
 			synchronized(gate) {
-				while (ready != null && !cancelled) {
+				// The asynchronous path stays one piece ahead. The inline path
+				// may queue all pieces of its deliberately small input because
+				// there is no consumer until this constructor returns.
+				while (ready.isNotEmpty() && !cancelled && !inline) {
 					try {
 						gate.wait(WAIT_MS)
 					} catch (stopping: InterruptedException) {
@@ -1041,7 +1053,7 @@ class EvvTtsService : TextToSpeechService() {
 					}
 				}
 				if (cancelled) return
-				ready = audio
+				ready.addLast(audio)
 				gate.notifyAll()
 			}
 		}
@@ -1061,7 +1073,7 @@ class EvvTtsService : TextToSpeechService() {
 		fun cancel() {
 			synchronized(gate) {
 				cancelled = true
-				ready = null
+				ready.clear()
 				finished = true
 				gate.notifyAll()
 			}
@@ -1464,6 +1476,11 @@ class EvvTtsService : TextToSpeechService() {
 		 *  enough that a cancelled utterance's thread leaves promptly even
 		 *  where the wait is not woken. */
 		const val WAIT_MS = 50L
+
+		/** Short requests are prepared on the synthesis thread. Their text
+		 * pipeline takes less time than an executor hand-off and this removes a
+		 * scheduling round trip from every button, key and screen-reader label. */
+		const val INLINE_TEXT_CHARS = 600
 
 		/**
 		 * How long a text has to be before it goes through the pipeline a

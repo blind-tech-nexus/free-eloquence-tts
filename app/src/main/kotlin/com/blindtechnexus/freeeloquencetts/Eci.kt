@@ -173,9 +173,10 @@ object Eci {
 	 * not to any voice. See [EvvEngine.applyVoice].
 	 */
 
-	/** The gender a voice nobody has touched is: female for Luna, male for
-	 *  the rest, which is what their presets carry. */
-	fun defaultGender(index: Int): Int = if (index == LUNA_INDEX) 1 else 0
+	/** The gender a voice nobody has touched is. The engine normally supplies
+	 * this value; this table is the immediate UI fallback while it opens. */
+	fun defaultGender(index: Int): Int =
+		if (index == 1 || index == 5 || index == 6 || index == LUNA_INDEX) 1 else 0
 
 	/**
 	 * The eight languages this app speaks: the eight IBM finished, which are
