@@ -170,19 +170,55 @@ object MarkupStyles {
 		open.add(tag.end)
 	}
 
-	/** The index of the `>` that closes the tag starting at [at], or -1. */
+	/**
+	 * The index of the `>` that closes the tag starting at [at], or -1 when
+	 * what is there is not a tag at all.
+	 *
+	 * A tag is known before it is allowed to be one. "<b>" is bold; "<b and
+	 * c>" is arithmetic with a b in it, and the difference is the name: only
+	 * the names in [TAGS], [BREAKS] and [VOID] are read out here, so a
+	 * comparison in a sentence or a line of code is left for [Ssml] and for
+	 * the symbol pass rather than being taken for a tag and swallowed.
+	 *
+	 * A comment or a processing instruction has no name to check and is
+	 * taken out whole.
+	 */
 	private fun tagEnd(text: String, at: Int): Int {
 		if (at + 1 >= text.length) return -1
-		val first = text[at + 1]
-		// "a < b" is prose; "<b", "</b" and "<h1" are tags.
-		if (!(first.isLetter() || first == '/' || first == '!')) return -1
 		val limit = minOf(text.length, at + TAG_LIMIT)
-		var j = at + 1
-		while (j < limit) {
-			val c = text[j]
-			if (c == '>') return j
+		val first = text[at + 1]
+		if (first == '!' || first == '?') {
+			var k = at + 2
+			while (k < limit) {
+				val c = text[k]
+				if (c == '>') return k
+				if (c == '<') return -1
+				k++
+			}
+			return -1
+		}
+		var nameStart = at + 1
+		if (text[nameStart] == '/') nameStart++
+		if (nameStart >= text.length || !text[nameStart].isLetter()) return -1
+		var nameEnd = nameStart
+		while (nameEnd < text.length && text[nameEnd].isLetterOrDigit()) nameEnd++
+		val name = text.substring(nameStart, nameEnd).lowercase()
+		if (name != "li" && name != "img" && name !in TAGS && name !in BREAKS && name !in VOID) return -1
+		// The attributes, if there are any, are what tells a tag with a space
+		// in it from prose that happens to contain an angle bracket: a tag
+		// that has a space after its name has an `=` in it before the
+		// bracket, and "<b and c>" does not.
+		var hasEquals = false
+		var k = nameEnd
+		while (k < limit) {
+			val c = text[k]
+			if (c == '>') {
+				if (k > nameEnd && !hasEquals && text[nameEnd].isWhitespace()) return -1
+				return k
+			}
+			if (c == '=') hasEquals = true
 			if (c == '<') return -1
-			j++
+			k++
 		}
 		return -1
 	}

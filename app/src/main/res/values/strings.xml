@@ -118,7 +118,7 @@
 	<string name="routing_automatic_description">Default: each app plays its own speech on the route it chose, so a book comes out of the media route, a clock out of alarms, a screen reader out of accessibility and a navigation prompt out of its own. Every route is covered and nothing is moved. Recommended.</string>
 	<string name="routing_media_description">Media / Music: this app plays every utterance itself on the media route, whatever the asking app chose, so it follows the media volume and comes out of whatever carries media - a car stereo, a speaker, headphones. An app that asks for speech as a file gets a silent one.</string>
 	<string name="routing_alarms_description">Alarms: this app plays every utterance itself on the alarm route, whatever the asking app chose, so it follows the alarm volume and stays audible when the media volume is turned down or muted. An app that asks for speech as a file gets a silent one.</string>
-	<string name="routing_accessibility_description">Accessibility: this app plays every utterance itself on the accessibility route, whatever the asking app chose, which is the route a hearing aid or a screen reader's own audio is usually paired to. An app that asks for speech as a file gets a silent one.</string>
+	<string name="routing_accessibility_description">Accessibility: this app plays every utterance itself on the accessibility route, whatever the asking app chose, which is the route a hearing aid or the audio of a screen reader is usually paired to. An app that asks for speech as a file gets a silent one.</string>
 	<string name="routing_all_description">All: this app plays every utterance on the accessibility route and the asking app plays it on its own route too, so it is heard on both - for one route reaching one ear and the other the other. An app that asks for speech as a file gets a silent one.</string>
 
 	<string name="section_dictionaries">Dictionary</string>
@@ -320,7 +320,7 @@
 	<string name="pauses_end">Short at end</string>
 	<string name="pauses_all">Short all</string>
 	<string name="symbol_label">Symbols</string>
-	<string name="symbol_description">Which symbols are spoken. Some is the engine's own reading with one repair: a comma with no word against it is taken out, so it is never heard as the word comma.</string>
+	<string name="symbol_description">Which symbols are spoken. Some is the reading the engine already does, with one repair: a comma with no word against it is taken out, so it is never heard as the word comma.</string>
 	<string name="symbol_mode_label">Symbol mode</string>
 	<string name="symbol_mode_all">All</string>
 	<string name="symbol_mode_most">Most</string>

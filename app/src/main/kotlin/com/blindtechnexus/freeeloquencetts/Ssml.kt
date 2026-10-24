@@ -99,26 +99,42 @@ object Ssml {
 		return sb.toString().trim()
 	}
 
-	/** The index of the `>` that closes the tag starting at [at], or -1 when
-	 *  what is there is not a tag at all. */
+	/**
+	 * The index of the `>` that closes the tag starting at [at], or -1 when
+	 * what is there is not a tag at all.
+	 *
+	 * A tag begins with a name, a closing slash, a declaration bang or a
+	 * processing instruction; "a < b" begins with a space and is prose. And a
+	 * tag with a space after its name has an `=` in it before the bracket, so
+	 * "a<b and c>d" -- arithmetic, or a line of code -- is not a tag with two
+	 * attributes and nobody's words are swallowed looking for one.
+	 */
 	private fun tagEnd(text: String, at: Int): Int {
 		if (at + 1 >= text.length) return -1
-		val first = text[at + 1]
-		// A tag begins with a name, a closing slash, a declaration bang or a
-		// processing instruction. "a < b" begins with a space and is prose.
-		if (!(first.isLetter() || first == '/' || first == '!' || first == '?')) return -1
 		val limit = minOf(text.length, at + TAG_LIMIT)
-		var j = at + 1
+		val first = text[at + 1]
+		if (!(first.isLetter() || first == '/' || first == '!' || first == '?')) return -1
+		var nameStart = at + 1
+		if (text[nameStart] == '/') nameStart++
+		var nameEnd = nameStart
+		while (nameEnd < text.length && nameEnd < limit &&
+			(text[nameEnd].isLetterOrDigit() || text[nameEnd] == '-')
+		) nameEnd++
+		var hasEquals = false
+		var j = nameEnd
 		while (j < limit) {
 			val c = text[j]
-			if (c == '>') return j
+			if (c == '>') {
+				if (j > nameEnd && !hasEquals && text[nameEnd].isWhitespace()) return -1
+				return j
+			}
+			if (c == '=') hasEquals = true
 			if (c == '<') return -1
 			j++
 		}
 		return -1
 	}
 
-	/** What the entity at [at] says, or null when it is not one this knows. */
 	private fun entity(text: String, at: Int): String? {
 		val semi = text.indexOf(';', at + 1)
 		if (semi < 0 || semi - at > 10) return null
