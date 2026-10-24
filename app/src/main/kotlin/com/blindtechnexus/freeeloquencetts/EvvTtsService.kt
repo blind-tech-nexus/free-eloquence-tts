@@ -879,6 +879,12 @@ class EvvTtsService : TextToSpeechService() {
 				// utterance's work by mistake.
 				work.cancel()
 				if (feeder === work) feeder = null
+				// An utterance that ended before its finish -- a stop that
+				// beat the engine to it, an engine that refused the first
+				// piece -- still gives the app's own player back, so the next
+				// utterance on another thread can have it rather than being
+				// played by the framework on a channel nobody chose.
+				if (own != null) try { player?.end() } catch (_: Throwable) {}
 			}
 		} finally {
 			releaseWakeLock(lock)
