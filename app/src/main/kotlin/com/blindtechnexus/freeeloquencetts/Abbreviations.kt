@@ -175,9 +175,12 @@ object Abbreviations {
 				writer.write('\n'.code)
 			}
 		}
-		if (!replaceFile(tmp, target)) return false
-		versionCount.incrementAndGet()
-		true
+		if (replaceFile(tmp, target)) {
+			versionCount.incrementAndGet()
+			true
+		} else {
+			false
+		}
 	} catch (unwritable: Exception) {
 		false
 	}
