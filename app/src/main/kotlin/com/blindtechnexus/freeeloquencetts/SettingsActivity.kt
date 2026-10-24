@@ -69,6 +69,11 @@ class SettingsActivity : ComponentActivity() {
 	 *  is no main screen behind the one that is up. */
 	private var enteredAt = Destination.MAIN
 
+	/** Where the audio routing screen was opened from, so that back goes
+	 *  there: the main screen and the settings screen both offer it, and a
+	 *  route chosen from the settings must not throw the settings away. */
+	private var routingFrom = Destination.MAIN
+
 	/** Whether the welcome screen on show was opened again from the main
 	 *  screen rather than by a first launch, which decides where leaving
 	 *  it goes. */
@@ -143,7 +148,10 @@ class SettingsActivity : ComponentActivity() {
 							},
 							onAbout = { destination = Destination.ABOUT },
 							onAudio = { destination = Destination.AUDIO },
-							onRouting = { destination = Destination.ROUTING },
+							onRouting = {
+								routingFrom = Destination.MAIN
+								destination = Destination.ROUTING
+							},
 							onWelcome = {
 								welcomeRevisited = true
 								destination = Destination.WELCOME
@@ -155,7 +163,10 @@ class SettingsActivity : ComponentActivity() {
 							onOpenDictionary = { destination = Destination.DICTIONARY },
 							onOpenAbbreviations = { destination = Destination.ABBREVIATIONS },
 							onOpenBattery = { destination = Destination.BATTERY },
-							onOpenRouting = { destination = Destination.ROUTING }
+							onOpenRouting = {
+								routingFrom = Destination.SETTINGS
+								destination = Destination.ROUTING
+							}
 						)
 						Destination.DICTIONARY -> DictionaryScreen(
 							onBack = ::back,
@@ -240,6 +251,7 @@ class SettingsActivity : ComponentActivity() {
 				destination = Destination.SETTINGS
 			Destination.DICTIONARY_FILE -> destination = Destination.DICTIONARY
 			Destination.AUDIO -> destination = Destination.MAIN
+			Destination.ROUTING -> destination = routingFrom
 			Destination.BATTERY ->
 				// The notification sent us here, and there is nothing behind it.
 				if (enteredAt == Destination.BATTERY) finish() else destination = Destination.SETTINGS
