@@ -37,31 +37,28 @@ class ScreensComposeTest {
 
 	@Test
 	fun theBatteryScreenBuildsItselfAndOffersEveryRow() {
+		Settings.store(context).edit()
+			.putBoolean(Settings.KEY_PERSISTENT_NOTIFICATION, false)
+			.putBoolean(Settings.KEY_START_ON_BOOT, false)
+			.apply()
 		compose.setContent {
 			MaterialTheme {
 				BatteryScreen(onBack = {}, onRequestExemption = {})
 			}
 		}
+		compose.onNodeWithContentDescription(
+			context.getString(R.string.persistent_notification_label)
+		).assertExists()
+		// Notification-only options are hidden until background protection is
+		// enabled, and the old diagnostic switch is no longer user-facing.
 		for (label in listOf(
-			R.string.persistent_notification_label,
 			R.string.notification_stop_label,
 			R.string.start_on_boot_label,
 			R.string.track_actions_label
 		)) {
-			compose.onNodeWithContentDescription(context.getString(label)).assertExists()
+			compose.onNodeWithContentDescription(context.getString(label)).assertDoesNotExist()
 		}
-		// There is no interval row any more, because there is no interval any
-		// more: the notification is posted once and left, and nothing looks
-		// for it on a clock. What the screen says instead is what is in force,
-		// which is what the switch above it decides -- so the sentence at the
-		// bottom is the one that is found, and the switch that promised a
-		// check every few seconds is not.
-		compose.onNodeWithText(context.getString(R.string.persistent_notification_label)).assertExists()
-		compose.onNodeWithText(
-			context.getString(R.string.battery_notification_off),
-			substring = true
-		).assertExists()
-		// The "while speaking" section is gone: its answers are fixed in
+		// The old "while speaking" section is gone: its answers are fixed in
 		// Stability and Pacing rather than chosen here, so none of its rows
 		// may be composed at all.
 		for (label in listOf(

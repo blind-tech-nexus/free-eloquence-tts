@@ -34,6 +34,7 @@ class OtpTest {
 	fun groupsAreKeptAsGroups() {
 		assertEquals("Code: 1 2 3, 4 5 6", Otp.apply("Code: 123 456"))
 		assertEquals("Your PIN is 1 2 3 4, 5 6 7 8", Otp.apply("Your PIN is 1234-5678"))
+		assertEquals("Verification code: 9 8 7 6, 5 4, 3 2", Otp.apply("Verification code: 9876-54-32"))
 	}
 
 	@Test

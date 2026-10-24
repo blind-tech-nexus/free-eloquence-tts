@@ -100,7 +100,7 @@ class AudioGenerator(context: Context) {
 			e.setSampleRate(settings.sampleRateHz)
 			e.setUpsampleMethod(AudioOptimization.methodFor(settings.audioOptimization))
 			e.setAbbreviations(settings.abbreviations)
-			e.applyVoice(settings.voice, settings.shape(settings.voice))
+			e.applyVoice(settings.activeVoicePreset, settings.activeVoiceShape())
 			val index = try {
 				UserDictionary.snapshot(app).index
 			} catch (broken: Throwable) {

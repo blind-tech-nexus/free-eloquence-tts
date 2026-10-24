@@ -34,6 +34,14 @@ class TextPipelineTest {
 	}
 
 	@Test
+	fun codeSyntaxIsNotMistakenForTextStylingOrSsml() {
+		assertEquals(
+			"List less than String greater than my value",
+			apply("List<String> my_value", code = true)
+		)
+	}
+
+	@Test
 	fun anEmojiIsNamedBeforeTheFixesSeeIt() {
 		assertEquals("grinning face", apply("😀", emoji = true))
 		assertEquals("", apply("😀", emoji = false))
@@ -92,6 +100,7 @@ class TextPipelineTest {
 		symbols: Int = Symbols.SOME,
 		custom: String = "",
 		styles: Boolean = true,
+		code: Boolean = false,
 		words: List<Pair<String, String>> = emptyList()
 	): String {
 		val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -103,6 +112,15 @@ class TextPipelineTest {
 		settings.symbolMode = symbols
 		settings.customSymbols = custom
 		settings.readTextStyles = styles
+		settings.codeMode = code
+		if (code) {
+			settings.codeCamelCase = true
+			settings.codeSnakeCase = true
+			settings.codeOperators = true
+			settings.codeBraces = true
+			settings.codePaths = true
+			settings.codeUrls = true
+		}
 		return TextPipeline.apply(text, settings, words)
 	}
 }

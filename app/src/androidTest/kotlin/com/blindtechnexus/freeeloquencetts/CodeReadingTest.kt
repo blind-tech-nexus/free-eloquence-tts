@@ -53,6 +53,17 @@ class CodeReadingTest {
 			say("if (x) {", braces = true)
 		)
 		assertEquals("a semicolon b", say("a; b", braces = true))
+		assertEquals(
+			"double quote hello double quote backslash n",
+			say("\"hello\"\\n", braces = true)
+		)
+	}
+
+	@Test
+	fun modernOperatorsAreNamedAsOneToken() {
+		assertEquals("x power equals 2", say("x **= 2", operators = true))
+		assertEquals("a question colon b", say("a ?: b", operators = true))
+		assertEquals("x left shift equals 1", say("x <<= 1", operators = true))
 	}
 
 	@Test

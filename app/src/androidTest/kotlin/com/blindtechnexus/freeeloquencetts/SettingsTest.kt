@@ -68,6 +68,37 @@ class SettingsTest {
 	}
 
 	@Test
+	fun aNamedCustomVoiceCanBeSavedSelectedAndDeleted() {
+		val profile = CustomVoiceProfile(
+			id = "test-profile",
+			name = "My reader",
+			baseVoice = GLEN,
+			shape = mapOf(
+				Eci.VOICE_GENDER to 1,
+				Eci.VOICE_SPEED to 88,
+				Eci.VOICE_PITCH_BASELINE to 72,
+				Eci.VOICE_VOLUME to 91
+			)
+		)
+		settings.saveCustomVoice(profile)
+		settings.activeCustomVoiceId = profile.id
+		assertEquals(listOf("My reader"), settings.customVoices().map { it.name })
+		assertEquals(GLEN, settings.activeVoicePreset)
+		assertEquals(72, settings.activeVoiceShape()[Eci.VOICE_PITCH_BASELINE])
+		assertEquals(88, settings.activeVoiceShape()[Eci.VOICE_SPEED])
+		val reread = Settings(InstrumentationRegistry.getInstrumentation().targetContext)
+		try {
+			assertEquals("My reader", reread.activeCustomVoice()?.name)
+			assertEquals(72, reread.activeVoiceShape()[Eci.VOICE_PITCH_BASELINE])
+		} finally {
+			reread.close()
+		}
+		settings.deleteCustomVoice(profile.id)
+		assertTrue(settings.customVoices().isEmpty())
+		assertNull(settings.activeCustomVoiceId)
+	}
+
+	@Test
 	fun speedIsSharedByEveryVoice() {
 		settings.setShapeValue(REED, Eci.VOICE_SPEED, 65)
 		assertEquals("Glen did not get the speed", 65, settings.shapeValue(GLEN, Eci.VOICE_SPEED))
@@ -193,6 +224,10 @@ class SettingsTest {
 			SynthesisRouting.usageOf(SynthesisRouting.ACCESSIBILITY)
 		)
 		assertTrue(SynthesisRouting.playsItself(SynthesisRouting.ALARMS))
+		// Direct routes used to reserve a third of a second (7,350 bytes at
+		// 11,025 Hz). The low-latency queue is about fifty milliseconds.
+		assertEquals(1102, SynthesisRouting.playerBufferBytes(11025, 1024))
+		assertEquals(4096, SynthesisRouting.playerBufferBytes(11025, 4096))
 	}
 
 	/** Text styles are read until somebody says otherwise, and the answer is
@@ -216,6 +251,10 @@ class SettingsTest {
 	}
 
 	private fun wipe() {
+		Settings.store(InstrumentationRegistry.getInstrumentation().targetContext).edit()
+			.remove(Settings.KEY_CUSTOM_VOICES)
+			.remove(Settings.KEY_ACTIVE_CUSTOM_VOICE)
+			.apply()
 		for (voice in Eci.PRESET_NAMES.indices) settings.clearShape(voice)
 		settings.speed = Eci.DEFAULT_SPEED
 		settings.voice = REED

@@ -81,8 +81,13 @@ object TextPipeline {
 		// exactly what used to lose the emphasis they carried: with styles on,
 		// the tags are read out in words first and the words are all that is
 		// left for [Ssml] to see. See [MarkupStyles].
-		try { if (s.readTextStyles) text = MarkupStyles.annotate(text) } catch (_: Throwable) {}
-		try { if (s.stripSsml) text = Ssml.strip(text) } catch (_: Throwable) {}
+		// In code mode angle brackets and underscores are syntax, not HTML or
+		// Markdown. Letting the style pass go first turned List<String> into
+		// "List" and my_value into emphasis, which made code reading appear to
+		// do nothing. Spans have already been announced by the service; only
+		// textual markup is skipped here while source code is being read.
+		try { if (s.readTextStyles && !s.codeMode) text = MarkupStyles.annotate(text) } catch (_: Throwable) {}
+		try { if (s.stripSsml && !s.codeMode) text = Ssml.strip(text) } catch (_: Throwable) {}
 		try { text = Emoji.apply(text, s.readEmoji) } catch (_: Throwable) {}
 		try { text = index.apply(text) } catch (_: Throwable) {}
 		if (s.expandAbbreviations) {

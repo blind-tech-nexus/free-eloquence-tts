@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import java.util.UUID
 
 /**
  * What the settings screen is showing, and the engine it can hear itself on.
@@ -35,8 +36,30 @@ class SettingsModel(context: Context) {
 	val languageIndex: Int
 		get() = Eci.LANGUAGES.indexOfFirst { it.code == language }.coerceAtLeast(0)
 
-	var voice by mutableStateOf(settings.voice)
+	/** The built-in preset underneath the selected profile. */
+	var voice by mutableStateOf(settings.activeVoicePreset)
 		private set
+
+	var customVoices by mutableStateOf(settings.customVoices())
+		private set
+
+	var activeCustomVoiceId by mutableStateOf(settings.activeCustomVoiceId)
+		private set
+
+	val voiceProfileNames: List<String>
+		get() = Eci.PRESET_NAMES.toList() + customVoices.map { it.name }
+
+	val selectedVoiceProfile: Int
+		get() {
+			val id = activeCustomVoiceId ?: return voice.coerceIn(Eci.PRESET_NAMES.indices)
+			val at = customVoices.indexOfFirst { it.id == id }
+			return if (at >= 0) Eci.PRESET_NAMES.size + at else voice.coerceIn(Eci.PRESET_NAMES.indices)
+		}
+
+	val voiceProfileName: String
+		get() = voiceProfileNames.getOrElse(selectedVoiceProfile) {
+			Eci.PRESET_NAMES.getOrElse(voice) { Eci.PRESET_NAMES[0] }
+		}
 
 	var expandAbbreviations by mutableStateOf(settings.expandAbbreviations)
 		private set
@@ -122,7 +145,7 @@ class SettingsModel(context: Context) {
 	var forceVolume by mutableStateOf(settings.forceVolume)
 		private set
 
-	private val shape = mutableStateMapOf<Int, Int>().apply { putAll(settings.shape(settings.voice)) }
+	private val shape = mutableStateMapOf<Int, Int>().apply { putAll(settings.activeVoiceShape()) }
 
 	val gender: Int get() = shape[Eci.VOICE_GENDER] ?: Eci.defaultGender(voice)
 
@@ -137,10 +160,12 @@ class SettingsModel(context: Context) {
 	 *  other's. */
 	private fun openPreview() {
 		preview.open(language) {
-			// A voice's own settings are what the sliders start at, and only
-			// the engine knows them.
-			if (!settings.shapeIsCustom(settings.voice)) adoptVoice()
-			shape.putAll(settings.shape(settings.voice))
+			// A preset's own settings are what its sliders start at. A custom
+			// profile already carries a complete shape and must never be
+			// replaced by the preset underneath it.
+			if (settings.activeCustomVoiceId == null && !settings.shapeIsCustom(settings.voice)) adoptVoice()
+			shape.clear()
+			shape.putAll(settings.activeVoiceShape())
 		}
 	}
 
@@ -158,13 +183,81 @@ class SettingsModel(context: Context) {
 	// ---- what the screen changes -----------------------------------------
 
 	fun chooseVoice(which: Int) {
-		voice = which
-		settings.voice = which
+		val settled = which.coerceIn(Eci.PRESET_NAMES.indices)
+		activeCustomVoiceId = null
+		settings.activeCustomVoiceId = null
+		voice = settled
+		settings.voice = settled
 		// A voice that has been changed keeps its changes. One that has not
 		// takes what the engine says it is.
-		if (!settings.shapeIsCustom(which)) adoptVoice()
+		if (!settings.shapeIsCustom(settled)) adoptVoice()
 		shape.clear()
-		shape.putAll(settings.shape(which))
+		shape.putAll(settings.shape(settled))
+	}
+
+	/** Selects either a built-in preset or one of the listener's profiles from
+	 * the single Voice profile list shown on screen. */
+	fun chooseVoiceProfile(which: Int) {
+		if (which < Eci.PRESET_NAMES.size) {
+			chooseVoice(which)
+			return
+		}
+		val profile = customVoices.getOrNull(which - Eci.PRESET_NAMES.size) ?: return
+		voice = profile.baseVoice
+		settings.voice = profile.baseVoice
+		settings.activeCustomVoiceId = profile.id
+		activeCustomVoiceId = profile.id
+		shape.clear()
+		shape.putAll(profile.shape)
+	}
+
+	/** A complete starting shape for the custom-voice editor. */
+	fun draftShape(baseVoice: Int): Map<Int, Int> {
+		val settled = baseVoice.coerceIn(Eci.PRESET_NAMES.indices)
+		val own = preview.presetShape(settled)
+		val out = LinkedHashMap<Int, Int>()
+		out.putAll(if (own.isNotEmpty()) own else settings.shape(settled))
+		for (param in Settings.SHAPE) {
+			if (!out.containsKey(param)) {
+				out[param] = when (param) {
+					Eci.VOICE_GENDER -> Eci.defaultGender(settled)
+					Eci.VOICE_SPEED -> settings.speed
+					Eci.VOICE_VOLUME -> 80
+					else -> 50
+				}
+			}
+		}
+		out[Eci.VOICE_SPEED] = shape[Eci.VOICE_SPEED] ?: settings.speed
+		return out
+	}
+
+	fun createCustomVoice(name: String, baseVoice: Int, values: Map<Int, Int>): Boolean {
+		val clean = name.trim().replace(Regex("\\s+"), " ").take(CustomVoiceProfile.MAX_NAME_LENGTH)
+		if (clean.isEmpty()) return false
+		if (Eci.PRESET_NAMES.any { it.equals(clean, ignoreCase = true) } ||
+			customVoices.any { it.name.equals(clean, ignoreCase = true) }
+		) return false
+		val profile = CustomVoiceProfile(
+			id = UUID.randomUUID().toString(),
+			name = clean,
+			baseVoice = baseVoice.coerceIn(Eci.PRESET_NAMES.indices),
+			shape = values
+		).normalized()
+		settings.saveCustomVoice(profile)
+		customVoices = settings.customVoices()
+		val at = customVoices.indexOfFirst { it.id == profile.id }
+		if (at < 0) return false
+		chooseVoiceProfile(Eci.PRESET_NAMES.size + at)
+		return true
+	}
+
+	fun deleteActiveCustomVoice() {
+		val id = activeCustomVoiceId ?: return
+		val base = voice
+		settings.deleteCustomVoice(id)
+		customVoices = settings.customVoices()
+		activeCustomVoiceId = null
+		chooseVoice(base)
 	}
 
 	/** Another of the eight. Everything else is left alone: the voice, the
@@ -184,16 +277,35 @@ class SettingsModel(context: Context) {
 		val settled = Eci.clampVoice(param, value)
 		if (shape[param] == settled) return
 		shape[param] = settled
-		settings.setShapeValue(voice, param, settled)
+		val customId = activeCustomVoiceId
+		if (customId == null) {
+			settings.setShapeValue(voice, param, settled)
+		} else {
+			val profile = customVoices.firstOrNull { it.id == customId } ?: return
+			settings.saveCustomVoice(profile.copy(shape = LinkedHashMap(shape)))
+			customVoices = settings.customVoices()
+		}
 	}
 
-	/** Forgets this voice's changes. Every other voice is left alone, and so is
-	 *  the speed, which belongs to the listener rather than to any of them. */
+	/** Restores the selected preset, or the base preset underneath a custom
+	 * profile. The custom profile keeps its name and selection while its tuning
+	 * returns to a clean starting point. */
 	fun resetVoice() {
-		settings.clearShape(voice)
-		adoptVoice()
+		val customId = activeCustomVoiceId
+		if (customId == null) {
+			settings.clearShape(voice)
+			adoptVoice()
+			shape.clear()
+			shape.putAll(settings.shape(voice))
+			return
+		}
+		val profile = customVoices.firstOrNull { it.id == customId } ?: return
+		val defaults = draftShape(profile.baseVoice)
+		val reset = profile.copy(shape = defaults)
+		settings.saveCustomVoice(reset)
+		customVoices = settings.customVoices()
 		shape.clear()
-		shape.putAll(settings.shape(voice))
+		shape.putAll(reset.shape)
 	}
 
 	fun chooseAbbreviations(on: Boolean) {
@@ -355,6 +467,30 @@ class SettingsModel(context: Context) {
 	 *  the same text road as a caller's speech, so what is heard is what the
 	 *  setting really does. */
 	fun say() {
+		val prepared = preparedPreviewText()
+		preview.say(
+			prepared,
+			settings.activeVoicePreset,
+			settings.activeVoiceShape(),
+			sampleRateHz,
+			settings.abbreviations,
+			settings.audioOptimization
+		)
+	}
+
+	/** Hears a custom profile before saving it. */
+	fun sayDraft(baseVoice: Int, values: Map<Int, Int>) {
+		preview.say(
+			preparedPreviewText(),
+			baseVoice.coerceIn(Eci.PRESET_NAMES.indices),
+			values,
+			sampleRateHz,
+			settings.abbreviations,
+			settings.audioOptimization
+		)
+	}
+
+	private fun preparedPreviewText(): String {
 		// The same snapshot the service takes, so the sample hears the list
 		// that is in force rather than a fresh read of the file behind it.
 		val dictionary = runCatching { UserDictionary.snapshot(app) }.getOrNull()
@@ -364,9 +500,8 @@ class SettingsModel(context: Context) {
 			dictionary?.index ?: WordIndex.EMPTY,
 			Abbreviations.entries(app)
 		)
-		val said = Prosody.prefix(settings.phrasePrediction) +
+		return Prosody.prefix(settings.phrasePrediction) +
 			Pauses.apply(text, settings.pauses, true)
-		preview.say(said, voice, settings.shape(voice), sampleRateHz, settings.abbreviations, settings.audioOptimization)
 	}
 
 	private fun adoptVoice() {

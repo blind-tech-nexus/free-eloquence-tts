@@ -28,6 +28,18 @@ class MarkupStylesTest {
 	}
 
 	@Test
+	fun inlineCssStylesAreSaid() {
+		assertEquals(
+			"bold red sale end red end bold",
+			MarkupStyles.annotate("<span style=\"font-weight: bold; color: red\">sale</span>")
+		)
+		assertEquals(
+			"underline old end underline",
+			MarkupStyles.annotate("<span style=\"text-decoration: underline\">old</span>")
+		)
+	}
+
+	@Test
 	fun aHeadingIsAHeading() {
 		assertEquals("heading 2 Today end heading", MarkupStyles.annotate("<h2>Today</h2>"))
 	}
