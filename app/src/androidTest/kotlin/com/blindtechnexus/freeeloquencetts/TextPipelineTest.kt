@@ -60,11 +60,14 @@ class TextPipelineTest {
 
 	@Test
 	fun aCommaStandingOnItsOwnIsNotSaid() {
-		// "Some" punctuation is the engine's own reading with one repair: a
-		// comma with no word against it would be named by the engine, and the
-		// word "comma" is never what the writer meant.
-		assertEquals("This is everything", apply("This is , everything"))
+		// Two layers reach the same answer. The fixes put a stray comma back
+		// against the word it follows, where it is the pause the engine makes
+		// anyway...
+		assertEquals("This is, everything", apply("This is , everything"))
 		assertEquals("Hello, world.", apply("Hello, world."))
+		// ...and a comma with no word on either side of it is taken out, so
+		// the engine never gets the chance to name it.
+		assertEquals("hello", apply(", hello"))
 	}
 
 	@Test
