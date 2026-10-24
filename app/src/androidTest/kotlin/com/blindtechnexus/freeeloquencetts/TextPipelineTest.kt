@@ -56,6 +56,12 @@ class TextPipelineTest {
 		assertEquals("image a red bicycle here", apply("<img alt=\"a red bicycle\"> here", styles = true))
 		assertEquals("AT&T", apply("AT&amp;T", styles = true))
 		assertEquals("bold a word end bold", apply("a **word**", styles = true))
+		// A colour written the modern way is a colour, and a tag's end is
+		// found by the tag's name rather than by what the opening tag said.
+		assertEquals(
+			"red warning end red",
+			apply("<span style=\"color: red\">warning</span>", styles = true)
+		)
 	}
 
 	/** A comment is a comment and a pointer is a pointer: in code mode

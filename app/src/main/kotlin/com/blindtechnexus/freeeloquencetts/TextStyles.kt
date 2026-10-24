@@ -335,7 +335,7 @@ object TextStyles {
         var out: StringBuilder? = null
         val n = text.length
         var i = 0
-        val open = ArrayList<String>(8)
+        val open = ArrayList<OpenTag>(8)
         var changed = false
         while (i < n) {
             val c = text[i]
@@ -443,7 +443,7 @@ object TextStyles {
         end: Int,
         name: String,
         out: StringBuilder,
-        open: ArrayList<String>
+        open: ArrayList<OpenTag>
     ): Boolean {
         val closing = start + 1 < text.length && text[start + 1] == '/'
         if (name.isEmpty()) return false
@@ -468,22 +468,27 @@ object TextStyles {
             out.append(' ')
             return true
         }
-        val label = labelOfTag(text, start, end, name) ?: return false
         if (closing) {
+            // An end says what the start it closes said, and it is found by
+            // the tag's name rather than by what it might mean: the words of
+            // a closing tag are not in the tag, so `<span style="color:
+            // red">` has to be closed by what the opening `<span>` said.
             // Only an end that some start promised is announced.
-            val at = open.lastIndexOf(label)
+            val at = open.indexOfLast { it.name == name }
             if (at < 0) return false
-            open.removeAt(at)
-            out.append(" end ").append(label).append(' ')
-        } else {
-            out.append(' ').append(label).append(' ')
-            // A tag whose closing form is not worth announcing -- a
-            // paragraph, a div with a colour -- is not pushed, so its end
-            // says nothing.
-            if (endsInLabel(name, label)) open.add(label)
+            out.append(" end ").append(open.removeAt(at).label).append(' ')
+            return true
         }
+        val label = labelOfTag(text, start, end, name) ?: return false
+        out.append(' ').append(label).append(' ')
+        // A tag whose closing form is not worth announcing -- a paragraph,
+        // a div with a colour -- is not pushed, so its end says nothing.
+        if (endsInLabel(name, label)) open.add(OpenTag(name, label))
         return true
     }
+
+    /** A tag that is open, and the words it was announced with. */
+    private class OpenTag(val name: String, val label: String)
 
     /** The words a tag is announced with, or null when it says nothing. */
     private fun labelOfTag(text: String, start: Int, end: Int, name: String): String? = when (name) {
@@ -502,19 +507,50 @@ object TextStyles {
         else -> null
     }
 
-    /** A tag that carries no name of its own but may carry a style. */
+    /** A tag that carries no name of its own but may carry a style. More
+     *  than one style can be set on one tag, and all of them are said:
+     *  `style="font-weight: bold; color: red"` is "bold red". */
     private fun styledByAttribute(text: String, start: Int, end: Int): String? {
         val style = attribute(text, start, end, "style")?.lowercase() ?: ""
+        var label: String? = null
+        fun add(words: String) {
+            label = if (label == null) words else label + " " + words
+        }
         if (style.isNotEmpty()) {
-            if (style.contains("font-weight") && (style.contains("bold") || style.contains("700") || style.contains("800") || style.contains("900"))) return "bold"
-            if (style.contains("font-style") && style.contains("italic")) return "italic"
-            if (style.contains("text-decoration") && style.contains("underline")) return "underline"
-            if (style.contains("text-decoration") && style.contains("line-through")) return "strikethrough"
+            if (style.contains("font-weight") && (style.contains("bold") || style.contains("700") || style.contains("800") || style.contains("900"))) add("bold")
+            if (style.contains("font-style") && style.contains("italic")) add("italic")
+            if (style.contains("text-decoration") && style.contains("underline")) add("underline")
+            if (style.contains("text-decoration") && style.contains("line-through")) add("strikethrough")
+            // A colour written the modern way, in the style attribute,
+            // is as much a colour as the legacy attribute beside it -- and
+            // it is the one most pages carry.
+            cssColorOf(style)?.let { add(it) }
         }
         val color = attribute(text, start, end, "color")
         if (!color.isNullOrBlank()) {
             val named = color.trim().lowercase()
-            if (named in NAMED_CSS) return named
+            if (named in NAMED_CSS) add(named)
+        }
+        return label
+    }
+
+    /** The colour a `style` attribute sets, by name, or null when it sets
+     *  none this says in words. Declarations are split on their semicolons
+     *  and named by their property, so `background-color` is not taken for
+     *  `color`. */
+    private fun cssColorOf(style: String): String? {
+        var from = 0
+        while (from < style.length) {
+            val end = style.indexOf(';', from).let { if (it < 0) style.length else it }
+            val colon = style.indexOf(':', from)
+            if (colon in from until end) {
+                val property = style.substring(from, colon).trim()
+                if (property == "color") {
+                    val value = style.substring(colon + 1, end).trim()
+                    if (value in NAMED_CSS) return value
+                }
+            }
+            from = end + 1
         }
         return null
     }

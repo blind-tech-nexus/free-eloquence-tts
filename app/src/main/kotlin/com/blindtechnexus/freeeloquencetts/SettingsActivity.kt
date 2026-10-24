@@ -187,7 +187,10 @@ class SettingsActivity : ComponentActivity() {
 						)
 						Destination.ABOUT -> AboutScreen(onBack = ::back)
 						Destination.AUDIO -> AudioGeneratorScreen(onBack = ::back)
-						Destination.ROUTING -> AudioRoutingScreen(onBack = ::back)
+						Destination.ROUTING -> AudioRoutingScreen(
+							onBack = ::back,
+							state = if (routingFrom == Destination.SETTINGS) settingsModel() else null
+						)
 					}
 					// Not over the welcome screen, which has a job of its own
 					// to finish first, and one at a time: two dialogs up at

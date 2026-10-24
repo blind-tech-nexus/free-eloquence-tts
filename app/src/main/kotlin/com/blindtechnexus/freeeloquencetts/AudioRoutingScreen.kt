@@ -48,10 +48,15 @@ import androidx.compose.ui.unit.dp
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AudioRoutingScreen(onBack: () -> Unit) {
+fun AudioRoutingScreen(onBack: () -> Unit, state: SettingsModel? = null) {
 	val context = LocalContext.current
 	val settings = remember { Settings(context.applicationContext) }
-	var chosen by remember { mutableStateOf(settings.synthesisRouting) }
+	// The choice is written where the caller keeps it when there is a caller
+	// with a model behind it -- the settings screen has one, and it is still
+	// holding the route it was composed with. Writing preferences through a
+	// Settings of this screen's own would leave that summary saying the old
+	// route while the new one is in force.
+	var chosen by remember { mutableStateOf(state?.synthesisRouting ?: settings.synthesisRouting) }
 	// The preferences are listened to rather than only written, so a screen
 	// left open while something else moves them is not left holding a
 	// listener for the life of the app.
@@ -80,7 +85,8 @@ fun AudioRoutingScreen(onBack: () -> Unit) {
 					selected = chosen == route,
 					onChoose = {
 						chosen = route
-						settings.synthesisRouting = route
+						if (state != null) state.chooseSynthesisRouting(route)
+						else settings.synthesisRouting = route
 					}
 				)
 			}
