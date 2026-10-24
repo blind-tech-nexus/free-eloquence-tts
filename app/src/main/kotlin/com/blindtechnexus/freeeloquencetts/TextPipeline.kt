@@ -7,6 +7,11 @@ package com.blindtechnexus.freeeloquencetts
  * preview on the settings screen, so what "Speak a sample" says is what a
  * caller hears. The order matters and is deliberate.
  *
+ * The markup comes first, and before anything is stripped: with text styles
+ * on, an emphasis tag is announced as the word for it (see [MarkupStyles]) and
+ * the words are what is left when the stripping runs, which is what stops a
+ * page's bold and its links vanishing into flat text.
+ *
  * The SSML tags come out first, while the text is still the caller's. Emoji
  * and emoticons are then named or dropped, so their names go through the rest
  * of the road as ordinary words. The user's own dictionary runs next, on the
@@ -72,6 +77,11 @@ object TextPipeline {
 		// regular expression is still one step's failure, and the text it
 		// was given is still speakable without it.
 		var text = raw
+		// Markup comes before the tags are stripped, because stripping them is
+		// exactly what used to lose the emphasis they carried: with styles on,
+		// the tags are read out in words first and the words are all that is
+		// left for [Ssml] to see. See [MarkupStyles].
+		try { if (s.readTextStyles) text = MarkupStyles.annotate(text) } catch (_: Throwable) {}
 		try { if (s.stripSsml) text = Ssml.strip(text) } catch (_: Throwable) {}
 		try { text = Emoji.apply(text, s.readEmoji) } catch (_: Throwable) {}
 		try { text = index.apply(text) } catch (_: Throwable) {}

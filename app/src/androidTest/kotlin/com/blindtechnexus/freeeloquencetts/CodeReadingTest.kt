@@ -73,10 +73,27 @@ class CodeReadingTest {
 
 	@Test
 	fun anAddressIsSaidAsAnAddress() {
+		// The whole address, and not only its host: the path used to be left
+		// to the operator switch, so a listener who turned on web addresses
+		// and not code operators heard the host and then silence where the
+		// path was.
+		assertEquals(
+			"url example dot com slash a slash b",
+			say("https://www.example.com/a/b", urls = true)
+		)
 		assertEquals(
 			"url example dot com slash a slash b",
 			say("https://www.example.com/a/b", urls = true, operators = true)
 		)
+		assertEquals(
+			"url x dot org slash p question mark q equals 1 and r equals 2",
+			say("https://x.org/p?q=1&r=2", urls = true)
+		)
+		// The full stop at the end of the sentence is the sentence's and not
+		// the host's.
+		assertEquals("see url example dot com.", say("see https://example.com.", urls = true))
+		// Prose with nothing to do with addresses is untouched.
+		assertEquals("a and b", say("a and b", urls = true))
 	}
 
 	@Test

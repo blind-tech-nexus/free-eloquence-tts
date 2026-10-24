@@ -25,6 +25,21 @@ class SymbolsTest {
 	}
 
 	@Test
+	fun someSilencesACommaThatStandsOnItsOwn() {
+		// The engine names a symbol with nothing against it, and a comma with
+		// a space on either side is one: heard as the word "comma" in the
+		// middle of a sentence, which is never what the text said.
+		assertEquals("This is everything", Symbols.apply("This is , everything", Symbols.SOME, ""))
+		assertEquals("one two", Symbols.apply("one , two", Symbols.SOME, ""))
+		assertEquals("a b", Symbols.apply("a ,, b", Symbols.SOME, ""))
+		// Written against a word it is the pause the engine already makes,
+		// and it stays where it was written.
+		assertEquals("Hello, world.", Symbols.apply("Hello, world.", Symbols.SOME, ""))
+		// And a comma inside a number belongs to the number.
+		assertEquals("1,000 units", Symbols.apply("1,000 units", Symbols.SOME, ""))
+	}
+
+	@Test
 	fun allNamesThePunctuationTheEngineLeavesSilent() {
 		assertEquals("Hello comma world dot", Symbols.apply("Hello, world.", Symbols.ALL, ""))
 		assertEquals("Hello dot World question mark", Symbols.apply("Hello. World?", Symbols.ALL, ""))

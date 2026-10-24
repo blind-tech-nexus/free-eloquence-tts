@@ -34,12 +34,19 @@
    samples is one lock, one copy and one wake-up on the other side. It is also
    how much of the utterance has to be made before the first of it can be heard,
    and how often a stop is answered, since the abort is only noticed when the
-   engine offers the next buffer. Measured at eleven thousand and twenty five
-   hertz, two thousand and forty eight samples is under a fifth of a second of
-   speech and about two milliseconds of this engine's time, so the first audio
-   and the answer to a swipe both arrive sooner, and the callbacks over one
-   utterance are still in the dozens. */
-#define FRAME_SAMPLES 2048
+   engine offers the next buffer.
+
+   So the frame is the first-audio delay as well, and a quarter of the old one
+   is a quarter of that delay: at eleven thousand and twenty five hertz, two
+   thousand and forty eight samples was a sixth of a second of silence in
+   front of every utterance -- the "it takes a moment to start" a screen
+   reader's user hears on every label -- and it bought nothing, because the
+   whole of a frame costs this engine about a millisecond to make. At five
+   hundred and twelve samples the first sound and the answer to a swipe both
+   arrive about a hundred and thirty milliseconds sooner, and one utterance
+   still spends only a few hundred locks and copies on frames that are already
+   in cache. */
+#define FRAME_SAMPLES 512
 #define RING_BYTES    (256 * 1024)
 
 /* How much of a frame one read will carry, and so how big the buffer that

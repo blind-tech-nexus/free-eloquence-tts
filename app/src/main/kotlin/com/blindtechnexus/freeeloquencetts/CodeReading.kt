@@ -164,25 +164,80 @@ object CodeReading {
 		var at = 0
 		var changed = false
 		while (at < text.length) {
-			val end = schemeEnd(text, at)
-			if (end < 0) {
+			val afterScheme = schemeEnd(text, at)
+			if (afterScheme < 0) {
 				out.append(text[at])
 				at++
 				continue
 			}
 			changed = true
 			out.append("url ")
-			at = end
-			// The host runs to the first mark that is not part of a name.
-			val hostEnd = hostEnd(text, at)
-			var host = text.substring(at, hostEnd)
-			at = hostEnd
+			at = afterScheme
+			// The host runs to the first mark that is not part of a name,
+			// less the full stop that is the end of the sentence rather
+			// than the end of a name: "example.com." is one host and one
+			// full stop, and saying "dot" for it would put a mark in the
+			// address that the writer did not.
+			var nameEnd = hostEnd(text, at)
+			while (nameEnd > at && text[nameEnd - 1] == '.') nameEnd--
+			var host = text.substring(at, nameEnd)
+			at = nameEnd
 			if (host.startsWith("www.")) host = host.substring(4)
 			for (c in host) {
 				if (c == '.') out.append(" dot ") else out.append(c)
 			}
+			// And the rest of the address, which is the part that used to be
+			// left to the operator pass -- so a listener who turned on web
+			// addresses but not code operators heard the host and then a path
+			// with every mark in it silent, which is the bug this fixes. The
+			// address is one thing and is said as one thing, whether or not
+			// any other switch is on.
+			at = addressRest(text, at, out)
 		}
 		return if (changed) settled(text, out.toString()) else text
+	}
+
+	/**
+	 * The path, the query and the fragment of an address, said, from [at].
+	 * Answers where it stopped, which is the first character that is not part
+	 * of the address -- a space, or the full stop or comma that belongs to the
+	 * sentence the address was written in and not to the address.
+	 */
+	private fun addressRest(text: String, from: Int, out: StringBuilder): Int {
+		var at = from
+		while (at < text.length) {
+			val c = text[at]
+			if (c.isLetterOrDigit()) {
+				out.append(c)
+				at++
+				continue
+			}
+			when (c) {
+				'/', '\\' -> out.append(" slash ")
+				'-' -> out.append(" dash ")
+				'_' -> out.append(' ')
+				':' -> out.append(" colon ")
+				'?' -> out.append(" question mark ")
+				'=' -> out.append(" equals ")
+				'&' -> out.append(" and ")
+				'#' -> out.append(" hash ")
+				'%' -> out.append(" percent ")
+				'+' -> out.append(" plus ")
+				'@' -> out.append(" at ")
+				'~' -> out.append(" tilde ")
+				// A full stop with nothing against it is the end of the
+				// sentence the address is in, not a mark in the address:
+				// "see example.com." is one address and one full stop.
+				'.' -> if (at + 1 >= text.length || text[at + 1].isWhitespace()) {
+					return at
+				} else {
+					out.append(" dot ")
+				}
+				else -> return at
+			}
+			at++
+		}
+		return at
 	}
 
 	/** Just past the "://" of a scheme starting at [at], or -1. A scheme is

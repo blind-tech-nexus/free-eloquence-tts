@@ -657,6 +657,7 @@ private fun numberModeNameOf(mode: Int): Int = when (mode) {
 private fun routingNameOf(route: Int): Int = when (route) {
 	SynthesisRouting.ACCESSIBILITY -> R.string.routing_accessibility
 	SynthesisRouting.MEDIA -> R.string.routing_media
+	SynthesisRouting.ALARMS -> R.string.routing_alarms
 	SynthesisRouting.ALL -> R.string.routing_all
 	else -> R.string.routing_automatic
 }
@@ -664,6 +665,7 @@ private fun routingNameOf(route: Int): Int = when (route) {
 private fun routingDescriptionOf(route: Int): Int = when (route) {
 	SynthesisRouting.ACCESSIBILITY -> R.string.routing_accessibility_description
 	SynthesisRouting.MEDIA -> R.string.routing_media_description
+	SynthesisRouting.ALARMS -> R.string.routing_alarms_description
 	SynthesisRouting.ALL -> R.string.routing_all_description
 	else -> R.string.routing_automatic_description
 }

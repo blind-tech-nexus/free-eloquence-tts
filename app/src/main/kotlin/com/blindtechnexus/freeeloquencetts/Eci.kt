@@ -362,6 +362,11 @@ object Eci {
 	 * speech, a curve through it, or nothing at all.
 	 */
 	const val UPSAMPLE_HOLD = 0
+	/** Zero-order hold's busier cousin: the same sample repeated twice into
+	 *  the gap rather than once, which is a shade less bright and no slower.
+	 *  Named here because it is one of the engine's own five and a caller
+	 *  reading CVT_ZEROS should find the same number on this side. */
+	const val UPSAMPLE_ZEROS = 1
 	const val UPSAMPLE_LINEAR = 2
 	const val UPSAMPLE_CUBIC = 3
 	const val UPSAMPLE_SINC = 4

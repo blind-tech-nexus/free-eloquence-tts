@@ -17,8 +17,14 @@ package com.blindtechnexus.freeeloquencetts
  * also how Speech Dispatcher's own module for this engine does it: the only
  * lever anybody has is the text.
  *
- * [SOME] is the engine left exactly as it stands, and is the default, so
- * nobody's speech changes under them when this arrives.
+ * [SOME] is the engine left as it stands, and is the default, so nobody's
+ * speech changes under them when this arrives. The one exception is the
+ * comma: the engine names a symbol that stands on its own, and a comma that
+ * has no word against it -- ", ", ".,", a line that is nothing but commas --
+ * is a pause the text asked for, not the word "comma". So a comma with no
+ * letter or digit directly before or after it is taken out, and one written
+ * against a word ("one, two") is left where it is, because it is the pause
+ * and the engine does not name it.
  *
  * [MOST] and [ALL] add the names of symbols the engine leaves silent when
  * they are attached: brackets, quotes and the like at [MOST], periods and
@@ -163,25 +169,13 @@ object Symbols {
 	/**
 	 * [text] with the symbols [mode] asks for named or silenced. [custom] is
 	 * the caller's own list and is read only at [CUSTOM].
-	 * In SOME mode, isolated commas are removed so comma is not spoken as word.
+	 *
+	 * [SOME] is the engine's own reading with one repair: a comma that no
+	 * word stands against is taken out, because the engine would name it.
 	 */
 	fun apply(text: String, mode: Int, custom: String): String {
 		if (text.isEmpty()) return text
-		if (mode == SOME) {
-			// SOME originally left text to engine, but isolated comma would be spoken as "comma"
-			// by engine. Requirement: remove comma from SOME mode, so isolated commas become silence.
-			var hasIsolatedComma = false
-			for (i in text.indices) {
-				if (text[i] == ',' && !attached(text, i)) { hasIsolatedComma = true; break }
-			}
-			if (!hasIsolatedComma) return text
-			val sb = StringBuilder(text.length)
-			for (i in text.indices) {
-				val c = text[i]
-				if (c == ',' && !attached(text, i)) sb.append(' ') else sb.append(c)
-			}
-			return COLLAPSE.replace(sb.toString().trim(), " ")
-		}
+		if (mode == SOME) return withoutLoneCommas(text)
 		var relevant = false
 		for (at in text.indices) {
 			if (RELEVANT[text[at].code]) {
@@ -242,6 +236,84 @@ object Symbols {
 			}
 		}
 		return COLLAPSE.replace(out.toString().trim(), " ")
+	}
+
+	/**
+	 * [text] with every comma that stands on its own taken out.
+	 *
+	 * The engine names a symbol that has nothing against it, so a comma of
+	 * that kind is heard as the word "comma" in the middle of a sentence --
+	 * which is never what the text meant. A comma written against a word or
+	 * a digit is the pause the engine already makes, and is left exactly
+	 * where it is; so is one inside a number, which is the engine's own
+	 * number reading rather than punctuation.
+	 *
+	 * "Against" is a letter or a digit with no space in between: "(," and
+	 * ",," are two symbols standing alone in the engine's eyes, and a space
+	 * on either side is what makes a comma lonely in the first place. One
+	 * scan, and a text with no comma at all -- which is most text -- is not
+	 * even looked at.
+	 */
+	private fun withoutLoneCommas(text: String): String {
+		if (text.indexOf(',') < 0) return text
+		var out: StringBuilder? = null
+		var at = 0
+		val n = text.length
+		while (at < n) {
+			val c = text[at]
+			if (c != ',') {
+				out?.append(c)
+				at++
+				continue
+			}
+			// Inside a number: 1,024 and 3,14 are the engine's own reading.
+			if (betweenDigits(text, at)) {
+				out?.append(c)
+				at++
+				continue
+			}
+			// Against means directly against, with no space in between: a
+			// comma with a space on either side is the one the engine names,
+			// and a comma inside "one, two" is the pause it makes anyway.
+			val before = at - 1
+			val after = at + 1
+			val worded = (before >= 0 && text[before].isLetterOrDigit()) ||
+				(after < n && text[after].isLetterOrDigit())
+			if (worded) {
+				out?.append(c)
+				at++
+				continue
+			}
+			// Nothing against it: the comma goes, and a space takes its
+			// place only where two words would otherwise run together.
+			if (out == null) {
+				out = StringBuilder(n)
+				out.append(text, 0, at)
+			}
+			if (at > 0 && !text[at - 1].isWhitespace() && after < n) out.append(' ')
+			at++
+		}
+		val built = out ?: return text
+		return spaced(built)
+	}
+
+	/** Runs of spaces down to one and the ends trimmed, in one pass and
+	 *  without a regular expression: this runs on the way to every utterance.
+	 *  A line break is left where it is -- a piece boundary is a line break --
+	 *  and only the spaces and tabs around it go. */
+	private fun spaced(text: CharSequence): String {
+		val out = StringBuilder(text.length)
+		var spaces = 0
+		for (c in text) {
+			if (c == ' ' || c == '\t') {
+				spaces++
+				continue
+			}
+			if (spaces > 0 && c != '\n' && out.isNotEmpty()) out.append(' ')
+			spaces = 0
+			out.append(c)
+		}
+		return out.toString()
 	}
 
 	/** Whether [mode] names [entry], once it is attached and at least [MOST]. */
