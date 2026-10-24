@@ -130,8 +130,13 @@ class SymbolsTest {
 	@Test
 	fun theBacktickIsNeverTouched() {
 		// It is the engine's annotation escape: "`p1" asks for a pause, and
-		// replacing the backtick would turn a request into a word.
+		// replacing the backtick or the signs and brackets of "`vbst+6" and
+		// "`[das]" would turn an engine directive into spoken garbage.
 		assertEquals("`p1 hello", Symbols.apply("`p1 hello", Symbols.NONE, ""))
 		assertEquals("`p1 hello", Symbols.apply("`p1 hello", Symbols.ALL, ""))
+		assertEquals("`vbst+6 A `vbst-6", Symbols.apply("`vbst+6 A `vbst-6", Symbols.NONE, ""))
+		assertEquals("`[das]", Symbols.apply("`[das]", Symbols.NONE, ""))
+		assertEquals("`[das]", Symbols.apply("`[das]", Symbols.ALL, ""))
+		assertEquals("one\ntwo", Symbols.apply("one\n , two", Symbols.SOME, ""))
 	}
 }

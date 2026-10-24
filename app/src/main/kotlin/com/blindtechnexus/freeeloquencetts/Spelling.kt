@@ -86,6 +86,14 @@ object Spelling {
 		var changed = false
 		while (at < text.length) {
 			val c = text[at]
+			if (c == '`') {
+				// An engine annotation -- "`vbst+6", "`[das]" -- is carried
+				// through untouched rather than spelled out as letters.
+				val end = EvvEngine.annotationEnd(text, at)
+				out.append(text, at, end)
+				at = end
+				continue
+			}
 			if (!c.isLetterOrDigit()) {
 				out.append(c)
 				at++

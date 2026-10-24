@@ -125,11 +125,10 @@ object Numbers {
 		while (i < n) {
 			val c = text[i]
 			if (c == '`') {
-				// An engine annotation -- "`vbst+6", "`p1" -- is carried
-				// through untouched: it is not text and its digits are not
-				// a number.
-				var k = i
-				while (k < n && !text[k].isWhitespace()) k++
+				// An engine annotation -- "`vbst+6", "`p1", "`[kaf1e]" -- is
+				// carried through untouched: it is not text and its digits
+				// are not a number.
+				val k = EvvEngine.annotationEnd(text, i)
 				out.append(text, i, k)
 				i = k
 				continue

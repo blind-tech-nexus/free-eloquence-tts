@@ -47,6 +47,18 @@ class SpellingTest {
 	}
 
 	@Test
+	fun engineAnnotationsAreLeftForTheEngine() {
+		assertEquals(
+			" `vbst+6 Alpha `vbst-6 ",
+			Spelling.apply(" `vbst+6 A `vbst-6 ", Spelling.NATO)
+		)
+		assertEquals(
+			"`[das] c a t",
+			Spelling.apply("`[das] cat", Spelling.LETTERS)
+		)
+	}
+
+	@Test
 	fun everyModeIsInModeS() {
 		assertEquals(5, Spelling.MODES.size)
 		assertTrue(Spelling.MODES.contains(Spelling.OFF))

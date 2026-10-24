@@ -91,9 +91,9 @@ object AudioOptimization {
 		else -> 0.95f
 	}
 
-	/** Anything the setting never offered falls back to the default, rather
-	 *  than running wild or silent. */
-	fun clamp(mode: Int): Int = if (MODES.contains(mode)) mode else BALANCED
+	/** Clamps [mode] into the range the setting offers, so an out-of-range
+	 *  value lands on the nearest valid mode rather than running wild. */
+	fun clamp(mode: Int): Int = mode.coerceIn(BALANCED, QUALITY)
 }
 
 /**

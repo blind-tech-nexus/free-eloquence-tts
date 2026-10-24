@@ -175,12 +175,25 @@ object Abbreviations {
 				writer.write('\n'.code)
 			}
 		}
-		if (target.exists()) target.delete()
-		tmp.renameTo(target)
+		if (!replaceFile(tmp, target)) return false
 		versionCount.incrementAndGet()
 		true
 	} catch (unwritable: Exception) {
 		false
+	}
+
+	private fun replaceFile(tmp: File, target: File): Boolean {
+		if (tmp.renameTo(target)) return true
+		return try {
+			tmp.inputStream().use { from ->
+				target.outputStream().use { to -> from.copyTo(to) }
+			}
+			tmp.delete()
+			true
+		} catch (failed: Exception) {
+			runCatching { tmp.delete() }
+			false
+		}
 	}
 
 	/** A line of the file is one line, so a key or an expansion carrying a

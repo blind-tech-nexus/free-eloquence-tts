@@ -149,18 +149,29 @@ object SynthesisRouting {
 				val wrote = try {
 					held.write(buffer, at, n - at)
 				} catch (_: Throwable) {
+					if (at > 0) synchronized(this) { if (!cut) framesWritten += (at / BYTES_PER_FRAME).toLong() }
 					return false
 				}
-				if (wrote < 0) return false
+				if (wrote < 0) {
+					if (at > 0) synchronized(this) { if (!cut) framesWritten += (at / BYTES_PER_FRAME).toLong() }
+					return false
+				}
 				if (wrote == 0) {
 					// A full track that will not block -- it has been paused
 					// by a cut on another thread -- is given a moment rather
 					// than spun on.
-					try { Thread.sleep(5) } catch (_: InterruptedException) { return false }
+					try { Thread.sleep(5) } catch (_: InterruptedException) {
+						if (at > 0) synchronized(this) { if (!cut) framesWritten += (at / BYTES_PER_FRAME).toLong() }
+						return false
+					}
 				}
 				at += wrote
 			}
-			synchronized(this) { framesWritten += (n / BYTES_PER_FRAME).toLong() }
+			if (at > 0) {
+				synchronized(this) {
+					if (!cut) framesWritten += (at / BYTES_PER_FRAME).toLong()
+				}
+			}
 			return !cut
 		}
 
@@ -174,7 +185,6 @@ object SynthesisRouting {
 			val held = track ?: return
 			val written = synchronized(this) { framesWritten }
 			if (written <= 0) return
-			val want = headAtBegin + written
 			var last = -1L
 			var still = 0
 			val deadline = System.nanoTime() + ((written * 1000L / maxOf(rateHz, 1)) + 2000L) * 1_000_000L
@@ -184,7 +194,8 @@ object SynthesisRouting {
 				} catch (_: Throwable) {
 					return
 				}
-				if (head >= want) return
+				val played = (head - headAtBegin) and 0xFFFFFFFFL
+				if (played >= written) return
 				if (head == last) {
 					if (++still >= STALL_TICKS) return
 				} else {
@@ -199,14 +210,16 @@ object SynthesisRouting {
 		 *  the half of a stop that [AudioTrack] can be told about. Called
 		 *  from whichever thread the stop came on. */
 		fun cut() {
-			cut = true
+			synchronized(this) {
+				cut = true
+				framesWritten = 0
+			}
 			val held = track ?: return
 			try {
 				held.pause()
 				held.flush()
 			} catch (_: Throwable) {
 			}
-			synchronized(this) { framesWritten = 0 }
 		}
 
 		@Synchronized

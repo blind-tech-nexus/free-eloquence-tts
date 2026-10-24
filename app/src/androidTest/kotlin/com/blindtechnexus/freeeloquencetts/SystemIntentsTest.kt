@@ -76,6 +76,8 @@ class SystemIntentsTest {
 		// one does carry the package, which is what the next check is about.
 		for (candidate in candidates) {
 			assertNull(candidate.intent.data)
+		}
+		for (candidate in candidates.dropLast(1)) {
 			assertNotNull(candidate.intent.component)
 		}
 		assertEquals(

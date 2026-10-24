@@ -252,7 +252,7 @@ class EngineTest {
 		assertEquals("café", latin1(WesternText.encode("café")))
 		assertTrue(
 			"a nought byte would end the text early",
-			WesternText.encode("a b").none { it.toInt() == 0 }
+			WesternText.encode("a\u0000b").none { it.toInt() == 0 }
 		)
 	}
 

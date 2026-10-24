@@ -898,6 +898,7 @@ class EvvTtsService : TextToSpeechService() {
 				// text goes, and the reference to it goes with it, so a stop
 				// that arrives a moment later cannot cancel the next
 				// utterance's work by mistake.
+				playingItself = false
 				work.cancel()
 				if (feeder === work) feeder = null
 			}

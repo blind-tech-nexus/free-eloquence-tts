@@ -246,7 +246,7 @@ class WordIndex private constructor(
 
         private var dropped = 0
 
-        private var folded = CharArray(128)
+        private var folded = CharArray(MAX_KEY_CHARS + 2)
 
         val size: Int get() = entries
         val overflowed: Int get() = dropped
@@ -314,8 +314,13 @@ class WordIndex private constructor(
             var hashes = IntArray(capacity)
             var mask = capacity - 1
             val next = IntArray(entries) { -1 }
-            for (e in 0 until entries) {
+            // Built from the last entry back to the first so that the head of
+            // each chain is the earliest entry added: a word in the user's
+            // own list stays ahead of a word of the same length in an
+            // imported file, while a longer phrase anywhere still wins.
+            for (e in entries - 1 downTo 0) {
                 val length = entryFirst[e]
+                if (length == 0) continue
                 val hash = hashOf(pool, entryKeyAt[e], length)
                 var slot = hash and mask
                 while (true) {
@@ -327,8 +332,8 @@ class WordIndex private constructor(
                     }
                     if (hashes[slot] == hash) {
                         // The same first word, or a key that begins with it:
-                        // the new entry joins that chain rather than taking
-                        // a slot of its own.
+                        // the entry joins that chain rather than taking a
+                        // slot of its own.
                         next[e] = held - 1
                         table[slot] = e + 1
                         break
@@ -347,7 +352,7 @@ class WordIndex private constructor(
             }
             val punctNext = IntArray(entries) { -1 }
             if (punctCount > 0) {
-                for (e in 0 until entries) {
+                for (e in entries - 1 downTo 0) {
                     if (entryFirst[e] != 0) continue
                     // The fold here is the character one, written out
                     // rather than called: this is a nested class, and a
@@ -400,7 +405,7 @@ class WordIndex private constructor(
          * small array against a hundred thousand short-lived ones.
          */
         private fun fold(word: String): String {
-            if (folded.size < word.length) folded = CharArray(word.length * 2)
+            if (folded.size < word.length + 1) folded = CharArray((word.length + 1) * 2)
             var n = 0
             var spaced = true
             for (c in word) {
@@ -412,12 +417,12 @@ class WordIndex private constructor(
                 if (foldedChar == ' ') {
                     if (spaced) continue
                     spaced = true
-                    folded[n++] = ' '
+                    if (n <= MAX_KEY_CHARS) folded[n++] = ' '
                     continue
                 }
                 spaced = false
-                if (n >= MAX_KEY_CHARS) break
                 folded[n++] = foldedChar
+                if (n > MAX_KEY_CHARS) break
             }
             while (n > 0 && folded[n - 1] == ' ') n--
             if (n == 0) return ""
