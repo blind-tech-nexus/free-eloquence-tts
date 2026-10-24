@@ -21,8 +21,16 @@ class TextPipelineTest {
 
 	@Test
 	fun ssmlComesOffBeforeAnythingElse() {
-		assertEquals("a c", apply("a <b> c", ssml = true))
-		assertEquals("a <b> c", apply("a <b> c", ssml = false))
+		assertEquals("a c", apply("a <b> c", ssml = true, styles = false))
+		assertEquals("a <b> c", apply("a <b> c", ssml = false, styles = false))
+	}
+
+	@Test
+	fun markupIsReadOutBeforeTheTagsAreStripped() {
+		// With styles on, a tag is a word and not a bracket: stripping it
+		// first is what used to lose the emphasis a page carried.
+		assertEquals("hello bold sale end bold world", apply("hello <b>sale</b> world"))
+		assertEquals("hello sale world", apply("hello <b>sale</b> world", styles = false))
 	}
 
 	@Test
@@ -33,8 +41,13 @@ class TextPipelineTest {
 
 	@Test
 	fun aGroupedThousandIsReadWhole() {
-		assertEquals("1,000,000", apply("1,000,000", numbers = Numbers.DIGITS))
+		// The shapes the engine reads correctly are left as written...
 		assertEquals("10,000", apply("10,000", numbers = Numbers.PAIRS))
+		assertEquals("1,150", apply("1,150", numbers = Numbers.DIGITS))
+		// ... and the one it drops a million from is repaired, whatever the
+		// mode, because the repair is a fault fix and not a preference.
+		assertEquals("1 0 0 0 0 0 0", apply("1,000,000", numbers = Numbers.DIGITS))
+		assertEquals("1000000", apply("1,000,000", numbers = Numbers.AS_IS))
 	}
 
 	@Test
@@ -43,6 +56,18 @@ class TextPipelineTest {
 			"`vbst+6 A `vbst-6",
 			apply("A", capitals = CapitalLetters.PITCH, symbols = Symbols.ALL)
 		)
+	}
+
+	@Test
+	fun aCommaStandingOnItsOwnIsNotSaid() {
+		// Two layers reach the same answer. The fixes put a stray comma back
+		// against the word it follows, where it is the pause the engine makes
+		// anyway...
+		assertEquals("This is, everything", apply("This is , everything"))
+		assertEquals("Hello, world.", apply("Hello, world."))
+		// ...and a comma with no word on either side of it is taken out, so
+		// the engine never gets the chance to name it.
+		assertEquals("hello", apply(", hello"))
 	}
 
 	@Test
@@ -66,6 +91,7 @@ class TextPipelineTest {
 		capitals: Int = CapitalLetters.NONE,
 		symbols: Int = Symbols.SOME,
 		custom: String = "",
+		styles: Boolean = true,
 		words: List<Pair<String, String>> = emptyList()
 	): String {
 		val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -76,6 +102,7 @@ class TextPipelineTest {
 		settings.capitalMode = capitals
 		settings.symbolMode = symbols
 		settings.customSymbols = custom
+		settings.readTextStyles = styles
 		return TextPipeline.apply(text, settings, words)
 	}
 }

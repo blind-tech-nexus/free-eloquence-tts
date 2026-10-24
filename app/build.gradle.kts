@@ -30,17 +30,16 @@ val buildNative by tasks.registering(Exec::class) {
 	description = "Cross-compiles the openevv engine and the JNI bridge for each ABI."
 	val engine = rootProject.layout.projectDirectory.dir("native/openevv")
 	val script = rootProject.layout.projectDirectory.file("native/build-native.sh")
-	// Deliberately not the engine's own sources. The script patches them, so a
-	// task declaring them would be rewriting its own inputs every time it ran
-	// and would never settle: the first build after any change fails and the
-	// next one succeeds. What decides the output is the submodule's commit, the
-	// patches laid on it, and the files named here. Editing native/openevv by
-	// hand wants --rerun-tasks. The patches are a file tree rather than a
-	// directory, so the set is what is there -- one, at the moment -- and a
-	// patch added or changed is a rebuild.
-	inputs.files(rootProject.fileTree("native/patches"))
+	// The engine is vendored in native/openevv rather than fetched as a
+	// submodule, so its sources are inputs like any other and an edit to one of
+	// them is a rebuild. Only src/ and lib/ are named: the language modules
+	// under lang/ are thirteen megabytes of text data that never changes, and
+	// hashing them on every build would cost more than the build saves. The
+	// generated rule tables are written under native/openevv/build/, which is
+	// outside the tree named here and output rather than input.
+	inputs.files(rootProject.fileTree("native/openevv/src"))
+	inputs.files(rootProject.fileTree("native/openevv/lib"))
 	inputs.file(rootProject.layout.projectDirectory.file("native/android.mk"))
-	inputs.file(rootProject.layout.projectDirectory.file(".gitmodules"))
 	inputs.file(script)
 	inputs.file(layout.projectDirectory.file("src/main/cpp/evv_jni.c"))
 	inputs.property("abis", abis)
@@ -60,7 +59,7 @@ val buildNative by tasks.registering(Exec::class) {
 	environment("OUT", nativeOut.get().asFile.absolutePath)
 	doFirst {
 		if (!engine.file("Makefile").asFile.exists()) {
-			throw GradleException("native/openevv is empty. Run: git submodule update --init --recursive")
+			throw GradleException("native/openevv has no Makefile; the engine is vendored in this repository.")
 		}
 	}
 }

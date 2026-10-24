@@ -62,29 +62,10 @@ if [ ! -x "$clang" ]; then
 	exit 1
 fi
 if [ ! -f "$engine/Makefile" ]; then
-	echo "native/openevv is empty; run: git submodule update --init --recursive" >&2
+	echo "native/openevv is missing its Makefile; the engine is vendored in this" >&2
+	echo "repository and is not a submodule, so nothing needs fetching." >&2
 	exit 1
 fi
-
-# What the engine needs before it is right on this architecture. Each is a bug
-# in openevv rather than a change for Android, and each is written up in its
-# own file; the submodule stays as upstream left it.
-for patch in "$here"/patches/*.patch; do
-	[ -e "$patch" ] || continue
-	if git -C "$engine" apply --reverse --check "$patch" >/dev/null 2>&1; then
-		continue
-	fi
-	if ! git -C "$engine" apply --whitespace=nowarn "$patch"; then
-		# Two builds racing here both see it unapplied and both try it. The
-		# loser has nothing left to do rather than nothing to say.
-		if git -C "$engine" apply --reverse --check "$patch" >/dev/null 2>&1; then
-			continue
-		fi
-		echo "could not apply $(basename "$patch") to native/openevv" >&2
-		exit 1
-	fi
-	echo "applied $(basename "$patch")"
-done
 
 # Every directory the engine's headers sit in, the same set its Makefile builds
 # its own include path from. They stay relative because the link below runs

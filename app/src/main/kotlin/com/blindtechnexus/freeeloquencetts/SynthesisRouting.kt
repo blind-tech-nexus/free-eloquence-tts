@@ -15,17 +15,25 @@ import android.util.Log
  * app on its own. That is [AUTOMATIC], and it is what every engine does and
  * what this one does unless told otherwise.
  *
- * The other three have this app play the speech itself, on a channel of the
- * listener's choosing, because there are phones and setups on which the
- * app's choice is the wrong one -- a car stereo that only carries media, a
- * hearing aid paired to the accessibility stream, a reader whose own
- * channel is ducked or muted by something else. [ACCESSIBILITY] plays every
- * utterance on the accessibility channel and [MEDIA] plays every utterance
- * on the media channel; in both the asking app is handed no samples, only
- * the start and the finish, so it still knows when each utterance began and
- * ended. [ALL] plays every utterance on the accessibility channel and hands
- * the samples to the asking app as well, which is for the setup where one
- * channel reaches one ear and the other the other.
+ * That is also the choice called [AUTOMATIC] in the code and "Default" on the
+ * screen, and the name is the point: it is the only setting that covers every
+ * route there is, because every asking app gets the route it asked for. A
+ * media player's book, a clock's alarm, a screen reader's label and a
+ * navigation prompt all arrive on the channel their app chose, which is why it
+ * is the default and why it is at the top of the list.
+ *
+ * The others have this app play the speech itself, on one channel of the
+ * listener's choosing, because there are phones and setups on which the app's
+ * choice is the wrong one -- a car stereo that only carries media, a hearing
+ * aid paired to the accessibility stream, an alarm that must be heard at
+ * alarm volume even with the media stream turned down, a reader whose own
+ * channel is ducked or muted by something else. [MEDIA] plays every utterance
+ * on the media channel, [ALARMS] on the alarm channel, [ACCESSIBILITY] on the
+ * accessibility channel; in each the asking app is handed no samples, only the
+ * start and the finish, so it still knows when each utterance began and ended.
+ * [ALL] plays every utterance on the accessibility channel and hands the
+ * samples to the asking app as well, which is for the setup where one channel
+ * reaches one ear and the other the other.
  *
  * The one thing the three cannot do is tell a request to play from a
  * request to write a file: both arrive here the same way. An app that asks
@@ -39,8 +47,18 @@ object SynthesisRouting {
 	const val ACCESSIBILITY = 1
 	const val MEDIA = 2
 	const val ALL = 3
+	const val ALARMS = 4
 
-	val CHOICES = listOf(AUTOMATIC, ACCESSIBILITY, MEDIA, ALL)
+	/**
+	 * The list as it is shown, and the order is deliberate: Default first,
+	 * because it is the one that covers every route and the one to leave
+	 * alone, then the one channel at a time, then the doubling.
+	 *
+	 * The numbers are not the order and must not be renumbered: they are
+	 * what earlier versions wrote into the settings, and a listener who chose
+	 * Accessibility once must still have Accessibility after an update.
+	 */
+	val CHOICES = listOf(AUTOMATIC, MEDIA, ALARMS, ACCESSIBILITY, ALL)
 
 	fun clamp(route: Int): Int = if (CHOICES.contains(route)) route else AUTOMATIC
 
@@ -54,6 +72,11 @@ object SynthesisRouting {
 	 *  framework calls the channel. */
 	fun usageOf(route: Int): Int = when (clamp(route)) {
 		MEDIA -> AudioAttributes.USAGE_MEDIA
+		// The alarm channel is the one a phone keeps audible when everything
+		// else is turned down, and the one a clock's own alarm comes out of:
+		// speech sent there follows the alarm volume and is not silenced by
+		// "mute media".
+		ALARMS -> AudioAttributes.USAGE_ALARM
 		else -> AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
 	}
 

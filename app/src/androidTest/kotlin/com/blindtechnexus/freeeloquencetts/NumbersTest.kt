@@ -10,9 +10,10 @@ import org.junit.runner.RunWith
  * How a run of digits is regrouped, which is the whole of the number
  * processing: the engine has no setting for it, so the modes are made out of
  * spaces. What is checked is the strong rule -- a run of up to five digits
- * is one number, a separator or a decimal point inside a number means the
- * number whole, and a run of six or more is grouped from the left -- and
- * that anything that is not a run of the ten digits is left alone.
+ * is one number, a decimal point or a correctly written separator means the
+ * number whole, and a run of six or more is grouped from the left -- plus the
+ * one repair, the comma-grouped number whose last group is zeros, which is
+ * the shape this engine drops a million from.
  */
 @RunWith(AndroidJUnit4::class)
 class NumbersTest {
@@ -55,14 +56,29 @@ class NumbersTest {
 	}
 
 	@Test
-	fun aSeparatorMeansTheNumberWholeInEveryMode() {
+	fun aSeparatorTheEngineReadsCorrectlyIsLeftAlone() {
 		assertEquals("10,000", Numbers.apply("10,000", Numbers.DIGITS))
-		assertEquals("1,000,000", Numbers.apply("1,000,000", Numbers.DIGITS))
-		assertEquals("1,000,000", Numbers.apply("1,000,000", Numbers.PAIRS))
-		assertEquals("1,000,000", Numbers.apply("1,000,000", Numbers.TRIPLETS))
+		// Two groups whose last one is not zeros read correctly too.
+		assertEquals("1,150", Numbers.apply("1,150", Numbers.DIGITS))
+		assertEquals("205,558,107", Numbers.apply("205,558,107", Numbers.DIGITS))
 		assertEquals("10.000.000", Numbers.apply("10.000.000", Numbers.DIGITS))
 		assertEquals("1,234.5", Numbers.apply("1,234.5", Numbers.DIGITS))
 		assertEquals("September 5, 2026", Numbers.apply("September 5, 2026", Numbers.DIGITS))
+	}
+
+	@Test
+	fun theShapeTheEngineMisreadsIsRepaired() {
+		// "1,000,000" comes out of the engine with the million missing, and
+		// the same digits without the separators do not. So the separators
+		// go, whatever the mode -- the number is the same number either
+		// way, and this is the only spelling of it the engine reads right.
+		assertEquals("1000000", Numbers.apply("1,000,000", Numbers.AS_IS))
+		assertEquals("1 0 0 0 0 0 0", Numbers.apply("1,000,000", Numbers.DIGITS))
+		assertEquals("10 0 0 0 0 0", Numbers.apply("1,000,000", Numbers.PAIRS))
+		assertEquals("100 0 0 0 0", Numbers.apply("1,000,000", Numbers.TRIPLETS))
+		assertEquals("205000000", Numbers.apply("\$205,000,000", Numbers.AS_IS))
+		assertEquals("1000000.5", Numbers.apply("1,000,000.5", Numbers.AS_IS))
+		assertEquals("1000000", Numbers.apply("1,000,000", 42))
 	}
 
 	@Test

@@ -1,6 +1,7 @@
 package com.blindtechnexus.freeeloquencetts
 
 import android.content.Context
+import android.media.AudioAttributes
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
@@ -161,6 +162,8 @@ class SettingsTest {
 		assertFalse(settings.readOtpDigits)
 		settings.synthesisRouting = SynthesisRouting.MEDIA
 		assertEquals(SynthesisRouting.MEDIA, settings.synthesisRouting)
+		settings.synthesisRouting = SynthesisRouting.ALARMS
+		assertEquals(SynthesisRouting.ALARMS, settings.synthesisRouting)
 		settings.synthesisRouting = 77
 		assertEquals("a bad route did not fall back", SynthesisRouting.AUTOMATIC, settings.synthesisRouting)
 		settings.forceLanguage = true
@@ -168,6 +171,28 @@ class SettingsTest {
 		remove(Settings.KEY_READ_OTP_DIGITS)
 		remove(Settings.KEY_SYNTHESIS_ROUTING)
 		remove(Settings.KEY_FORCE_LANGUAGE)
+	}
+
+	/** The routing menu: Default at the top, one channel at a time below it,
+	 *  and each choice carrying the channel it names. */
+	@Test
+	fun theRoutingMenuStartsWithDefaultAndNamesItsChannels() {
+		assertEquals("Default is not at the top", SynthesisRouting.AUTOMATIC, SynthesisRouting.CHOICES.first())
+		assertTrue(SynthesisRouting.CHOICES.contains(SynthesisRouting.MEDIA))
+		assertTrue(SynthesisRouting.CHOICES.contains(SynthesisRouting.ALARMS))
+		assertTrue(SynthesisRouting.CHOICES.contains(SynthesisRouting.ACCESSIBILITY))
+		// Default is the one that covers every route there is: every app on
+		// the channel it asked for, and nothing moved.
+		assertTrue(SynthesisRouting.handsToFramework(SynthesisRouting.AUTOMATIC))
+		assertFalse(SynthesisRouting.playsItself(SynthesisRouting.AUTOMATIC))
+		// And each of the others plays itself, on the channel it names.
+		assertEquals(AudioAttributes.USAGE_MEDIA, SynthesisRouting.usageOf(SynthesisRouting.MEDIA))
+		assertEquals(AudioAttributes.USAGE_ALARM, SynthesisRouting.usageOf(SynthesisRouting.ALARMS))
+		assertEquals(
+			AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY,
+			SynthesisRouting.usageOf(SynthesisRouting.ACCESSIBILITY)
+		)
+		assertTrue(SynthesisRouting.playsItself(SynthesisRouting.ALARMS))
 	}
 
 	/** Text styles are read until somebody says otherwise, and the answer is

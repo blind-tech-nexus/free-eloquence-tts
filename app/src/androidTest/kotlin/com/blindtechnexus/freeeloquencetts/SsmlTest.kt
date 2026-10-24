@@ -40,12 +40,27 @@ class SsmlTest {
 	}
 
 	@Test
-	fun aMalformedTagIsStillTakenOutWhole() {
-		assertEquals("3 4", Ssml.strip("3 < 5 > 4"))
+	fun aComparisonInProseIsNotATag() {
+		// A tag begins with a name or a slash. "3 < 5 > 4" begins with a
+		// space, so it is arithmetic, and taking it for a malformed tag would
+		// swallow the middle of a sentence about code.
+		assertEquals("3 < 5 > 4", Ssml.strip("3 < 5 > 4"))
 	}
 
 	@Test
 	fun aStrayAngleWithNoCloseIsLeftForTheSymbols() {
 		assertEquals("3 < 5", Ssml.strip("3 < 5"))
+	}
+
+	@Test
+	fun anEntityIsSaidAsWhatItMeans() {
+		// "&amp;" is "and", not "ampersand a m p semicolon", and a numeric
+		// entity is the character it names.
+		assertEquals("fish and chips", Ssml.strip("fish &amp; chips"))
+		assertEquals("caf\u00e9", Ssml.strip("caf&#233;"))
+		assertEquals("caf\u00e9", Ssml.strip("caf&#xE9;"))
+		// One this does not know is left as written: dropping it would lose
+		// something and guessing at it would invent something.
+		assertEquals("a &weird; b", Ssml.strip("a &weird; b"))
 	}
 }

@@ -28,7 +28,7 @@
 	<string name="welcome_codes">Numbers and one-time codes</string>
 	<string name="welcome_codes_description">Long numbers can be read a digit, a pair or a triplet at a time, and a verification code in a message is read a digit at a time on its own — 4 9 2 8 0 1, never four hundred and ninety-two thousand.</string>
 	<string name="welcome_routing">Sound where you want it</string>
-	<string name="welcome_routing_description">By default every app plays its speech on the channel it chose. Synthesis routing can send everything to the accessibility channel, the media channel, or both.</string>
+	<string name="welcome_routing_description">By default every app plays its speech on the route it chose. Audio routing can send everything to media, alarms or accessibility instead, or to accessibility and the asking app at once.</string>
 	<string name="welcome_continue">Get started</string>
 	<string name="welcome_back_to_main">Back to the main screen</string>
 
@@ -108,16 +108,18 @@
 	<string name="audio_optimization_quality_description">The cleanest sound this voice has.</string>
 	<string name="sample_rate_label">Sample rate</string>
 	<string name="sample_rate_description">Higher is clearer but uses more battery. The engine makes its speech at 11,025 hertz and raises it to the rate chosen here.</string>
-	<string name="routing_label">Synthesis routing</string>
-	<string name="routing_description">Where the sound goes: the channel each app asks for, or one channel of your choosing for everything.</string>
-	<string name="routing_automatic">Automatic</string>
+	<string name="routing_label">Audio routing</string>
+	<string name="routing_description">Where Eloquence audio is played. Default leaves every app on the route it asked for, which is every route there is. The other choices play everything this engine says on one route of your own, whatever the asking app chose.</string>
+	<string name="routing_automatic">Default</string>
+	<string name="routing_media">Media / Music</string>
+	<string name="routing_alarms">Alarms</string>
 	<string name="routing_accessibility">Accessibility</string>
-	<string name="routing_media">Media</string>
 	<string name="routing_all">All</string>
-	<string name="routing_automatic_description">Automatic: each app plays its own speech on the channel it chose, as every speech engine does. Recommended.</string>
-	<string name="routing_accessibility_description">Accessibility: this app plays every utterance itself on the accessibility channel, whatever the asking app chose. An app that asks for speech as a file gets a silent one.</string>
-	<string name="routing_media_description">Media: this app plays every utterance itself on the media channel, whatever the asking app chose. An app that asks for speech as a file gets a silent one.</string>
-	<string name="routing_all_description">All: this app plays every utterance on the accessibility channel and the asking app plays it on its own channel too.</string>
+	<string name="routing_automatic_description">Default: each app plays its own speech on the route it chose, so a book comes out of the media route, a clock out of alarms, a screen reader out of accessibility and a navigation prompt out of its own. Every route is covered and nothing is moved. Recommended.</string>
+	<string name="routing_media_description">Media / Music: this app plays every utterance itself on the media route, whatever the asking app chose, so it follows the media volume and comes out of whatever carries media - a car stereo, a speaker, headphones. An app that asks for speech as a file gets a silent one.</string>
+	<string name="routing_alarms_description">Alarms: this app plays every utterance itself on the alarm route, whatever the asking app chose, so it follows the alarm volume and stays audible when the media volume is turned down or muted. An app that asks for speech as a file gets a silent one.</string>
+	<string name="routing_accessibility_description">Accessibility: this app plays every utterance itself on the accessibility route, whatever the asking app chose, which is the route a hearing aid or the audio of a screen reader is usually paired to. An app that asks for speech as a file gets a silent one.</string>
+	<string name="routing_all_description">All: this app plays every utterance on the accessibility route and the asking app plays it on its own route too, so it is heard on both - for one route reaching one ear and the other the other. An app that asks for speech as a file gets a silent one.</string>
 
 	<string name="section_dictionaries">Dictionary</string>
 	<string name="dictionaries_description">Add words the voice should say differently.</string>
@@ -196,7 +198,7 @@
 
 	<string name="section_text">Reading</string>
 	<string name="number_mode_label">Numbers</string>
-	<string name="number_mode_description">How a long number is spoken. Normal reads every number whole. The other three read a number of six or more digits a digit, a pair or a triplet at a time, from the left: 985256 becomes 9 8 5 2 5 6, 98 52 56 or 985 256. Shorter numbers, years, prices, decimals and numbers written with thousands separators are always read whole.</string>
+	<string name="number_mode_description">How a long number is spoken. Normal leaves every number to the engine, except that a number written with thousands separators whose last group is all zeros - 1,000,000 - has its separators dropped first, because that is the one shape the engine drops a million from. Digits, Pairs and Triplets read a number of six or more digits a digit, a pair or a triplet at a time from the left: 985256 becomes 9 8 5 2 5 6, 98 52 56 or 985 256, and a group that starts with 0 is said digit by digit. Shorter numbers, years, prices, decimals, fractions, versions and numbers written with separators the engine reads correctly are always read whole.</string>
 	<string name="otp_label">Read one-time codes digit by digit</string>
 	<string name="otp_description">A verification code in a message — \"your code is 492801\" — is read 4 9 2 8 0 1, whatever the number mode. The code is found from the words around it, in English, German, Spanish, French and Italian; years, prices, order numbers and telephone numbers are left alone.</string>
 	<string name="number_as_is">Normal</string>
@@ -318,7 +320,7 @@
 	<string name="pauses_end">Short at end</string>
 	<string name="pauses_all">Short all</string>
 	<string name="symbol_label">Symbols</string>
-	<string name="symbol_description">Which symbols are spoken.</string>
+	<string name="symbol_description">Which symbols are spoken. Some is the reading the engine already does, with one repair: a comma with no word against it is taken out, so it is never heard as the word comma.</string>
 	<string name="symbol_mode_label">Symbol mode</string>
 	<string name="symbol_mode_all">All</string>
 	<string name="symbol_mode_most">Most</string>
@@ -327,7 +329,7 @@
 	<string name="symbol_mode_none">None</string>
 	<string name="symbol_all_description">All symbols spoken, including . and ,</string>
 	<string name="symbol_most_description">Brackets, quotes, ? ! etc spoken.</string>
-	<string name="symbol_some_description">Money and math symbols spoken. Lone symbols named.</string>
+	<string name="symbol_some_description">Money, math and punctuation spoken. A comma standing on its own is a pause, not the word comma, and is silenced; one written against a word is left as the pause it is.</string>
 	<string name="symbol_custom_description">Only your chosen symbols spoken.</string>
 	<string name="symbol_none_description">No symbols spoken.</string>
 	<string name="symbol_custom_hint">Symbols to speak</string>
