@@ -199,7 +199,7 @@ object Otp {
 			val c = text[i]
 			if (c == '`') {
 				// An engine annotation is carried past, digits and all.
-				while (i < n && !text[i].isWhitespace()) i++
+				i = EvvEngine.annotationEnd(text, i)
 				continue
 			}
 			if (!c.isAsciiDigit()) {

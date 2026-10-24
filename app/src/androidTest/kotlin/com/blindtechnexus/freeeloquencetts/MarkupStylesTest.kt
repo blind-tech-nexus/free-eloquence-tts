@@ -47,6 +47,8 @@ class MarkupStylesTest {
 	@Test
 	fun aLayoutTagSaysNothingButIsABreak() {
 		assertEquals("one two", MarkupStyles.annotate("<div>one</div><div>two</div>"))
+		assertEquals("one two", MarkupStyles.annotate("one<br />two"))
+		assertEquals("bullet One bullet Two", MarkupStyles.annotate("<ul><li>One</li><li>Two</li></ul>"))
 	}
 
 	@Test

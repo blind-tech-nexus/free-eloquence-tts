@@ -87,8 +87,8 @@ fun AudioGeneratorScreen(onBack: () -> Unit) {
 			val saved = try {
 				context.contentResolver.openOutputStream(uri)?.use { sink ->
 					file.inputStream().use { it.copyTo(sink) }
-				}
-				true
+					true
+				} ?: false
 			} catch (e: Exception) {
 				false
 			}

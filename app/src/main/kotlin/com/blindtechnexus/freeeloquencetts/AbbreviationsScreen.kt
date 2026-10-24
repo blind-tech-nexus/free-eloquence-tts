@@ -128,8 +128,8 @@ fun AbbreviationsScreen(onBack: () -> Unit) {
 			val written = try {
 				context.contentResolver.openOutputStream(uri)?.use { sink ->
 					sink.bufferedWriter(Charsets.UTF_8).use { it.write(text) }
-				}
-				true
+					true
+				} ?: false
 			} catch (broken: Exception) {
 				false
 			}

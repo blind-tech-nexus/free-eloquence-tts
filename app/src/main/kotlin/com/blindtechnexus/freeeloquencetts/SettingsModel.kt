@@ -150,6 +150,7 @@ class SettingsModel(context: Context) {
 
 	fun close() {
 		preview.close()
+		settings.close()
 	}
 
 	fun percentOf(param: Int): Int = Eci.toPercent(param, shape[param] ?: 0)

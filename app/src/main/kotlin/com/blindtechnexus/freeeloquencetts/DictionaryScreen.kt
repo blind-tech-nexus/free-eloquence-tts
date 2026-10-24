@@ -219,8 +219,8 @@ fun DictionaryScreen(onBack: () -> Unit, onOpenFile: (String) -> Unit) {
 								w.write('\n'.code)
 							}
 						}
-					}
-					true
+						true
+					} ?: false
 				} catch (e: Exception) {
 					false
 				}

@@ -27,5 +27,8 @@ class EngineStaticTest {
 		assertFalse(EvvEngine.isBlankSpeech("hello"))
 		assertFalse(EvvEngine.isBlankSpeech("`p200 hello"))
 		assertFalse(EvvEngine.isBlankSpeech("  a  "))
+		assertFalse(EvvEngine.isBlankSpeech("`[das]"))
+		assertFalse(EvvEngine.isBlankSpeech("`pp1 `[das] `p100"))
+		assertTrue(EvvEngine.isBlankSpeech("`[]"))
 	}
 }

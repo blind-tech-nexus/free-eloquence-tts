@@ -144,13 +144,14 @@ object MarkupStyles {
 		val name = body.substring(at, end).lowercase()
 
 		if (name == "img") {
+			if (closing) return
 			val alt = attribute(body, "alt")
 			out.append(" image ")
 			if (alt != null) out.append(alt).append(' ')
 			return
 		}
 		if (name == "li") {
-			out.append(" bullet ")
+			out.append(if (closing) " " else " bullet ")
 			return
 		}
 		if (name in VOID || name in BREAKS) {
@@ -213,7 +214,12 @@ object MarkupStyles {
 		while (k < limit) {
 			val c = text[k]
 			if (c == '>') {
-				if (k > nameEnd && !hasEquals && text[nameEnd].isWhitespace()) return -1
+				if (k > nameEnd && !hasEquals && text[nameEnd].isWhitespace()) {
+					var rest = nameEnd
+					while (rest < k && text[rest].isWhitespace()) rest++
+					val selfClose = rest == k - 1 && text[rest] == '/'
+					if (rest < k && !selfClose) return -1
+				}
 				return k
 			}
 			if (c == '=') hasEquals = true

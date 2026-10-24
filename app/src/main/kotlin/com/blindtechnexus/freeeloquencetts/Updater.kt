@@ -209,6 +209,7 @@ internal object Updater {
 			// answer. Fetching the same 50 MB again on a phone that is paying
 			// for each of them by the megabyte would be the app's mistake, not
 			// theirs.
+			downloading.set(false)
 			state = State.Ready(file, file.length())
 			return true
 		}

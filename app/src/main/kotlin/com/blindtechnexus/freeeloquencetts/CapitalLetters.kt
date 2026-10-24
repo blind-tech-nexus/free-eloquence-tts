@@ -17,15 +17,21 @@ object CapitalLetters {
 
 	fun apply(text: String, mode: Int): String {
 		if (mode == NONE || text.isEmpty()) return text
-		// Quick check: any single capital?
+		// Quick check: any single capital outside an engine annotation?
 		var hasSingle = false
-		for (i in text.indices) {
-			val c = text[i]
+		var scan = 0
+		while (scan < text.length) {
+			val c = text[scan]
+			if (c == '`') {
+				scan = EvvEngine.annotationEnd(text, scan)
+				continue
+			}
 			if (c in 'A'..'Z') {
-				val prevOk = i == 0 || !(text[i - 1].isLetter() || text[i - 1] == '\'')
-				val nextOk = i == text.length - 1 || !(text[i + 1].isLetter() || text[i + 1] == '\'')
+				val prevOk = scan == 0 || !(text[scan - 1].isLetter() || text[scan - 1] == '\'')
+				val nextOk = scan == text.length - 1 || !(text[scan + 1].isLetter() || text[scan + 1] == '\'')
 				if (prevOk && nextOk) { hasSingle = true; break }
 			}
+			scan++
 		}
 		if (!hasSingle) return text
 
@@ -33,6 +39,12 @@ object CapitalLetters {
 		var i = 0
 		while (i < text.length) {
 			val c = text[i]
+			if (c == '`') {
+				val end = EvvEngine.annotationEnd(text, i)
+				sb.append(text, i, end)
+				i = end
+				continue
+			}
 			if (c in 'A'..'Z') {
 				val prevOk = i == 0 || !(text[i - 1].isLetter() || text[i - 1] == '\'')
 				val nextOk = i == text.length - 1 || !(text[i + 1].isLetter() || text[i + 1] == '\'')

@@ -558,18 +558,21 @@ object UserDictionary {
 			val given = LinkedHashMap<String, Pair<String, String>>()
 			for ((word, say) in entries) {
 				if (given.size >= MAX_ENTRIES) break
-				if (word.isEmpty() || say.isEmpty()) continue
-				if (word.length > WordIndex.MAX_KEY_CHARS) continue
-				if (say.length > WordIndex.MAX_SAY_CHARS) continue
-				given[word.lowercase()] = word.trim() to say.trim()
+				val cleanWord = word.trim()
+				val cleanSay = say.trim()
+				if (cleanWord.isEmpty() || cleanSay.isEmpty()) continue
+				if (cleanWord.length > WordIndex.MAX_KEY_CHARS) continue
+				if (cleanSay.length > WordIndex.MAX_SAY_CHARS) continue
+				given[foldKey(cleanWord)] = cleanWord to cleanSay
 			}
 			if (given.isEmpty()) return 0
 			val seen = HashSet<String>(Math.min(given.size, 1 shl 16))
 			val ok = rewrite(
 				context,
 				{ key ->
-					val had = given.containsKey(key)
-					if (had && seen.size < MAX_ENTRIES) seen.add(key)
+					val folded = foldKey(key)
+					val had = given.containsKey(folded)
+					if (had && seen.size < MAX_ENTRIES) seen.add(folded)
 					had
 				},
 				given.values.toList()

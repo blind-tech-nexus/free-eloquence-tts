@@ -157,8 +157,8 @@ fun DictionaryFileScreen(name: String, onBack: () -> Unit, onDeleted: () -> Unit
 					val from = ExtraDictionaries.fileFor(context, name) ?: throw IllegalStateException()
 					context.contentResolver.openOutputStream(uri)?.use { sink ->
 						from.inputStream().use { it.copyTo(sink) }
-					}
-					true
+						true
+					} ?: false
 				} catch (e: Exception) {
 					false
 				}

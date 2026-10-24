@@ -66,6 +66,7 @@ class EvvPreview() {
 	fun presetShape(index: Int): Map<Int, Int> = engine?.presetShape(index) ?: emptyMap()
 
 	fun open(language: Int = Eci.ENGLISH_US, then: (() -> Unit)? = null) {
+		if (playing && engine?.language != language) stopSpeaking()
 		work.post {
 			english = language
 			if (engine == null || engine?.language != language) {

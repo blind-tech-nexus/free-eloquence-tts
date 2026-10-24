@@ -67,9 +67,11 @@ class EvvEngine private constructor(@Volatile private var handle: Long, val lang
 
 		/**
 		 * Whether [text] carries nothing the engine could say: whitespace
-		 * and backtick annotations only. A piece like that is skipped by the
-		 * caller rather than handed over, because an utterance of nothing is
-		 * a wait for audio that is never coming, not speech.
+		 * and non-speaking backtick annotations only. A piece like that is
+		 * skipped by the caller rather than handed over, because an utterance
+		 * of nothing is a wait for audio that is never coming, not speech.
+		 * A bracketed annotation (`[das]`, `ord[1]`) carries phoneme or text
+		 * content of its own and is speech whenever its brackets are not blank.
 		 */
 		fun isBlankSpeech(text: String): Boolean {
 			var i = 0
@@ -77,14 +79,50 @@ class EvvEngine private constructor(@Volatile private var handle: Long, val lang
 			while (i < n) {
 				val c = text[i]
 				if (c == '`') {
-					i++
-					while (i < n && !text[i].isWhitespace()) i++
+					val end = annotationEnd(text, i)
+					if (end > i + 2 && text[end - 1] == ']') {
+						val open = text.indexOf('[', i + 1)
+						if (open in (i + 1) until (end - 1)) {
+							for (k in (open + 1) until (end - 1)) {
+								if (!text[k].isWhitespace()) return false
+							}
+						}
+					}
+					i = end
 					continue
 				}
 				if (!c.isWhitespace()) return false
 				i++
 			}
 			return true
+		}
+
+		/**
+		 * Where the engine annotation beginning with `` ` `` at [at] ends.
+		 *
+		 * A phoneme or bracketed say-as annotation (`[das]`, `ord[1]`) runs
+		 * through its closing bracket on the same line, so spaces inside a
+		 * phoneme string stay inside it and punctuation written directly after
+		 * `]` stays outside it; any other annotation (`vbst+6`, `p100`, `pp1`)
+		 * runs up to the next whitespace.
+		 */
+		internal fun annotationEnd(text: CharSequence, at: Int): Int {
+			val n = text.length
+			var k = at + 1
+			if (k >= n || text[k].isWhitespace()) return k
+			while (k < n && !text[k].isWhitespace()) {
+				if (text[k] == '[') {
+					var close = k + 1
+					while (close < n && text[close] != ']' && text[close] != '\n' && text[close] != '\r') {
+						close++
+					}
+					if (close < n && text[close] == ']') return close + 1
+					break
+				}
+				k++
+			}
+			while (k < n && !text[k].isWhitespace()) k++
+			return k
 		}
 
 		/**

@@ -14,5 +14,8 @@
 
 # Left alone.
 *.jar binary
+*.jks binary
+*.apk binary
+*.so binary
 *.png binary
 *.dic binary

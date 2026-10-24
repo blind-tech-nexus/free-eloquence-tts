@@ -160,8 +160,7 @@ fun BatteryScreen(onBack: () -> Unit, onRequestExemption: () -> Unit) {
 				onChange = { on ->
 					stopButton = on
 					settings.notificationStopButton = on
-					// The notification is rebuilt by whoever is holding it up,
-					// within the check that runs every few seconds.
+					if (persistent) KeepAlive.sync(context, true)
 					Tracker.action(settings, "notification stop button ${if (on) "on" else "off"}")
 				}
 			)

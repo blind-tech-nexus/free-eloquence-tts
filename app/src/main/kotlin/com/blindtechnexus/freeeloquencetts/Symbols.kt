@@ -177,11 +177,18 @@ object Symbols {
 		if (text.isEmpty()) return text
 		if (mode == SOME) return withoutLoneCommas(text)
 		var relevant = false
-		for (at in text.indices) {
-			if (RELEVANT[text[at].code]) {
+		var scan = 0
+		while (scan < text.length) {
+			val ch = text[scan]
+			if (ch == '`') {
+				scan = EvvEngine.annotationEnd(text, scan)
+				continue
+			}
+			if (ch.code < RELEVANT.size && RELEVANT[ch.code]) {
 				relevant = true
 				break
 			}
+			scan++
 		}
 		// Nothing in the text is a symbol or a typographic character, so there
 		// is nothing to name, nothing to take away, and no spaces left behind
@@ -191,8 +198,18 @@ object Symbols {
 		val listed = if (mode == CUSTOM) custom.filter { TABLE.containsKey(it) }.toSet() else emptySet()
 		val source = normalize(text)
 		val out = StringBuilder(source.length + 32)
-		for (at in source.indices) {
+		var at = 0
+		while (at < source.length) {
 			val c = source[at]
+			if (c == '`') {
+				// An engine annotation -- "`vbst+6", "`[das]" -- is carried
+				// through untouched: its '+', '-' or brackets belong to the
+				// engine's escape, not to the sentence's punctuation.
+				val end = EvvEngine.annotationEnd(source, at)
+				out.append(source, at, end)
+				at = end
+				continue
+			}
 			when {
 				// A contraction is a word, not a symbol, and the engine reads
 				// it as one. "don apostrophe t" is nobody's reading of don't.
@@ -234,6 +251,7 @@ object Symbols {
 					}
 				}
 			}
+			at++
 		}
 		return COLLAPSE.replace(out.toString().trim(), " ")
 	}
@@ -261,6 +279,12 @@ object Symbols {
 		val n = text.length
 		while (at < n) {
 			val c = text[at]
+			if (c == '`') {
+				val end = EvvEngine.annotationEnd(text, at)
+				out?.append(text, at, end)
+				at = end
+				continue
+			}
 			if (c != ',') {
 				out?.append(c)
 				at++
@@ -309,7 +333,7 @@ object Symbols {
 				spaces++
 				continue
 			}
-			if (spaces > 0 && c != '\n' && out.isNotEmpty()) out.append(' ')
+			if (spaces > 0 && c != '\n' && out.isNotEmpty() && out[out.length - 1] != '\n') out.append(' ')
 			spaces = 0
 			out.append(c)
 		}
@@ -327,16 +351,34 @@ object Symbols {
 	/** [text] with every typographic character turned into its plain one. */
 	private fun normalize(text: String): String {
 		var needed = false
-		for (at in text.indices) {
-			val c = text[at].code
+		var scan = 0
+		while (scan < text.length) {
+			val ch = text[scan]
+			if (ch == '`') {
+				scan = EvvEngine.annotationEnd(text, scan)
+				continue
+			}
+			val c = ch.code
 			if (c < PLAIN_CHARS.size && PLAIN_CHARS[c]) {
 				needed = true
 				break
 			}
+			scan++
 		}
 		if (!needed) return text
 		val out = StringBuilder(text.length)
-		for (c in text) out.append(PLAIN[c] ?: c)
+		var at = 0
+		while (at < text.length) {
+			val c = text[at]
+			if (c == '`') {
+				val end = EvvEngine.annotationEnd(text, at)
+				out.append(text, at, end)
+				at = end
+				continue
+			}
+			out.append(PLAIN[c] ?: c)
+			at++
+		}
 		return out.toString()
 	}
 

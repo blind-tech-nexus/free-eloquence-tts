@@ -702,7 +702,7 @@ JNIEXPORT jstring JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_loo
 	jsize          keyLen;
 	unsigned char* want;
 	const char*    found;
-	jstring        answer;
+	jstring        answer = NULL;
 	(void)cls;
 	if (in == NULL || key == NULL || in->dict == NULL_DICT_HAND)
 		return NULL;
@@ -713,7 +713,21 @@ JNIEXPORT jstring JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_loo
 	(*env)->GetByteArrayRegion(env, key, 0, keyLen, (jbyte*)want);
 	want[keyLen] = 0;
 	found = eciDictLookup(in->eci, in->dict, volume, want);
-	answer = found == NULL ? NULL : (*env)->NewStringUTF(env, found);
+	if (found != NULL) {
+		/* The engine stores Western single-byte text (ISO-8859-1), not
+		   Modified UTF-8, so handing bytes >= 0x80 straight to NewStringUTF
+		   aborts CheckJNI. Every ISO-8859-1 byte maps to the same UTF-16
+		   code unit. */
+		size_t n = strlen(found);
+		jchar* wide = (jchar*)malloc((n == 0 ? 1 : n) * sizeof(jchar));
+		if (wide != NULL) {
+			size_t i;
+			for (i = 0; i < n; i++)
+				wide[i] = (jchar)(unsigned char)found[i];
+			answer = (*env)->NewString(env, wide, (jsize)n);
+			free(wide);
+		}
+	}
 	free(want);
 	return answer;
 }
