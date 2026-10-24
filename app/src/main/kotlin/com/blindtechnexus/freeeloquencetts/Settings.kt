@@ -97,9 +97,11 @@ class Settings(context: Context) {
 	 *
 	 * [SynthesisRouting.AUTOMATIC] by default, which is what every speech
 	 * engine does: the app that asked for speech is handed the samples and
-	 * plays them where it chose to. The other three have this app play the
-	 * speech itself, on the accessibility channel, on the media channel, or
-	 * on the accessibility channel beside whatever the asking app does.
+	 * plays them where it chose to. Every other choice has this app play the
+	 * speech itself on one of Android's audio usages -- media, alarms,
+	 * notifications, navigation, the accessibility channel and the rest --
+	 * except [SynthesisRouting.ALL], which plays on the accessibility channel
+	 * *and* hands the asking app the samples as well.
 	 */
 	var synthesisRouting: Int
 		get() = SynthesisRouting.clamp(prefs.getInt(KEY_SYNTHESIS_ROUTING, SynthesisRouting.AUTOMATIC))

@@ -2,7 +2,7 @@
 
 Free eloquence TTS is a free alternative Eloquence text-to-speech engine for Android and Wear OS.
 
-The speech comes from [openevv](https://github.com/Mudb0y/openevv), a C rebuild of IBM's Embedded ViaVoice. This repo cross-compiles that engine for Android, wraps it in JNI, and puts a `TextToSpeechService` around it. openevv is a submodule and is not edited in place.
+The speech comes from [openevv](https://github.com/Mudb0y/openevv), a C rebuild of IBM's Embedded ViaVoice. This repo carries that engine as source in `native/openevv` -- vendored rather than a submodule, so a clone is the whole build and a checkout cannot be half of one -- cross-compiles it for Android, wraps it in JNI, and puts a `TextToSpeechService` around it. The engine sources are upstream's, at the commit named in `native/openevv/VENDORED.md`; the only change made here is the patch in `native/patches`, applied at build time.
 
 ## Unofficial
 
@@ -20,6 +20,8 @@ No warranty. See LICENSE, and read the part about language data before redistrib
 * Audio optimization above the sample rate: balanced, louder, or cleaner finishing of the samples. See [Audio optimization](#audio-optimization).
 * Speech rate and pitch from the system settings, with a switch to force this app's own over them.
 * Symbol pronunciation: all, most, some, a custom list, or none.
+* Number processing: long numbers read whole, a digit, a pair or a triplet at a time, grouped from the right so a phone number and a year sound the way a person says them. See [Numbers](#numbers).
+* Audio routing: the default, where each app plays its own speech on the channel it chose, or one of thirteen Android audio usages -- accessibility, media, alarms, notifications, navigation and the rest -- played by this app itself. See [Audio routing](#audio-routing).
 * Pronunciation dictionaries, and a user dictionary whose matching is a bounded index rather than a trie of objects: a file of lakhs or millions of words is an import and not a crash, and the words that do not fit are counted and said out loud rather than silently dropped. See [The user dictionary](#the-user-dictionary).
 * Abbreviations and expansions of your own, with a choice of how each one is matched: see [Expansions](#abbreviations-and-expansions).
 * Code reading: camelCase and snake_case names taken apart, operators and brackets named, indentation counted, file paths and addresses said as themselves. Seven switches under one: see [Reading source code](#reading-source-code).
@@ -46,12 +48,13 @@ TalkBack settings, Text-to-speech settings, Preferred engine, Google.
 Needs the Android SDK, NDK r23 or later, JDK 17, Python 3 and bash. No Android Studio, and the wrapper fetches its own Gradle.
 
 ```
-git submodule update --init --recursive
 export ANDROID_NDK_HOME=/path/to/ndk
 ./gradlew installDebug
 ./gradlew connectedDebugAndroidTest
 ./gradlew assembleDebugAndroidTest
 ```
+
+Nothing has to be fetched first: the engine is in the tree.
 
 The middle line needs a phone. The last one does not: it compiles the instrumented
 tests against the app and stops there, which is the half of the check that can be
@@ -72,17 +75,21 @@ A fix to openevv that upstream has not taken yet goes in `native/patches` and is
 
 ## Screens
 
-Four, in one activity. A screen reader announces the departure and the arrival of every activity, an engine preview opened for the settings screen would be closed and reopened by a trip to the about screen, and a back stack of four activities is four things to be somewhere inside when the phone answers. So the screens are a state, the back key moves it, and "Go back" in the title bar does what the back key does.
+Ten, in one activity. A screen reader announces the departure and the arrival of every activity, an engine preview opened for the settings screen would be closed and reopened by a trip to the about screen, and a back stack of ten activities is ten things to be somewhere inside when the phone answers. So the screens are a state, the back key moves it, and "Go back" in the title bar does what the back key does.
 
 *Welcome*, once, on a first launch: what the app is, and what it is about to ask for.
 
-*Main*, which is what the launcher opens: what the app is, then the three things worth doing -- configure the voice, open the system's text-to-speech settings and choose this engine there, read about the app -- each with the reason said before the button that acts on it.
+*Main*, which is what the launcher opens: what the app is, then the things worth doing -- configure the voice, open the system's text-to-speech settings and choose this engine there, choose where the speech is heard, generate an audio file, read about the app, and the welcome screen again if it is wanted -- each with the reason said before the button that acts on it.
 
-*Eloquence settings*, which is also what the gear beside the engine in the system settings opens, straight to it rather than by way of the main screen. Eight sections, each a heading TalkBack can jump to: voice customization, voice behaviors, voice quality -- audio optimization above the sample rate -- voice dictionary settings, text reading, code reading, other settings, and a voice to test the lot of them on.
+*Eloquence settings*, which is also what the gear beside the engine in the system settings opens, straight to it rather than by way of the main screen. Nine sections, each a heading TalkBack can jump to: voice customization, voice behaviors, voice quality -- audio optimization above the sample rate and a row that opens the audio routing screen -- dictionaries, text reading, code reading, keeping the voice alive, other settings, and a voice to test the lot of them on.
 
 *Expansions*, reached from the dictionary section: the abbreviations and expansions of your own, as a list with an add button, an options button on each row, and an import and an export beside them.
 
 *Dictionary*, reached the same way: the words the engine is to say differently from how they are spelled.
+
+*Audio routing*, reached from the main screen and from the quality section of the settings: the list of android audio usages the speech can be played on, one row each, with a sentence saying what the route is for. See [Audio routing](#audio-routing).
+
+*Audio generator*: type text, hear it in the chosen voice, and share or save the file it makes.
 
 *About us*: what the app is, who made it -- Sujan Rai, with the Blind Tech Nexus team -- and three ways to reach them, as buttons rather than as addresses to copy down. WhatsApp on [wa.me/9779708340992](https://wa.me/9779708340992) for bugs, feedback and feature requests, the Telegram channel on [t.me/blindtechnexus](https://t.me/blindtechnexus) for update broadcasts and the rest, and blindtechvisionary@gmail.com for an answer that can be relied on, with the address and a subject already filled in. Each asks by link first and then by the app's own scheme, and a link that nothing on the device can follow says so out loud rather than doing nothing at all. WhatsApp is asked three ways rather than two: `wa.me` is the address WhatsApp hands out, `api.whatsapp.com/send?phone=` is what `wa.me` redirects to and is the one that works on a browser that will not follow the redirect, and `whatsapp://send?phone=` is for a device with the app and no browser. The address this used to name, `w.me`, is the short form of a signed-in desktop session and answers a phone with a page saying it cannot be loaded there, which is what the button labelled "Contact on WhatsApp" arrived at. The `<queries>` block in the manifest names the messaging apps for the same reason: Android 11 and later answer "nothing is installed" to an app that has not said what it is looking for, and a scheme that cannot be resolved is a button that does nothing.
 
@@ -156,7 +163,56 @@ The engine has no parameter for this, and neither does anything else in the ECI 
 
 So the five settings are made out of text changes on the way in, which is also how Speech Dispatcher's own module for this engine does it. *Some* is the engine left exactly as it stands, and is the default, so nobody's speech changes when this arrives. *Most* adds the names of attached brackets, quotes, question marks and the like, which the engine leaves silent. *All* adds attached periods and commas. *None* names nothing: every symbol is replaced with silence except the marks the engine needs for its pauses and the apostrophe inside a word. *Custom* is none plus a list of the user's own, entered as the symbols themselves.
 
+One thing is taken away at *Some*, which is otherwise the engine untouched: a comma standing on its own. A lone comma is not punctuation the engine pauses at -- there is nothing beside it to punctuate -- so it is said as the word "comma", which reads as a mistake in the middle of a dictation. Only the lone ones go: a comma with a letter or a digit beside it is punctuation, and the engine makes its pause and says nothing.
+
 Three things are deliberately never replaced at any level that speaks them: the symbols the engine already reads in place -- the dollar, the percent, the equals and the rest -- because writing " dollar" in place of "$" trades the engine's "five dollars" for "five dollar"; a mark between two digits, because 3.14 and 2:30 and 1,024 are number readings rather than symbols; and the apostrophe inside a word, because "don't" is a contraction and not a symbol.
+
+## Numbers
+
+Long numbers are regrouped before the engine sees them, because the engine has one way of saying a number and a person reads a phone number, a year and an account number three different ways. The setting is one button with four choices:
+
+* **Normal** -- every number is the engine's business, which says 985256 as "nine hundred eighty-five thousand two hundred fifty-six". The default.
+* **Digits** -- a long number is said a digit at a time: `985256` is "9 8 5 2 5 6".
+* **Pairs** -- two digits at a time, `985256` is "98 52 56".
+* **Triplets** -- three at a time, `985256` is "985 256".
+
+The grouping is reckoned from the **right**, so the leading group is the short one when the length does not divide evenly: `1234567` in pairs is "1 23 45 67" and in triplets "1 234 567", never "12 34 56 7". That is the grouping a person reading a number aloud uses, and the last group -- the part a listener holds on to -- stays a whole group. A group that opens with a zero is said a digit at a time so the zero is heard: `0412` in pairs is "0 4 12".
+
+Six rules keep it from doing something surprising:
+
+* A run of three digits or fewer is one number in every mode. Times, prices, PINs, counts and page numbers are short, and "301" said as "3 0 1" is a number nobody recognises. Four digits is where a number is long enough to be chunked, and Normal leaves all of them alone.
+* A number written with thousands separators is whole, in every mode: `1,000,000` and the continental `10.000.000`. A separator has to be followed by exactly three digits to count, so "September 5, 2026" is two numbers and a comma.
+* The digits after a decimal point are a fraction and are left alone; so is the integer part in front of one. `3.1415926` stays a decimal rather than becoming a telephone number.
+* A run that directly touches a letter is part of a name: `mp3`, `utf8`, `sha256` and `covid19` are words.
+* A plus in front of digits is the dialling kind and keeps a space after it, so `+9779841` is still callable.
+* Only the ten ASCII digits are touched. Everything else -- punctuation, annotations, letters -- comes through exactly as it was written.
+
+The pass is one walk over the characters with no regular expressions and no allocation until it finds something to change, and a text with nothing to do -- which is most text -- is answered with the very string it was given. `NumbersTest` holds the rules.
+
+## Audio routing
+
+An Android speech engine does not play anything: it hands the samples to the framework, and the framework plays them on behalf of the app that asked, on whatever audio channel that app chose. That is **Default**, and it is what every engine does and what this one does unless told otherwise.
+
+Every other route has this app play the speech itself, on a channel of the listener's choosing, because there are phones and setups where the asking app's choice is the wrong one: a car head unit that only carries media, a hearing aid paired to the accessibility stream, a reader whose own channel is ducked or muted by something else. The settings screen and the main screen both open a screen that lists them, one row each with a sentence, and the whole of the list is:
+
+* **Accessibility** -- the screen-reader channel, ducked by other audio and the one most hearing aids and screen-reader setups carry.
+* **Media and music** -- the channel a car stereo plays.
+* **Alarms** -- full volume, and it sounds through most silent modes.
+* **Notifications**, **Notification events**, **Ringtone** -- the three channels the notification and call sounds use.
+* **Navigation** -- turn-by-turn guidance, which other audio treats the way it treats spoken directions.
+* **System sounds** -- the short interface-effect channel.
+* **Voice communication** -- the call channel, processed for speech.
+* **Game** -- the channel games use.
+* **Assistant** -- the assistant channel on Android 8 and later.
+* **Accessibility and the app** -- this app plays on the accessibility channel *and* the asking app is handed the real samples as well, for the setup where one channel reaches one ear and the other the other.
+
+Two decisions are worth knowing about.
+
+A request to speak and a request to write a file arrive at an engine the same way, and the route cannot tell them apart. So under a route the app plays itself, the framework's callback is answered with silence of the same length as what is heard: a file request gets a silent file of the right length rather than a hang, and a client that streams to its own audio track gets silence rather than a duplicate of the speech. The setting says so, and it is the one reason Default is the default.
+
+A route that cannot be taken falls back to the framework. A player that will not open, a second utterance arriving while one is still playing through the single track, a device that refuses low-latency output: none of them is answered with silence. The second caller is played by the framework on the channel it asked for, which is the arrangement it would have had without routing at all.
+
+The player is one streaming `AudioTrack` kept across utterances, since opening one costs tens of milliseconds and a screen reader says a hundred things a minute; it is remade when the rate or the channel moves. It holds a fifth of a second of audio, which is what keeps an utterance from running further ahead of the ear than that and what a stop has to throw away; the write blocks when the track is full, so the engine is paced by the ear rather than by a sleep. A stop pauses and flushes the track at once -- the one half of an interruption that reaches samples already made -- and the finish of an utterance waits for what was written to be heard, so a client is told when its speech finished rather than when it was made.
 
 ## Voice, phrase prediction, abbreviations
 
@@ -239,15 +295,17 @@ A synthesiser that reads source code as prose says `getElementById` as one word,
 * **Brackets and marks** -- braces, brackets, parentheses, the semicolon, the colon, the comma, the dot, `@`, `#`, `$` and the backtick, each with a name.
 * **Indentation** -- counted rather than spoken: a line that opens with whitespace says "indent 4" and then its own text. A tab is one and a space is one, because that is a count of the characters and not a guess at the width of somebody's editor.
 * **File paths** -- `/home/user/notes.txt` as "path home slash user slash notes dot txt". Two shapes are taken and both are narrow: one that starts where a path has to -- a slash, a tilde, a dot slash, a drive letter -- and one that is relative and carries a file name, so `src/main/App.kt` is a path and `and/or` is not. Saying "slash" in the middle of a sentence because two words happened to be joined would be worse than the silence.
-* **Addresses** -- `https://www.example.com/a/b` as "url example dot com slash a slash b". The scheme is a name and the dots in a host are not sentence ends, and those are the two things the engine gets wrong about an address.
+* **Addresses** -- `https://www.example.com/a/b` as "url example dot com slash a slash b", and `mailto:user@example.com` as "email user at example dot com". The scheme is a name and the dots in a host are not sentence ends, and those are the two things the engine gets wrong about an address. The address ends where its characters stop being address characters, brackets it opened are allowed to close, and the full stop of the sentence around it is left to the sentence: "See https://example.com." says "url example dot com." and not "dot".
 
-They run in that order, paths and addresses before the operators, because an address is one thing that the operator pass would otherwise take apart mark by mark. What a pass that puts spaces around the things it names owes the text back is put back rather than trimmed: the indentation pass runs last and reads the whitespace at the start of a line, so a leading space that was in the text has to still be there when it does.
+Paths and addresses are on by default, because they are almost never prose; the rest are off until the master switch is turned on. They run in that order, paths and addresses before the operators, because an address is one thing that the operator pass would otherwise take apart mark by mark. What a pass that puts spaces around the things it names owes the text back is put back rather than trimmed: the indentation pass runs last and reads the whitespace at the start of a line, so a leading space that was in the text has to still be there when it does.
 
 ## Web pages and styled text
 
 A page read by a browser arrives at a speech engine already flattened to text, and the flattening keeps the meaning in spans: a link is a `URLSpan`, a heading is a `StyleSpan` with a `RelativeSizeSpan` beside it, a list item is a `BulletSpan`, a picture is an `ImageSpan`. Read without them, all of that is a wall of words in which a link is indistinguishable from the sentence around it and a picture is nothing at all. With **Read text styles** on -- it is on by default -- every styled stretch is announced as the thing it is, twice, around the words it covers: "link Shop end link", "bold hello end bold", "larger text Contents end larger text".
 
 What is announced, and the whole of it: bold, italic and bold italic; underline, strikethrough, superscript and subscript; links, from `URLSpan` or from any other `ClickableSpan`, because the two are the same thing to a listener and a page handling its own links carries the second kind; images, with whatever the page said they show, and without the placeholder character they stand on; monospace and other named fonts; larger and smaller text; the colour of coloured text by name; highlighted text, with the colour of the highlight; bullets; quotes; and centred and right-aligned text. What is deliberately not announced: black and white foreground colours, which are the default ink on one screen or another and would be noise on every stretch of every app that sets its colours, transparent colours, which colour nothing, and layout spans that say nothing about a word.
+
+Not every page arrives as spans. A browser extension, a feed reader, a message from a service and a great many accessibility bridges hand over the characters of the page's HTML instead, tags and entities and all, and stripping them would lose exactly the meaning the spans were carrying. So a second pass reads the markup itself while the tags are still there: `<b>` and `<strong>` are bold, `<i>` and `<em>` italic, `<h1>` to `<h6>` a heading, `<a>` a link, `<ul>` and `<li>` a bullet, `<blockquote>` a quote, `<code>` code, `<img alt="a red bicycle">` an image and what it shows; a `style` attribute is read for weight, slant, underline and line-through, a `color` attribute for the colour, and `&amp;` and `&#39;` are decoded rather than spelled. Markdown, which is what a great many messages are written in, is read the same way: `**bold**`, `*italic*` and `~~struck~~` where the markers pair up, and `#`/`>`/`-` at the start of a line for a heading, a quote and a bullet. A `*` that multiplies is left alone, `a_b_c` is left alone, and a script or a stylesheet is skipped whole rather than read as words. The pass answers the original string when the text carries no markup at all, which is every utterance a person typed.
 
 A page also carries characters that are not words. A zero-width space wherever the markup allowed a line break, a soft hyphen wherever a word could be split, a byte-order mark at the front, an object replacement character where an image was, and the several spaces that are not the space bar: a voice given those says a pause, or nothing, or the word "space", any of which is a wrong word in the middle of a sentence. They are taken out in one scan before anything else reads the text, and the scan only runs when one of them is there at all -- which is never for text a person typed and often for text a page was.
 
@@ -259,9 +317,11 @@ Long text is handed to the engine in pieces, because the engine cannot abandon a
 
 The pieces are a sequence now, and a piece is rewritten when the utterance reaches it. The first syllable is one piece of work behind the request rather than one document behind it, and a piece is a couple of hundred characters whatever the document it came out of is. `StreamingPipelineTest` holds both halves of the claim: that the pieces are the same pieces in the same order saying the same thing, and that asking for the first two of them costs two of them rather than all of them.
 
-Below ten thousand characters -- a couple of pages -- the single pass is still taken. It is cheaper there than the per-piece calls, and it cuts the rewritten text rather than the caller's, which is the better of the two: the pipeline can move a character, and a cut made before it runs is a cut made against text that is about to change.
+Below two thousand characters -- a screen or two -- the single pass is still taken. It is cheaper there than the per-piece calls, and it cuts the rewritten text rather than the caller's, which is the better of the two: the pipeline can move a character, and a cut made before it runs is a cut made against text that is about to change.
 
-The pieces are prepared one ahead of the speech, on a thread of its own (`evv-text`), rather than on the framework's synthesis thread between two pieces. There are three properties and each is a delay that is not paid. The next piece is ready while the piece before it is still being spoken, so the engine is never idle waiting for text that is ready a millisecond later than it is needed. One piece at a time and no further, so a chapter is not cut and rewritten in full behind somebody who is about to swipe away its first sentence. And a stop cancels the work where it stands -- a flag, an interrupt, and the prepared text dropped -- so a stopped utterance leaves no thread grinding through the rest of the document that the next utterance would have been waiting behind. Interrupting and synthesising are two threads doing their own work at the same time, and the only thing that orders them is the flag they both watch.
+A line is not prepared on a thread at all. Almost everything a screen reader says is a line -- "screen locked", "charging, 42 percent", "message from Sam" -- and handing a dozen words to a thread and waking back for them costs two context switches and a condition variable, which is small in absolute terms and is paid in front of the first syllable of every single thing said. Below three hundred and twenty characters the whole of the text is rewritten and cut right there, on the synthesis thread, and the engine starts with no hand-off at all; the work is a pass over a few dozen characters and is cheaper than the wake-up it replaces. Cancelling it is a flag and a clear, because nothing was ever handed to another thread.
+
+A document is prepared on a thread of its own (`evv-text`), a piece or two ahead of the speech, rather than on the framework's synthesis thread between two pieces. There are three properties and each is a delay that is not paid. The next piece is ready while the piece before it is still being spoken, so the engine is never idle waiting for text that is ready a millisecond later than it is needed. Two pieces are kept ready and no more, so a chapter is not cut and rewritten in full behind somebody who is about to swipe away its first sentence, and the wait for a piece is bounded rather than for ever: a text thread that has died is a finished utterance, not a service that hangs. And a stop cancels the work where it stands -- a flag, an interrupt, and the prepared text dropped -- so a stopped utterance leaves no thread grinding through the rest of the document that the next utterance would have been waiting behind. Interrupting and synthesising are two threads doing their own work at the same time, and the only thing that orders them is the flag they both watch.
 
 ## The user dictionary
 
@@ -289,6 +349,10 @@ The engine is not slow. A host build of the same C the app ships, on the same si
 
 **Everything before the first syllable was done on every utterance.** The text used to be copied through a chain of five passes that each built new strings, the pronunciation dictionary was re-taught per utterance, and the settings were compared field by field. Now the emoji, symbol, fix-up, dictionary and code-set passes each make one scan of the characters and each answer with the original string when they have nothing to change; `WesternText` keeps a table that says whether a character needs work at all, so ordinary English is a copy rather than a lookup per character; a dictionary is reread when its revision has moved and not otherwise; and the settings carry a revision that goes up on any write, so an unchanged configuration is one integer comparison. What the reader waits for is the first frame of audio, which is 12 ms of this engine's time on a desktop build and is the only number in the whole utterance that cannot be shared out over the rest of it.
 
+**A line paid for a thread it did not need.** Almost every utterance a screen reader makes is a line, and the pipeline ran on a worker thread for all of them: two context switches and a condition variable in front of the first syllable of every item in a list. Below three hundred and twenty characters the text is now prepared on the synthesis thread itself, in the same pass, and the engine starts with no hand-off at all; only a document goes to the worker. Cancelling a line is a flag and a clear rather than an interrupt.
+
+**The buffer the framework was filled from was shared.** It was kept on the service across utterances to save an allocation, which is fine for one speaker and wrong for two: the framework speaks one utterance at a time from one client, but a screen reader and an app's own speech are two threads, and a shared buffer is two threads writing each other's audio. It is owned by the utterance now. Four kilobytes an utterance is nothing against a sentence said twice.
+
 The engine is also kept between utterances rather than made and thrown away each time -- it is never given back, because making a fresh one costs a second or so before the next first syllable; and one read takes everything the engine has written rather than everything a caller happened to ask for, so a 2048-sample frame crosses the boundary between the two threads in one go whatever the size of the buffer the framework offered.
 
 Two more that were found while the "while speaking" section was taken out, because slowness between elements is interruption latency rather than synthesis speed and every utterance runs on the framework's one synthesis thread. **The waits a stop has to land in were slept out.** A swipe that arrived mid-slice waited out the rest of it before the next element could start. The wait is woken the moment silence is asked for, so the next first syllable is delayed only by however long the engine takes to drop what it was making. **Long text ran four seconds ahead of the speech.** That queued seconds of audio nobody had heard yet and the next swipe threw all of it away, which is the failure the lead exists to prevent -- so every message is paced to the same three hundred milliseconds now, long or short.
@@ -310,7 +374,7 @@ adb -s SERIAL shell getprop ro.product.cpu.abilist
 ## Layout
 
 ```
-native/openevv          the engine, a submodule, untouched
+native/openevv          the engine, vendored source at a recorded commit
 native/patches          the one runtime hookup the front end needs
 native/android.mk       two make targets openevv has no reason to carry
 native/build-native.sh  cross-compiles the engine, links libevvjni.so
@@ -329,7 +393,7 @@ Everything links into one shared object, `libevvjni.so`. Android only packages f
 
 MIT for the Kotlin, the C bridge, the build and the tests. See LICENSE.
 
-Not the engine. openevv is MIT under its own copyright and is fetched from upstream, not copied here.
+Not the engine. openevv is MIT under its own copyright. It is vendored in `native/openevv` at the commit in `native/openevv/VENDORED.md`, with its own `LICENSE` and `NOTICE` beside it.
 
 Not the language data openevv carries. That is transcribed from IBM's Embedded ViaVoice objects and is IBM's. `native/openevv/NOTICE` says what it is and whose it is.
 

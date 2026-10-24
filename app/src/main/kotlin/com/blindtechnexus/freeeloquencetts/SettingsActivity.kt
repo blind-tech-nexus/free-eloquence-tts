@@ -23,7 +23,7 @@ import androidx.compose.ui.res.stringResource
 
 /** Which of the screens is up. */
 internal enum class Destination {
-	WELCOME, MAIN, SETTINGS, ABOUT, DICTIONARY, DICTIONARY_FILE, ABBREVIATIONS, BATTERY, AUDIO
+	WELCOME, MAIN, SETTINGS, ABOUT, DICTIONARY, DICTIONARY_FILE, ABBREVIATIONS, BATTERY, AUDIO, ROUTING
 }
 
 /**
@@ -33,7 +33,7 @@ internal enum class Destination {
  * activity of its own and a lot that suffers from having one: a screen reader
  * announces the departure and the arrival of every activity, an engine preview
  * opened for the settings screen would be closed and reopened by a trip to the
- * about screen, and a back stack of four activities is four things to be
+ * about screen, and a back stack of ten activities is ten things to be
  * somewhere inside when the phone answers. So the screens are a state and the
  * back key moves it.
  *
@@ -143,6 +143,7 @@ class SettingsActivity : ComponentActivity() {
 							},
 							onAbout = { destination = Destination.ABOUT },
 							onAudio = { destination = Destination.AUDIO },
+							onRouting = { destination = Destination.ROUTING },
 							onWelcome = {
 								welcomeRevisited = true
 								destination = Destination.WELCOME
@@ -153,7 +154,8 @@ class SettingsActivity : ComponentActivity() {
 							onBack = ::back,
 							onOpenDictionary = { destination = Destination.DICTIONARY },
 							onOpenAbbreviations = { destination = Destination.ABBREVIATIONS },
-							onOpenBattery = { destination = Destination.BATTERY }
+							onOpenBattery = { destination = Destination.BATTERY },
+							onOpenRouting = { destination = Destination.ROUTING }
 						)
 						Destination.DICTIONARY -> DictionaryScreen(
 							onBack = ::back,
@@ -174,6 +176,7 @@ class SettingsActivity : ComponentActivity() {
 						)
 						Destination.ABOUT -> AboutScreen(onBack = ::back)
 						Destination.AUDIO -> AudioGeneratorScreen(onBack = ::back)
+						Destination.ROUTING -> AudioRoutingScreen(onBack = ::back)
 					}
 					// Not over the welcome screen, which has a job of its own
 					// to finish first, and one at a time: two dialogs up at

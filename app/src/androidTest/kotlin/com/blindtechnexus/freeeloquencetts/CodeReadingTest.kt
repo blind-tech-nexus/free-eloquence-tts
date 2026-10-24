@@ -77,6 +77,21 @@ class CodeReadingTest {
 			"url example dot com slash a slash b",
 			say("https://www.example.com/a/b", urls = true, operators = true)
 		)
+		// The full stop of the sentence around an address is the sentence's
+		// and not the address's: it used to be named, and "See
+		// https://example.com." came out "url example dot com dot".
+		assertEquals(
+			"See url example dot com.",
+			say("See https://example.com.", urls = true, operators = true, braces = true)
+		)
+		assertEquals(
+			"email user at example dot com",
+			say("mailto:user@example.com", urls = true, operators = true)
+		)
+		assertEquals(
+			"url example dot com",
+			say("www.example.com", urls = true)
+		)
 	}
 
 	@Test

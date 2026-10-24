@@ -28,7 +28,7 @@
 	<string name="welcome_codes">Numbers and one-time codes</string>
 	<string name="welcome_codes_description">Long numbers can be read a digit, a pair or a triplet at a time, and a verification code in a message is read a digit at a time on its own — 4 9 2 8 0 1, never four hundred and ninety-two thousand.</string>
 	<string name="welcome_routing">Sound where you want it</string>
-	<string name="welcome_routing_description">By default every app plays its speech on the channel it chose. Synthesis routing can send everything to the accessibility channel, the media channel, or both.</string>
+	<string name="welcome_routing_description">By default every app plays its speech on the channel it chose. Audio routing can send everything to the accessibility channel, media and music, alarms, notifications, navigation, or any other audio route on the phone.</string>
 	<string name="welcome_continue">Get started</string>
 	<string name="welcome_back_to_main">Back to the main screen</string>
 
@@ -42,6 +42,8 @@
 	<string name="main_about_action">About</string>
 	<string name="main_audio_description">Type text and save it as an audio file spoken in your voice.</string>
 	<string name="main_audio_action">Audio generator</string>
+	<string name="main_routing_description">Choose where the speech is heard: the accessibility channel, media and music, alarms, or another audio route.</string>
+	<string name="main_routing_action">Audio routing</string>
 	<string name="main_welcome_description">Read again what this app does and what it offers.</string>
 	<string name="main_welcome_action">View welcome screen</string>
 	<string name="main_system_unavailable">Cannot open system TTS settings on this device.</string>
@@ -108,16 +110,38 @@
 	<string name="audio_optimization_quality_description">The cleanest sound this voice has.</string>
 	<string name="sample_rate_label">Sample rate</string>
 	<string name="sample_rate_description">Higher is clearer but uses more battery. The engine makes its speech at 11,025 hertz and raises it to the rate chosen here.</string>
-	<string name="routing_label">Synthesis routing</string>
-	<string name="routing_description">Where the sound goes: the channel each app asks for, or one channel of your choosing for everything.</string>
-	<string name="routing_automatic">Automatic</string>
+	<string name="routing_label">Audio routing</string>
+	<string name="routing_description">Where the speech goes: the channel each app asks for, or one channel of your choosing for everything.</string>
+	<string name="routing_open_description">Where the speech is heard. Now: %1$s.</string>
+	<string name="routing_screen_title">Audio routing</string>
+	<string name="routing_screen_description">Choose the channel Eloquence speaks on. Default lets each app play its own speech on the channel it chose. Every other choice makes this app play the speech itself on the channel you pick, which is what to use when the app\'s own channel is muted, ducked, or going to the wrong speaker.</string>
+	<string name="routing_screen_note">A route applies from the next thing spoken. An app that asks for speech as a file gets a silent one while a route is chosen, because a request to play and a request to write a file arrive here the same way.</string>
+	<string name="routing_automatic">Default</string>
 	<string name="routing_accessibility">Accessibility</string>
-	<string name="routing_media">Media</string>
-	<string name="routing_all">All</string>
-	<string name="routing_automatic_description">Automatic: each app plays its own speech on the channel it chose, as every speech engine does. Recommended.</string>
-	<string name="routing_accessibility_description">Accessibility: this app plays every utterance itself on the accessibility channel, whatever the asking app chose. An app that asks for speech as a file gets a silent one.</string>
-	<string name="routing_media_description">Media: this app plays every utterance itself on the media channel, whatever the asking app chose. An app that asks for speech as a file gets a silent one.</string>
-	<string name="routing_all_description">All: this app plays every utterance on the accessibility channel and the asking app plays it on its own channel too.</string>
+	<string name="routing_media">Media and music</string>
+	<string name="routing_alarms">Alarms</string>
+	<string name="routing_notification">Notifications</string>
+	<string name="routing_notification_event">Notification events</string>
+	<string name="routing_ringtone">Ringtone</string>
+	<string name="routing_navigation">Navigation</string>
+	<string name="routing_sonification">System sounds</string>
+	<string name="routing_voice_communication">Voice communication</string>
+	<string name="routing_game">Game</string>
+	<string name="routing_assistant">Assistant</string>
+	<string name="routing_all">Accessibility and the app</string>
+	<string name="routing_automatic_description">Default: each app plays its own speech on the channel it chose, as every speech engine does. Recommended, and the only route that can also write a file.</string>
+	<string name="routing_accessibility_description">Accessibility: this app plays every utterance on the screen-reader channel, whatever the asking app chose. Other audio is ducked for it, and it is the channel most hearing aids and screen-reader setups carry.</string>
+	<string name="routing_media_description">Media and music: this app plays every utterance on the music channel. The right choice for a car stereo or a speaker that only carries media.</string>
+	<string name="routing_alarms_description">Alarms: this app plays every utterance on the alarm channel, which is full volume and usually sounds through silent mode.</string>
+	<string name="routing_notification_description">Notifications: this app plays every utterance on the notification channel.</string>
+	<string name="routing_notification_event_description">Notification events: the channel Android uses for notification sounds such as a message arriving.</string>
+	<string name="routing_ringtone_description">Ringtone: the incoming-call channel.</string>
+	<string name="routing_navigation_description">Navigation: the turn-by-turn guidance channel, which other audio treats the way it treats spoken directions.</string>
+	<string name="routing_sonification_description">System sounds: the channel for short interface sounds. Speech on it is treated as a system effect by other apps.</string>
+	<string name="routing_voice_communication_description">Voice communication: the call channel, which is processed for speech during a call.</string>
+	<string name="routing_game_description">Game: the channel games use, for setups that keep it separate.</string>
+	<string name="routing_assistant_description">Assistant: the assistant channel on Android 8 and later, so an assistant and its answers share a route.</string>
+	<string name="routing_all_description">Accessibility and the app: this app plays every utterance on the accessibility channel and the asking app plays it on its own channel too, for the setup where one channel reaches one ear and the other the other.</string>
 
 	<string name="section_dictionaries">Dictionary</string>
 	<string name="dictionaries_description">Add words the voice should say differently.</string>
@@ -196,7 +220,7 @@
 
 	<string name="section_text">Reading</string>
 	<string name="number_mode_label">Numbers</string>
-	<string name="number_mode_description">How a long number is spoken. Normal reads every number whole. The other three read a number of six or more digits a digit, a pair or a triplet at a time, from the left: 985256 becomes 9 8 5 2 5 6, 98 52 56 or 985 256. Shorter numbers, years, prices, decimals and numbers written with thousands separators are always read whole.</string>
+	<string name="number_mode_description">How a long number is spoken. Normal reads every number whole. The other three read a number of four or more digits a digit, a pair or a triplet at a time, grouped from the right so the first group is the short one: 985256 becomes 9 8 5 2 5 6, 98 52 56 or 985 256, and 1234567 in pairs becomes 1 23 45 67. Numbers of three digits or fewer, decimals and numbers written with thousands separators are always read whole.</string>
 	<string name="otp_label">Read one-time codes digit by digit</string>
 	<string name="otp_description">A verification code in a message — \"your code is 492801\" — is read 4 9 2 8 0 1, whatever the number mode. The code is found from the words around it, in English, German, Spanish, French and Italian; years, prices, order numbers and telephone numbers are left alone.</string>
 	<string name="number_as_is">Normal</string>
@@ -327,7 +351,7 @@
 	<string name="symbol_mode_none">None</string>
 	<string name="symbol_all_description">All symbols spoken, including . and ,</string>
 	<string name="symbol_most_description">Brackets, quotes, ? ! etc spoken.</string>
-	<string name="symbol_some_description">Money and math symbols spoken. Lone symbols named.</string>
+	<string name="symbol_some_description">Money and math symbols spoken. A lone comma is dropped rather than said.</string>
 	<string name="symbol_custom_description">Only your chosen symbols spoken.</string>
 	<string name="symbol_none_description">No symbols spoken.</string>
 	<string name="symbol_custom_hint">Symbols to speak</string>

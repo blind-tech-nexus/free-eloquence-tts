@@ -6,18 +6,30 @@ package com.blindtechnexus.freeeloquencetts
  * Modes:
  * - AS_IS: leave every number to the engine, which says "nine hundred
  *   eighty-five thousand two hundred fifty-six" for 985256.
- * - DIGITS: a long run one digit at a time -- 985256 is "9 8 5 2 5 6".
- * - PAIRS: a long run two at a time from the left -- 985256 is "98 52 56".
- * - TRIPLETS: a long run three at a time -- 985256 is "985 256".
+ * - DIGITS: a number one digit at a time -- 985256 is "9 8 5 2 5 6".
+ * - PAIRS: a number two at a time from the right -- 985256 is "98 52 56"
+ *   and 1234567 is "1 23 45 67".
+ * - TRIPLETS: a number three at a time from the right -- 985256 is
+ *   "985 256" and 1234567 is "1 234 567".
+ *
+ * These are the number-processing choices every Eloquence front end has had
+ * since the DOS days, and the ones ETI's own documentation, Vocalizer and
+ * TalkBack's "number processing" proposal all describe: a long number is
+ * spoken in the chunks a person reads it in, and the grouping is reckoned
+ * from the **right** so that the leading chunk is the short one. "123" as
+ * pairs is "1 23" -- "one twenty-three" -- and not "12 3"; a reader who
+ * hears the tail of a phone number or a year in the wrong grouping has to
+ * reassemble it in their head.
  *
  * The rules, which are the same in every mode but AS_IS and are meant to be
  * strong enough that nothing surprising ever happens to a number:
  *
- * 1. A run of fewer than [LONG_FROM] digits -- five or fewer -- is one
- *    number and is never broken up. Years, times, prices, PINs, page
- *    numbers, percentages and counts are all short, and "2026" read as
- *    "20 26" is a year nobody recognises. Only a run of six or more digits
- *    is ever regrouped, in any mode.
+ * 1. A run of fewer than [LONG_FROM] digits -- three or fewer -- is one
+ *    number and is never broken up. Times, prices, PINs, counts and page
+ *    numbers are short, and "301" read as "3 0 1" is a number nobody
+ *    recognises. From four digits on a number is long enough that a person
+ *    reading it aloud would chunk it: 2015 is "20 15", 985256 is "985 256".
+ *    Normal mode leaves all of them whole.
  *
  * 2. A number written with thousands separators is the number, whole.
  *    "1,000,000" and "10.000.000" (the continental spelling) are copied as
@@ -33,17 +45,28 @@ package com.blindtechnexus.freeeloquencetts
  *    sides of it; "Section 7.123456" is still a fraction, which is the
  *    safer wrong answer.
  *
- * 4. Otherwise a long run is grouped from the left, telephone style, so an
- *    odd length keeps its short group at the end: "1234567" in pairs is
- *    "12 34 56 7" and in triplets "123 456 7". A group that opens with a
- *    zero is said a digit at a time, so the zero is heard: "0412" in pairs
- *    is "0 4 12" rather than "four twelve".
+ * 4. Otherwise a long run is grouped from the right. An odd length
+ *    therefore keeps its short group at the start: "1234567" in pairs is
+ *    "1 23 45 67" and in triplets "1 234 567". This is the rule the
+ *    engines themselves use, and the one that keeps the last group -- the
+ *    part a listener holds on to -- a whole group. A group that opens with
+ *    a zero is said a digit at a time, so the zero is heard: "0412" in
+ *    pairs is "0 4 12" rather than "four twelve", and a leading group of
+ *    one digit is just that digit.
  *
  * 5. A plus before digits is the dialling kind and is kept with a space
  *    after it ("+911" stays callable), punctuation of every other kind
  *    splits runs ("12:34" is two runs), and only the ten ASCII digits are
  *    touched. Everything that is not a run of digits comes through exactly
  *    as it was written.
+ *
+ * 6. A run of digits that is part of a word is a name and not a quantity,
+ *    and is left whole as well: "mp3", "utf8" and "sha256" are words. The
+ *    engine reads the digits in them as digits already, and spacing them
+ *    out would turn the name into a spelling lesson. A dash or a dot
+ *    between letters and digits does not make a word -- "COVID-19" is a
+ *    name, and is left whole -- but the rule is the plain one: directly
+ *    touching a letter means the run is part of a word.
  *
  * The whole thing is one pass over the text with no regular expressions, so
  * a page of text costs what copying it costs, and a text with nothing to do
@@ -59,8 +82,10 @@ object Numbers {
 	val MODES = listOf(AS_IS, DIGITS, PAIRS, TRIPLETS)
 
 	/** A run this long or longer is regrouped; anything shorter is one
-	 *  number, in every mode but AS_IS. */
-	const val LONG_FROM = 6
+	 *  number, in every mode but AS_IS. Four: three digits are a quantity
+	 *  in every language ("301", "112"), and four are a year, a PIN or the
+	 *  start of something longer. */
+	const val LONG_FROM = 4
 
 	/** A mode outside the list is the default, so a preference written by
 	 *  another build is a behaviour and not a crash. */
@@ -113,6 +138,12 @@ object Numbers {
 			}
 			var j = i
 			while (j < n && text[j].isAsciiDigit()) j++
+			// Rule 6: a run that touches a letter is part of a name.
+			if (touchesLetter(text, i, j)) {
+				out.append(text, i, j)
+				i = j
+				continue
+			}
 			// Rule 2: a number written with thousands separators is the
 			// number, whole, however long it is.
 			val separated = scanSeparators(text, j)
@@ -134,9 +165,19 @@ object Numbers {
 		return if (changed) out.toString() else text
 	}
 
+	/** Whether the run `[from, to)` is joined to a letter on either side.
+	 *  A letter directly before or after the digits is a name with a number
+	 *  in it -- mp3, utf8, sha256 -- rather than a quantity. */
+	private fun touchesLetter(text: String, from: Int, to: Int): Boolean {
+		if (from > 0 && text[from - 1].isLetter()) return true
+		return to < text.length && text[to].isLetter()
+	}
+
 	/** Whether [text] holds anything this pass would change: a run of
 	 *  [LONG_FROM] digits, or a plus in front of a digit. One scan, no
-	 *  allocation. */
+	 *  allocation. Letters break the run as well, because a name is not a
+	 *  number; that makes the scan say no for "sha256" without a second
+	 *  pass over it. */
 	private fun hasWork(text: String): Boolean {
 		var run = 0
 		val n = text.length
@@ -145,7 +186,10 @@ object Numbers {
 			val c = text[i]
 			if (c.isAsciiDigit()) {
 				run++
-				if (run >= LONG_FROM) return true
+				if (run >= LONG_FROM && !touchesLetter(text, i - run + 1, i + 1)) {
+					// A long run is only work if it is not part of a word.
+					return true
+				}
 			} else {
 				run = 0
 				if (c == '+' && i + 1 < n && text[i + 1].isAsciiDigit()) return true
@@ -215,6 +259,12 @@ object Numbers {
 	 * One digit run grouped for [mode], appended to [out]. Answers whether
 	 * anything but the run itself went in, so a text with nothing to do --
 	 * which is most text -- comes back as the string it was.
+	 *
+	 * Groups are reckoned from the right, so the leading group is the short
+	 * one when the length does not divide evenly. Nothing is allocated
+	 * between the first digit and the last: the groups are positions in the
+	 * source, which is what makes this cost a copy rather than a list of
+	 * pieces.
 	 */
 	private fun groupRun(text: String, start: Int, end: Int, mode: Int, out: StringBuilder): Boolean {
 		val length = end - start
@@ -230,25 +280,26 @@ object Numbers {
 			}
 			return true
 		}
-		// Rule 4: groups from the left, and the short group at the end.
 		val group = groupSize(mode)
+		// The first group takes what is left over when the rest are whole
+		// groups: 7 digits in pairs is 1 then 23 45 67, never 12 34 56 7.
+		val first = if (length % group == 0) group else length % group
 		var p = start
-		var first = true
+		var size = first
+		var firstGroup = true
 		while (p < end) {
-			val size = minOf(group, end - p)
-			if (!first) out.append(' ')
-			first = false
+			if (!firstGroup) out.append(' ')
+			firstGroup = false
 			if (size > 1 && text[p] == '0') {
 				// A group that opens with a zero is said a digit at a
 				// time, so the zero is heard rather than swallowed.
 				out.append(text[p])
-				for (k in p + 1 until p + size) {
-					out.append(' ').append(text[k])
-				}
+				for (k in p + 1 until p + size) out.append(' ').append(text[k])
 			} else {
 				out.append(text, p, p + size)
 			}
 			p += size
+			size = group
 		}
 		return true
 	}

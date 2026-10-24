@@ -133,6 +133,23 @@ object CodeReading {
 		'`' to "backtick"
 	).toMap()
 
+	/** The operators a character can begin, so the scan below looks at one
+	 *  short list rather than at all thirty-odd of them for every character
+	 *  of every article. The lists keep the order of [OPERATORS], which is
+	 *  longest first, so "===" is still met before "==". */
+	private val OPERATORS_BY_FIRST: Map<Char, MutableList<Pair<String, String>>> = buildMap {
+		for (operator in OPERATORS) {
+			val first = operator.first[0]
+			getOrPut(first) { ArrayList(4) }.add(operator)
+		}
+	}
+
+	/** The characters that can start an operator, for the one scan that says
+	 *  whether the pass has anything to do at all. */
+	private val OPERATOR_STARTS: BooleanArray = BooleanArray(0x10000).apply {
+		for (operator in OPERATORS) this[operator.first[0].code] = true
+	}
+
 	/** [text] with the parts of it [options] asks for turned into words. */
 	fun apply(text: String, options: Options): String {
 		if (text.isEmpty() || options.none) return text
@@ -145,71 +162,255 @@ object CodeReading {
 		return out
 	}
 
-	// ---- addresses -------------------------------------------------------
-
 	/**
-	 * `https://www.example.com/a/b` as "url example dot com /a/b".
+	 * A web address said as an address: `https://www.example.com/a/b` as
+	 * "url example dot com slash a slash b", `user@example.com` as
+	 * "email user at example dot com", and `example.com` on its own as
+	 * "url example dot com".
 	 *
-	 * The scheme is a name and the dots in a host are not sentence ends, and
-	 * those are the two things the engine gets wrong about an address: it
-	 * spells "https" as a word and pauses at every dot as though the sentence
-	 * had ended five times. What is left alone is everything after the host,
-	 * which is a path and a query, and the pass below this one names the marks
-	 * in it -- so the address is not turned into one long phrase here, it is
-	 * turned into the two parts that want different treatment.
+	 * The scheme is a name and the dots in a host are not sentence ends,
+	 * and those are the two things the engine gets wrong about an address:
+	 * it spells "https" as a word and pauses at every dot as though the
+	 * sentence had ended five times. What is left alone is everything after
+	 * the host, which is a path and a query, and the pass below names the
+	 * marks in it -- so the address is not turned into one long phrase
+	 * here, it is turned into the parts that want different treatment.
+	 *
+	 * A bare host is recognised too, with or without `www.`, and an email
+	 * address with it. Before this, an address only counted when it carried
+	 * a scheme, so the commonest way a page writes one -- "visit
+	 * example.com" -- was read as a sentence that ended at "example" and
+	 * then a second one that began with "com". A token has to end in a
+	 * top-level domain to be a host, so "3.14", "notes.txt" and "e.g." are
+	 * not addresses and are left exactly as they are.
 	 */
 	private fun urls(text: String): String {
-		if (text.indexOf("://") < 0) return text
-		val out = StringBuilder(text.length + 32)
+		if (text.isEmpty()) return text
+		val n = text.length
+		var out: StringBuilder? = null
 		var at = 0
-		var changed = false
-		while (at < text.length) {
-			val end = schemeEnd(text, at)
-			if (end < 0) {
-				out.append(text[at])
+		while (at < n) {
+			if (!isUrlStart(text, at)) {
+				out?.append(text[at])
 				at++
 				continue
 			}
-			changed = true
-			out.append("url ")
+			val end = urlEnd(text, at)
+			if (end <= at || !looksLikeAddress(text, at, end)) {
+				out?.append(text[at])
+				at++
+				continue
+			}
+			if (out == null) out = StringBuilder(n + 64).append(text, 0, at)
+			sayAddress(text, at, end, out)
 			at = end
-			// The host runs to the first mark that is not part of a name.
-			val hostEnd = hostEnd(text, at)
-			var host = text.substring(at, hostEnd)
-			at = hostEnd
-			if (host.startsWith("www.")) host = host.substring(4)
-			for (c in host) {
-				if (c == '.') out.append(" dot ") else out.append(c)
+		}
+		if (out == null) return text
+		return settled(text, out.toString())
+	}
+
+	/** Whether [at] could open an address: a word start, and a scheme, a
+	 *  www, an at sign or a dot somewhere ahead of it. Wide on purpose;
+	 *  [looksLikeAddress] is the narrow half. */
+	private fun isUrlStart(text: String, at: Int): Boolean {
+		if (at > 0) {
+			val before = text[at - 1]
+			if (before.isLetterOrDigit() || before == '.' || before == '-' || before == '_' ||
+				before == '/' || before == '@' || before == ':'
+			) {
+				return false
 			}
 		}
-		return if (changed) settled(text, out.toString()) else text
+		val c = text[at]
+		if (c == '@') return false
+		return c.isLetterOrDigit() || c == '_'
 	}
 
-	/** Just past the "://" of a scheme starting at [at], or -1. A scheme is
-	 *  letters, digits, plus, minus and dot, and has to be at the start of a
-	 *  word: "a://b" in the middle of prose is not an address, and neither is
-	 *  the "//" a comment starts with. */
-	private fun schemeEnd(text: String, at: Int): Int {
-		if (at > 0 && isIdentifierChar(text[at - 1])) return -1
-		var j = at
-		while (j < text.length && (text[j].isLetterOrDigit() || text[j] == '+' ||
-				text[j] == '-' || text[j] == '.')
-		) j++
-		if (j == at || j > at + 12) return -1
-		if (j + 2 < text.length && text[j] == ':' && text[j + 1] == '/' && text[j + 2] == '/') {
-			return j + 3
+	/** Where the run that starts at [at] ends: the first character a URL
+	 *  cannot contain, with the sentence punctuation that follows an
+	 *  address trimmed from the end so "example.com." keeps its full stop
+	 *  as prose. */
+	private fun urlEnd(text: String, at: Int): Int {
+		var end = at
+		val n = text.length
+		while (end < n) {
+			val c = text[end]
+			if (c.isWhitespace() || c == '"' || c == '\'' || c == '<' || c == '>' || c == '`') break
+			end++
 		}
-		return -1
+		var opens = 0
+		var closes = 0
+		var squares = 0
+		var squareCloses = 0
+		for (i in at until end) {
+			when (text[i]) {
+				'(' -> opens++
+				')' -> closes++
+				'[' -> squares++
+				']' -> squareCloses++
+			}
+		}
+		while (end > at) {
+			when (text[end - 1]) {
+				'.', ',', ';', ':', '!', '?', '}' -> end--
+				')' -> if (closes > opens) { end--; closes-- } else return end
+				']' -> if (squareCloses > squares) { end--; squareCloses-- } else return end
+				else -> return end
+			}
+		}
+		return end
 	}
 
-	/** Where a host stops: the first character that cannot be in a name. */
-	private fun hostEnd(text: String, from: Int): Int {
-		var j = from
-		while (j < text.length) {
-			val c = text[j]
-			if (c.isLetterOrDigit() || c == '.' || c == '-' || c == '_') j++ else break
+	/** Whether `[from, to)` is an address rather than a word with a dot in
+	 *  it: a scheme, a mail address, or a host whose last label is a
+	 *  top-level domain this list knows. */
+	private fun looksLikeAddress(text: String, from: Int, to: Int): Boolean {
+		if (hasScheme(text, from, to)) return true
+		val token = text.substring(from, to)
+		val at = token.indexOf('@')
+		if (at > 0 && at == token.lastIndexOf('@')) {
+			val local = token.substring(0, at)
+			val host = token.substring(at + 1)
+			return local.isNotEmpty() && host.isNotEmpty() && hasTopLevelDomain(host)
 		}
-		return j
+		if (!token.contains('.')) return false
+		val host = token.substringBefore('/').substringBefore('?').substringBefore('#')
+		return hasTopLevelDomain(host)
+	}
+
+	/** Whether the token opens with a scheme -- `https://`, `ftp://`,
+	 *  `mailto:` -- or with `www.`. */
+	private fun hasScheme(text: String, from: Int, to: Int): Boolean {
+		val colon = text.indexOf(':', from)
+		if (colon in (from + 1) until to) {
+			var valid = true
+			for (i in from until colon) {
+				val c = text[i]
+				if (!(c.isLetterOrDigit() || c == '+' || c == '-' || c == '.')) {
+					valid = false
+					break
+				}
+			}
+			if (valid) {
+				val after = colon + 1
+				if (after + 1 < to && text[after] == '/' && text[after + 1] == '/') return true
+				if (text.regionMatches(from, "mailto", 0, 6, ignoreCase = true) && colon >= from + 6) return true
+			}
+		}
+		return to - from > 4 && text.regionMatches(from, "www.", 0, 4, ignoreCase = true)
+	}
+
+	/** Whether the host's last label is one of the top-level domains a
+	 *  reader will meet. A number is never one, so a version or a decimal
+	 *  is not a host. */
+	private fun hasTopLevelDomain(host: String): Boolean {
+		val dot = host.lastIndexOf('.')
+		if (dot <= 0 || dot + 1 >= host.length) return false
+		val tld = host.substring(dot + 1).lowercase()
+		if (tld.length < 2 || tld.length > 24) return false
+		if (tld.all { it.isDigit() }) return false
+		return tld in TOP_LEVEL_DOMAINS
+	}
+
+	/** Appends what an address at `[from, to)` sounds like. */
+	private fun sayAddress(text: String, from: Int, to: Int, out: StringBuilder) {
+		var at = from
+		// A mail address is not a URL and saying "url" in front of it is a
+		// lie about what it is.
+		val mail = text.indexOf('@', at)
+		if (mail in (at + 1) until to && !hasScheme(text, at, to)) {
+			out.append("email ")
+			for (i in at until to) {
+				when (text[i]) {
+					'@' -> out.append(" at ")
+					'.' -> out.append(" dot ")
+					'_' -> out.append(" underscore ")
+					'-' -> out.append(" dash ")
+					else -> out.append(text[i])
+				}
+			}
+			out.append(' ')
+			return
+		}
+		if (text.regionMatches(at, "mailto:", 0, 7, ignoreCase = true)) {
+			out.append("email ")
+			at += 7
+		} else {
+			out.append("url ")
+			// Drop the scheme and the two slashes, if there are any. The
+			// word "url" has already said what they say.
+			val colon = text.indexOf(':', at)
+			if (colon in (at + 1) until to) {
+				var scheme = true
+				for (i in at until colon) {
+					if (!(text[i].isLetterOrDigit() || text[i] == '+' || text[i] == '-' || text[i] == '.')) {
+						scheme = false
+						break
+					}
+				}
+				if (scheme) {
+					at = colon + 1
+					while (at + 1 < to && text[at] == '/' && text[at + 1] == '/') at += 2
+				}
+			}
+		}
+		if (at < to && text.regionMatches(at, "www.", 0, 4, ignoreCase = true)) at += 4
+		// The host runs to the first mark that belongs to the path or the
+		// query rather than to the name. A port is not part of the name.
+		var hostEnd = at
+		while (hostEnd < to) {
+			val c = text[hostEnd]
+			if (c == '/' || c == '?' || c == '#' || c == ':') break
+			hostEnd++
+		}
+		for (i in at until hostEnd) {
+			when (text[i]) {
+				'.' -> out.append(" dot ")
+				'@' -> out.append(" at ")
+				else -> out.append(text[i])
+			}
+		}
+		if (hostEnd < to && text[hostEnd] == ':') {
+			var portEnd = hostEnd + 1
+			while (portEnd < to && text[portEnd].isDigit()) portEnd++
+			if (portEnd > hostEnd + 1) {
+				out.append(" port ")
+				out.append(text, hostEnd + 1, portEnd)
+				hostEnd = portEnd
+			}
+		}
+		// Everything after the host: a path, a query, a fragment. Each
+		// mark is said by name here rather than left to the operators
+		// pass, because a reader who wants addresses read does not
+		// necessarily have operators switched on.
+		for (i in hostEnd until to) {
+			when (text[i]) {
+				'/' -> out.append(" slash ")
+				'.' -> out.append(" dot ")
+				'_' -> out.append(" underscore ")
+				'-' -> out.append(" dash ")
+				'?' -> out.append(" question mark ")
+				'#' -> out.append(" hash ")
+				'=' -> out.append(" equals ")
+				'&' -> out.append(" and ")
+				':' -> out.append(" colon ")
+				'%' -> out.append(" percent ")
+				'+' -> out.append(" plus ")
+				'~' -> out.append(" tilde ")
+				else -> out.append(text[i])
+			}
+		}
+		// A space after the address only when something that wants one
+		// follows: a full stop belongs to the sentence, not to the
+		// address, and "example dot com ." is a stutter in the middle of
+		// one.
+		if (to >= text.length) return
+		val next = text[to]
+		if (next.isWhitespace() || next.isLetterOrDigit() || next == '"' || next == '\'' ||
+			next == '(' || next == '['
+		) {
+			out.append(' ')
+		}
 	}
 
 	/**
@@ -311,6 +512,20 @@ object CodeReading {
 		return extension
 	}
 
+	/** The top-level domains worth naming a host by. The list is long
+	 *  enough to cover what a web article links to and short enough that a
+	 *  file name with a dot is not mistaken for a site. */
+	private val TOP_LEVEL_DOMAINS = setOf(
+		"com", "org", "net", "edu", "gov", "mil", "int", "info", "biz", "name",
+		"io", "co", "dev", "app", "ai", "me", "tv", "cc", "xyz", "online", "site",
+		"tech", "store", "blog", "news", "live", "cloud", "page", "link", "wiki",
+		"uk", "us", "ca", "au", "nz", "ie", "de", "fr", "es", "it", "nl", "be",
+		"ch", "at", "se", "no", "dk", "fi", "pl", "pt", "gr", "cz", "ru", "ua",
+		"in", "np", "pk", "bd", "lk", "jp", "cn", "kr", "tw", "hk", "sg", "my",
+		"id", "ph", "th", "vn", "br", "mx", "ar", "cl", "za", "ng", "ke", "eg",
+		"il", "tr", "sa", "ae", "ir", "eu"
+	)
+
 	// ---- identifiers -----------------------------------------------------
 
 	/**
@@ -331,6 +546,16 @@ object CodeReading {
 	 * not taken apart at all, because taking it apart would spell it.
 	 */
 	private fun identifiers(text: String, options: Options): String {
+		// Prose with no underscore and no capital inside a word has nothing
+		// this pass could change, and most prose is that. One scan instead of
+		// a rebuild and a substring per word.
+		var interesting = false
+		for (i in text.indices) {
+			val c = text[i]
+			if (c == '_' && options.snakeCase) { interesting = true; break }
+			if (c.isUpperCase() && i > 0 && !text[i - 1].isWhitespace()) { interesting = true; break }
+		}
+		if (!interesting) return text
 		val out = StringBuilder(text.length + 32)
 		var changed = false
 		var at = 0
@@ -413,6 +638,11 @@ object CodeReading {
 	}
 
 	private fun operators(text: String): String {
+		var interesting = false
+		for (c in text) {
+			if (OPERATOR_STARTS[c.code]) { interesting = true; break }
+		}
+		if (!interesting) return text
 		val out = StringBuilder(text.length + 64)
 		var at = 0
 		var changed = false
@@ -431,10 +661,31 @@ object CodeReading {
 	}
 
 	private fun operatorAt(text: String, at: Int): Pair<String, String>? {
-		for ((token, name) in OPERATORS) {
-			if (text.startsWith(token, at)) return token to name
+		val candidates = OPERATORS_BY_FIRST[text[at]] ?: return null
+		for (candidate in candidates) {
+			if (!text.startsWith(candidate.first, at)) continue
+			// A full stop that ends a sentence is punctuation and not the
+			// dot of a member access, and naming it is what turned
+			// "See https://example.com." into "url example dot com dot".
+			// The test is the one a reader makes without thinking: a dot
+			// with something in front of it and nothing word-like behind
+			// it is the end of a sentence. Code -- "a.b", "x.()", "a.b." --
+			// still has its dots named, since everything after them but a
+			// space or the end of the text is a character to name.
+			if (candidate.first == "." && endsSentence(text, at)) continue
+			return candidate
 		}
 		return null
+	}
+
+	/** Whether the dot at [at] is the full stop of a sentence rather than
+	 *  part of a name. */
+	private fun endsSentence(text: String, at: Int): Boolean {
+		val after = at + 1
+		if (after < text.length && !text[after].isWhitespace()) return false
+		if (at == 0) return false
+		val before = text[at - 1]
+		return !before.isWhitespace()
 	}
 
 	private fun braces(text: String): String {
@@ -448,8 +699,12 @@ object CodeReading {
 		if (!relevant) return text
 		val out = StringBuilder(text.length + 64)
 		for (at in text.indices) {
-			val name = BRACES[text[at]]
-			if (name == null) out.append(text[at])
+			val c = text[at]
+			// A full stop at the end of a sentence is punctuation, not
+			// the dot of a name: naming it is what read "example.com."
+			// as "example dot com dot". See [endsSentence].
+			val name = if (c == '.' && endsSentence(text, at)) null else BRACES[c]
+			if (name == null) out.append(c)
 			else out.append(' ').append(name).append(' ')
 		}
 		return settled(text, out.toString())
@@ -467,14 +722,31 @@ object CodeReading {
 	 * Hence the rule is put back what was there rather than trim.
 	 */
 	private fun settled(source: String, built: String): String {
-		var out = COLLAPSE.replace(built, " ")
-		if (out.startsWith(" ") && source.isNotEmpty() && !source[0].isWhitespace()) {
-			out = out.substring(1)
+		// Runs of spaces down to one, in one pass and with no regular
+		// expression. The leading space is kept only when the source had
+		// one, because the indentation pass reads it; the trailing one only
+		// when the source ended in whitespace, for the same reason.
+		val out = StringBuilder(built.length)
+		var i = 0
+		val n = built.length
+		while (i < n && built[i] == ' ') i++
+		if (i > 0 && source.isNotEmpty() && source[0].isWhitespace()) out.append(' ')
+		while (i < n) {
+			val c = built[i]
+			if (c == ' ') {
+				while (i < n && built[i] == ' ') i++
+				if (i < n) out.append(' ')
+				continue
+			}
+			out.append(c)
+			i++
 		}
-		if (out.endsWith(" ") && source.isNotEmpty() && !source[source.length - 1].isWhitespace()) {
-			out = out.dropLast(1)
+		if (out.isNotEmpty() && out[out.length - 1] == ' ' &&
+			(source.isEmpty() || !source[source.length - 1].isWhitespace())
+		) {
+			out.setLength(out.length - 1)
 		}
-		return out
+		return out.toString()
 	}
 
 	// ---- how far in a line the code is -----------------------------------
@@ -536,6 +808,4 @@ object CodeReading {
 
 	private fun isIdentifierChar(c: Char): Boolean = c.isLetterOrDigit() || c == '_'
 
-	/** The runs of spaces the replacements above leave behind. */
-	private val COLLAPSE = Regex(" {2,}")
 }

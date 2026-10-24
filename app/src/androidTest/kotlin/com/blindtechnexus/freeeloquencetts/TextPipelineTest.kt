@@ -45,6 +45,42 @@ class TextPipelineTest {
 		)
 	}
 
+	/** A page's markup is read before the SSML pass can take it away, which
+	 *  is what makes "read text styles" work on an article a browser handed
+	 *  over as characters rather than as spans. */
+	@Test
+	fun theMarkupAPageCarriesIsReadBeforeItIsStripped() {
+		assertEquals("bold Bold end bold", apply("<b>Bold</b>", styles = true))
+		assertEquals("Bold", apply("<b>Bold</b>", styles = false))
+		assertEquals("heading Title end heading", apply("<h1>Title</h1>", styles = true))
+		assertEquals("image a red bicycle here", apply("<img alt=\"a red bicycle\"> here", styles = true))
+		assertEquals("AT&T", apply("AT&amp;T", styles = true))
+		assertEquals("bold a word end bold", apply("a **word**", styles = true))
+	}
+
+	/** A comment is a comment and a pointer is a pointer: in code mode
+	 *  nothing reads a leading hash as a heading or a pair of asterisks as
+	 *  emphasis, however much they look like markdown. The code pass names
+	 *  them, which is what a reader of code asked for. */
+	@Test
+	fun codeIsNotReadAsMarkdown() {
+		assertEquals("hash not a heading", apply("# not a heading", styles = true, code = true))
+		assertEquals("a star b star c", apply("a *b* c", styles = true, code = true))
+	}
+
+	@Test
+	fun addressesAndPathsAreSaidAsThemselves() {
+		assertEquals("See url example dot com.", apply("See https://example.com.", code = true))
+		assertEquals(
+			"email user at example dot com",
+			apply("mailto:user@example.com", code = true)
+		)
+		assertEquals(
+			"path home slash user slash notes dot txt",
+			apply("/home/user/notes.txt", code = true)
+		)
+	}
+
 	@Test
 	fun plainTextComesThroughTheWholeRoad() {
 		assertEquals("Hello from Eloquence.", apply("Hello from Eloquence."))
@@ -66,7 +102,9 @@ class TextPipelineTest {
 		capitals: Int = CapitalLetters.NONE,
 		symbols: Int = Symbols.SOME,
 		custom: String = "",
-		words: List<Pair<String, String>> = emptyList()
+		words: List<Pair<String, String>> = emptyList(),
+		styles: Boolean = true,
+		code: Boolean = false
 	): String {
 		val context = InstrumentationRegistry.getInstrumentation().targetContext
 		val settings = Settings(context)
@@ -76,6 +114,8 @@ class TextPipelineTest {
 		settings.capitalMode = capitals
 		settings.symbolMode = symbols
 		settings.customSymbols = custom
+		settings.readTextStyles = styles
+		settings.codeMode = code
 		return TextPipeline.apply(text, settings, words)
 	}
 }
