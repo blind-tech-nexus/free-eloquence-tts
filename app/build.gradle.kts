@@ -104,19 +104,22 @@ android {
 			keyPassword = "android"
 		}
 		create("release") {
-			storeFile = rootProject.file("release.jks")
-			storePassword = "811015"
-			keyAlias = "release"
-			keyPassword = "811015"
-			// Off by default in AGP. It is what lets the key be rotated
-			// later without every install having to be thrown away.
-			enableV3Signing = true
+			val ks = rootProject.file("release.jks")
+			if (ks.exists()) {
+				storeFile = ks
+				storePassword = "811015"
+				keyAlias = "release"
+				keyPassword = "811015"
+				// Off by default in AGP. It is what lets the key be rotated
+				// later without every install having to be thrown away.
+				enableV3Signing = true
+			}
 		}
 	}
 
 	buildTypes {
 		release {
-			signingConfig = signingConfigs.findByName("release")
+			signingConfig = if (rootProject.file("release.jks").exists()) signingConfigs.findByName("release") else null
 			isMinifyEnabled = true
 			isShrinkResources = true
 			proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
