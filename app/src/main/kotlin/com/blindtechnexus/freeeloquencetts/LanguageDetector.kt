@@ -267,8 +267,17 @@ object LanguageDetector {
 		if (LEX_DE.contains(lower)) scores[IDX_DE] += 4
 		if (LEX_IT.contains(lower)) scores[IDX_IT] += 4
 
-		// Nothing the lexicons knew: score the letters themselves.
+		// A short Latin word does not carry enough evidence for reliable
+		// language identification from character n-grams alone. In particular,
+		// ordinary English words can share two-letter sequences with French,
+		// Spanish, German and Italian. When the configured voice is Hindi or
+		// Nepali, the safe and useful default for an otherwise unknown Latin
+		// token is English, not an accidental Indic or unrelated Western voice.
+		// Explicit lexicon words and distinctive diacritics above still switch
+		// normally; romanized Indic words were handled before this point.
 		if (scores.all { it == 0 }) {
+			val baseFamily = Eci.languageOf(baseLanguage).iso2Language
+			if (baseFamily == "hi" || baseFamily == "ne") return Eci.ENGLISH_US
 			return familyToModule(bigramFamily(lower, baseLanguage), baseLanguage)
 		}
 		var best = 0
@@ -356,7 +365,7 @@ object LanguageDetector {
 		"हैं", "है", "हूँ", "हूं", "होगा", "होगी", "होता", "होती", "हुआ", "हुए", "हुई",
 		"रहा", "रही", "रहे", "था", "थी", "थे", "नहीं", "क्या", "क्यों", "कैसे", "कैसा",
 		"कौन", "मुझे", "मुझको", "हमें", "तुम्हें", "अपने", "वाला", "वाली", "वाले",
-		"लिए", "द्वारा", "चाहिए", "बहुत", "अभी", "फिर", "लोग", "नमस्ते", "धन्यवाद",
+		"लिए", "द्वारा", "चाहिए", "बहुत", "अभी", "फिर", "लोग",
 		"शुक्रिया", "अलविदा", "कृपया", "भारत", "हिंदुस्तान", "हिन्दुस्तान", "दिल्ली",
 		"मुंबई", "बंबई", "लड़का", "लड़की", "सुबह", "दोपहर", "महीना", "हफ्ता", "हफ़्ता",
 		"सप्ताह", "रुपये", "रुपया", "पैसा", "पैसे", "वक़्त", "वक्त", "ज़िंदगी", "दुनिया",

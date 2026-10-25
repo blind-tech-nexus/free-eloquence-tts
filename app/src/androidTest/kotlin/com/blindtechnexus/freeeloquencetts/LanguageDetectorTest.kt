@@ -31,6 +31,16 @@ class LanguageDetectorTest {
 	}
 
 	@Test
+	fun sharedDevanagariWordsRespectTheConfiguredIndicVoice() {
+		// Greetings and thanks are used in both languages; treating them as
+		// Hindi-only markers needlessly switched Nepali listeners to Hindi.
+		for (word in listOf("नमस्ते", "धन्यवाद")) {
+			assertEquals(Eci.HINDI, LanguageDetector.detect(word, Eci.HINDI))
+			assertEquals(Eci.NEPALI, LanguageDetector.detect(word, Eci.NEPALI))
+		}
+	}
+
+	@Test
 	fun devanagariNepaliIsRecognizedByItsMarkers() {
 		assertEquals(
 			Eci.NEPALI,
@@ -105,6 +115,22 @@ class LanguageDetectorTest {
 		val firstNepali = segments.indexOfFirst { it.language == Eci.NEPALI }
 		val firstEnglish = segments.indexOfFirst { it.language == Eci.ENGLISH_US }
 		assertTrue(firstNepali in 0..firstEnglish)
+	}
+
+	@Test
+	fun unknownLatinWordsDoNotLeakIntoAnIndicVoice() {
+		// Latin-script words have no Hindi/Nepali phonemes to route through the
+		// Indic romanizer. Unknown English and product vocabulary must not be
+		// guessed into another language merely because of a shared bigram.
+		for (baseIndic in listOf(Eci.HINDI, Eci.NEPALI)) {
+			for (word in listOf("message", "launcher", "dictation", "voice", "AI", "qzxv")) {
+				assertEquals("$word from base $baseIndic", Eci.ENGLISH_US, LanguageDetector.detect(word, baseIndic))
+			}
+			val mixed = LanguageDetector.split("नमस्ते message launcher", baseIndic)
+			assertEquals(baseIndic, mixed.first().language)
+			assertEquals(Eci.ENGLISH_US, mixed.last().language)
+			assertEquals("नमस्ते message launcher", mixed.joinToString("") { it.text })
+		}
 	}
 
 	@Test
