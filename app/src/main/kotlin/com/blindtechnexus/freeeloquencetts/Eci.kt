@@ -203,6 +203,12 @@ object Eci {
 	const val FRENCH_CANADA = 0x00030001
 	const val GERMAN = 0x00040000
 	const val ITALIAN = 0x00050000
+	const val HINDI = 0x00100000
+	const val NEPALI = 0x00120000
+
+	/** Whether [code] takes UTF-8 text (Devanagari and mixed scripts) through
+	 *  its romanizer rather than single-byte Western Latin-1. */
+	fun isUtf8Language(code: Int): Boolean = code == HINDI || code == NEPALI
 
 	/** One language the app speaks: the engine's own number for it, the
 	 *  spellings Android asks about in both lengths, the BCP-47 tag a
@@ -233,7 +239,7 @@ object Eci {
 			country != null && (country.equals(iso2Country, true) || country.equals(iso3Country, true))
 	}
 
-	/** All eight, the American first, which is what every list that does
+	/** All ten, the American first, which is what every list that does
 	 *  not say otherwise is ordered by, and then the rest in the engine's
 	 *  own order. */
 	val LANGUAGES = listOf(
@@ -244,7 +250,9 @@ object Eci {
 		Language(FRENCH_FRANCE, "fr", "fra", "FR", "FRA", "French (France)", "frfr"),
 		Language(FRENCH_CANADA, "fr", "fra", "CA", "CAN", "French (Canada)", "frca"),
 		Language(GERMAN, "de", "deu", "DE", "DEU", "German", "dede"),
-		Language(ITALIAN, "it", "ita", "IT", "ITA", "Italian", "itit")
+		Language(ITALIAN, "it", "ita", "IT", "ITA", "Italian", "itit"),
+		Language(HINDI, "hi", "hin", "IN", "IND", "Hindi (India)", "hiin"),
+		Language(NEPALI, "ne", "nep", "NP", "NPL", "Nepali (Nepal)", "nenp")
 	)
 
 	/** The ISO-3 language of the default voice, which is what Android

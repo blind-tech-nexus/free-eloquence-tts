@@ -153,6 +153,10 @@ static int checkone(int32_t have, int32_t want)
             || want == 0x80300 || want == 0x80400 || want == 0x80800;
     case 0xa0000:
         return want == 0xa0000 || want == 0xa0800;
+    case 0x100000:
+        return want == 0x100000 || want == 0x100800;
+    case 0x120000:
+        return want == 0x120000 || want == 0x120800;
     default:
         return want == have;
     }

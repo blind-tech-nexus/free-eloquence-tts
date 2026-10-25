@@ -383,6 +383,8 @@ static int ed_road(int32_t lang)
     case 0x60201:                        /* and two, second dialect only */
     case 0x60800: case 0x60801:          /* and wide */
     case 0xa0000: case 0xa0800:          /* Korean, narrow and wide */
+    case 0x100000: case 0x100800:        /* Hindi */
+    case 0x120000: case 0x120800:        /* Nepali */
         return DICT_ROAD_EXT;
 
     case 0x80000: case 0x80800:          /* Japanese */

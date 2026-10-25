@@ -1,0 +1,481 @@
+# Authentic Indo-Aryan vowel nucleus start durations (ms in global word 2628).
+rule assign_stanital_start_dur takes 3 from is_sidur.obj
+  local dummy_a bytes 8
+  local out_dur bytes 8
+  local pct bytes 8
+
+  call ZZget_parmINT addr dummy_a arg 1
+  call ZZget_parmINT addr out_dur arg 2
+  call ZZfence_null
+  set global word 2628 to 100
+  if global half 522 is 1
+    set global word 2628 to 75
+    go to check_vow_unst
+  end
+  plant test st_v_1
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 60
+    if answer is 0
+      set global word 2628 to 82
+      go to after_vow_st
+    end
+  end
+place st_v_1
+  plant test st_v_2
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 69
+    if answer is 0
+      set global word 2628 to 82
+      go to after_vow_st
+    end
+  end
+place st_v_2
+  plant test st_v_3
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 27
+    if answer is 0
+      set global word 2628 to 96
+      go to after_vow_st
+    end
+  end
+place st_v_3
+  plant test st_v_4
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 31
+    if answer is 0
+      set global word 2628 to 96
+      go to after_vow_st
+    end
+  end
+place st_v_4
+  plant test st_v_5
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 61
+    if answer is 0
+      set global word 2628 to 96
+      go to after_vow_st
+    end
+  end
+place st_v_5
+  plant test st_v_6
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 62
+    if answer is 0
+      set global word 2628 to 96
+      go to after_vow_st
+    end
+  end
+place st_v_6
+  plant test st_v_7
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 71
+    if answer is 0
+      set global word 2628 to 96
+      go to after_vow_st
+    end
+  end
+place st_v_7
+  plant test st_v_8
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 72
+    if answer is 0
+      set global word 2628 to 96
+      go to after_vow_st
+    end
+  end
+place st_v_8
+  plant test st_v_9
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 73
+    if answer is 0
+      set global word 2628 to 96
+      go to after_vow_st
+    end
+  end
+place st_v_9
+  plant test st_v_10
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 74
+    if answer is 0
+      set global word 2628 to 96
+      go to after_vow_st
+    end
+  end
+place st_v_10
+  plant test st_v_11
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 28
+    if answer is 0
+      set global word 2628 to 112
+      go to after_vow_st
+    end
+  end
+place st_v_11
+  plant test st_v_12
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 32
+    if answer is 0
+      set global word 2628 to 112
+      go to after_vow_st
+    end
+  end
+place st_v_12
+  plant test st_v_13
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 75
+    if answer is 0
+      set global word 2628 to 112
+      go to after_vow_st
+    end
+  end
+place st_v_13
+  plant test st_v_14
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 77
+    if answer is 0
+      set global word 2628 to 112
+      go to after_vow_st
+    end
+  end
+place st_v_14
+  plant test st_v_15
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 29
+    if answer is 0
+      set global word 2628 to 118
+      go to after_vow_st
+    end
+  end
+place st_v_15
+  plant test st_v_16
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 33
+    if answer is 0
+      set global word 2628 to 118
+      go to after_vow_st
+    end
+  end
+place st_v_16
+  plant test st_v_17
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 63
+    if answer is 0
+      set global word 2628 to 118
+      go to after_vow_st
+    end
+  end
+place st_v_17
+  plant test st_v_18
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 64
+    if answer is 0
+      set global word 2628 to 118
+      go to after_vow_st
+    end
+  end
+place st_v_18
+  plant test st_v_19
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 76
+    if answer is 0
+      set global word 2628 to 118
+      go to after_vow_st
+    end
+  end
+place st_v_19
+  plant test st_v_20
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 78
+    if answer is 0
+      set global word 2628 to 118
+      go to after_vow_st
+    end
+  end
+place st_v_20
+  plant test st_v_21
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 30
+    if answer is 0
+      set global word 2628 to 132
+      go to after_vow_st
+    end
+  end
+place st_v_21
+  plant test st_v_22
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 70
+    if answer is 0
+      set global word 2628 to 132
+      go to after_vow_st
+    end
+  end
+place st_v_22
+place after_vow_st
+  plant test st_nonfin
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call advance_tok
+    if answer is 0
+      call advance_tok
+      if answer is 0
+        call testFldeq 2 4 5
+        if answer is 0
+          set global word 2628 to 66
+        end
+      end
+    end
+  end
+place st_nonfin
+  if global half 402 is 0
+    set cell pct kind to 65532
+    set cell pct field to 85
+    plant test matched
+    call setdur addr pct addr out_dur
+  end
+  match
+place check_vow_unst
+  plant test unst_v_1
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 60
+    if answer is 0
+      set global word 2628 to 62
+      go to after_vow_unst
+    end
+  end
+place unst_v_1
+  plant test unst_v_2
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 69
+    if answer is 0
+      set global word 2628 to 62
+      go to after_vow_unst
+    end
+  end
+place unst_v_2
+  plant test unst_v_3
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 27
+    if answer is 0
+      set global word 2628 to 74
+      go to after_vow_unst
+    end
+  end
+place unst_v_3
+  plant test unst_v_4
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 31
+    if answer is 0
+      set global word 2628 to 74
+      go to after_vow_unst
+    end
+  end
+place unst_v_4
+  plant test unst_v_5
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 61
+    if answer is 0
+      set global word 2628 to 74
+      go to after_vow_unst
+    end
+  end
+place unst_v_5
+  plant test unst_v_6
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 62
+    if answer is 0
+      set global word 2628 to 74
+      go to after_vow_unst
+    end
+  end
+place unst_v_6
+  plant test unst_v_7
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 71
+    if answer is 0
+      set global word 2628 to 74
+      go to after_vow_unst
+    end
+  end
+place unst_v_7
+  plant test unst_v_8
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 72
+    if answer is 0
+      set global word 2628 to 74
+      go to after_vow_unst
+    end
+  end
+place unst_v_8
+  plant test unst_v_9
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 73
+    if answer is 0
+      set global word 2628 to 74
+      go to after_vow_unst
+    end
+  end
+place unst_v_9
+  plant test unst_v_10
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 74
+    if answer is 0
+      set global word 2628 to 74
+      go to after_vow_unst
+    end
+  end
+place unst_v_10
+  plant test unst_v_11
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 28
+    if answer is 0
+      set global word 2628 to 86
+      go to after_vow_unst
+    end
+  end
+place unst_v_11
+  plant test unst_v_12
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 32
+    if answer is 0
+      set global word 2628 to 86
+      go to after_vow_unst
+    end
+  end
+place unst_v_12
+  plant test unst_v_13
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 75
+    if answer is 0
+      set global word 2628 to 86
+      go to after_vow_unst
+    end
+  end
+place unst_v_13
+  plant test unst_v_14
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 77
+    if answer is 0
+      set global word 2628 to 86
+      go to after_vow_unst
+    end
+  end
+place unst_v_14
+  plant test unst_v_15
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 29
+    if answer is 0
+      set global word 2628 to 90
+      go to after_vow_unst
+    end
+  end
+place unst_v_15
+  plant test unst_v_16
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 33
+    if answer is 0
+      set global word 2628 to 90
+      go to after_vow_unst
+    end
+  end
+place unst_v_16
+  plant test unst_v_17
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 63
+    if answer is 0
+      set global word 2628 to 90
+      go to after_vow_unst
+    end
+  end
+place unst_v_17
+  plant test unst_v_18
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 64
+    if answer is 0
+      set global word 2628 to 90
+      go to after_vow_unst
+    end
+  end
+place unst_v_18
+  plant test unst_v_19
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 76
+    if answer is 0
+      set global word 2628 to 90
+      go to after_vow_unst
+    end
+  end
+place unst_v_19
+  plant test unst_v_20
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 78
+    if answer is 0
+      set global word 2628 to 90
+      go to after_vow_unst
+    end
+  end
+place unst_v_20
+  plant test unst_v_21
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 30
+    if answer is 0
+      set global word 2628 to 102
+      go to after_vow_unst
+    end
+  end
+place unst_v_21
+  plant test unst_v_22
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is 0
+    call testFldeq 2 0 70
+    if answer is 0
+      set global word 2628 to 102
+      go to after_vow_unst
+    end
+  end
+place unst_v_22
+place after_vow_unst
+  match
+end

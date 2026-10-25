@@ -148,6 +148,7 @@ int rz_isRomExist(int32_t family, int32_t dialect)
     case 10: return dialect == 0;
     case 11: return dialect == 0 || dialect == 1;
     case 16: return dialect == 0;
+    case 18: return dialect == 0;
     default: return 0;
     }
 }

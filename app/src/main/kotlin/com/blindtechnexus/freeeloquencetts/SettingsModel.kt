@@ -459,6 +459,8 @@ class SettingsModel(context: Context) {
 		Eci.SPANISH_SPAIN, Eci.SPANISH_MEXICO -> R.string.preview_text_es
 		Eci.FRENCH_FRANCE, Eci.FRENCH_CANADA -> R.string.preview_text_fr
 		Eci.ITALIAN -> R.string.preview_text_it
+		Eci.HINDI -> R.string.preview_text_hi
+		Eci.NEPALI -> R.string.preview_text_ne
 		else -> R.string.preview_text
 	}
 

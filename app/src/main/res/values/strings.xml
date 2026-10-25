@@ -419,11 +419,15 @@
 	<string name="hertz">%1$d Hz</string>
 
 	<string name="sample_text">Hello from Eloquence.</string>
+	<string name="sample_text_hi">एलोक्वेन्स से नमस्ते।</string>
+	<string name="sample_text_ne">इलोक्वेन्सबाट नमस्ते।</string>
 	<string name="preview_text">Hello from Eloquence. This is a test.</string>
 	<string name="preview_text_de">Hallo, ich bin Ihre neue Stimme. So klingt dieses Programm auf Deutsch.</string>
 	<string name="preview_text_es">Hola, soy tu nueva voz. Así suena este programa en español.</string>
 	<string name="preview_text_fr">Bonjour, je suis votre nouvelle voix. Voici comment ce programme sonne en français.</string>
 	<string name="preview_text_it">Ciao, sono la tua nuova voce. Così suona questo programma in italiano.</string>
+	<string name="preview_text_hi">नमस्ते, मैं आपकी नई आवाज़ हूँ। यह प्रोग्राम हिंदी में इस तरह सुनाई देता है।</string>
+	<string name="preview_text_ne">नमस्ते, म तपाईंको नयाँ आवाज हुँ। यो कार्यक्रम नेपालीमा यसरी सुनिन्छ।</string>
 
 	<string name="audio_title">Audio generator</string>
 	<string name="audio_description">Type text, generate it in your voice, then share or save the audio.</string>

@@ -410,7 +410,9 @@ class EvvEngine private constructor(@Volatile private var handle: Long, val lang
 		if (closed) return -1
 		return try {
 			EvvNative.teachWord(
-				handle, volume, WesternText.encode(key), WesternText.encode(say)
+				handle, volume,
+				WesternText.encodeForLanguage(key, language),
+				WesternText.encodeForLanguage(say, language)
 			)
 		} catch (_: Throwable) {
 			-1
@@ -420,7 +422,7 @@ class EvvEngine private constructor(@Volatile private var handle: Long, val lang
 	fun lookUpWord(volume: Int, key: String): String? = synchronized(guard) {
 		if (closed) return null
 		return try {
-			EvvNative.lookUpWord(handle, volume, WesternText.encode(key))
+			EvvNative.lookUpWord(handle, volume, WesternText.encodeForLanguage(key, language))
 		} catch (_: Throwable) {
 			null
 		}
@@ -453,7 +455,7 @@ class EvvEngine private constructor(@Volatile private var handle: Long, val lang
 		if (closed || isStopped()) return false
 		return try {
 			if (text.isBlank() || text.length > MAX_SPEAK_CHARS) return false
-			val bytes = WesternText.encode(text)
+			val bytes = WesternText.encodeForLanguage(text, language)
 			if (bytes.isEmpty()) return false
 			EvvNative.speak(handle, bytes)
 		} catch (refused: Throwable) {

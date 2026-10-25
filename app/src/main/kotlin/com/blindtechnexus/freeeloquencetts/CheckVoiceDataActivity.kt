@@ -7,7 +7,7 @@ import android.speech.tts.TextToSpeech
 
 /**
  * What Android asks before it will use the engine. Everything is in the APK,
- * so the eight languages are already there and nothing is missing.
+ * so all ten languages are already there and nothing is missing.
  */
 class CheckVoiceDataActivity : Activity() {
 

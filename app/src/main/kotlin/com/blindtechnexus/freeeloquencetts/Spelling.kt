@@ -112,14 +112,27 @@ object Spelling {
 		return if (changed) out.toString() else text
 	}
 
-	/** One word, letter by letter, into [out]. */
+	/** One word, letter by letter (or akshara by akshara for scripts with
+	 *  combining marks), into [out]. */
 	private fun spell(word: String, phonetic: Boolean, out: StringBuilder) {
 		var first = true
-		for (c in word) {
-			val said = nameOf(c, phonetic)
+		var i = 0
+		while (i < word.length) {
+			val c = word[i]
+			var end = i + 1
+			while (end < word.length && isCombiningOrJoiner(word[end])) {
+				if (word[end] == '\u094D' && end + 1 < word.length && word[end + 1].isLetter()) {
+					// Keep conjunct consonant cluster (C + virama + C) together as one akshara
+					end += 2
+				} else {
+					end++
+				}
+			}
+			val said = if (end == i + 1) nameOf(c, phonetic) else word.substring(i, end)
 			if (!first) out.append(' ')
 			out.append(said)
 			first = false
+			i = end
 		}
 	}
 
@@ -135,22 +148,33 @@ object Spelling {
 	}
 
 	/** Whether a run of characters is a word that [CAPITALS] should spell:
-	 *  long enough to be an abbreviation, and written with no lower case in
-	 *  it. A word of two capitals is a word -- "OK", "TV", "US" -- and
-	 *  spelling it would be saying four letters where two were written. */
+	 *  long enough to be an abbreviation, written in uppercase letters with no
+	 *  lower case in it. Unicameral scripts such as Devanagari (`OTHER_LETTER`)
+	 *  have neither upper nor lower case, so counting [Char.isUpperCase]
+	 *  ensures ordinary Devanagari words are spoken as words. */
 	private fun isAcronym(word: String): Boolean {
 		if (word.length < MIN_ACRONYM) return false
-		var letters = 0
+		var upper = 0
 		for (c in word) {
 			if (c.isLowerCase()) return false
-			if (c.isLetter()) letters++
+			if (c.isUpperCase()) upper++
 		}
-		return letters >= MIN_ACRONYM
+		return upper >= MIN_ACRONYM
+	}
+
+	private fun isCombiningOrJoiner(c: Char): Boolean {
+		if (c == '\u200C' || c == '\u200D') return true
+		return when (Character.getType(c).toByte()) {
+			Character.NON_SPACING_MARK,
+			Character.COMBINING_SPACING_MARK,
+			Character.ENCLOSING_MARK -> true
+			else -> false
+		}
 	}
 
 	private fun wordEnd(text: String, from: Int): Int {
 		var j = from
-		while (j < text.length && text[j].isLetterOrDigit()) j++
+		while (j < text.length && (text[j].isLetterOrDigit() || isCombiningOrJoiner(text[j]))) j++
 		return j
 	}
 }

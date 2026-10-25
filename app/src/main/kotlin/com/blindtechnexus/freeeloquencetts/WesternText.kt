@@ -88,6 +88,40 @@ object WesternText {
 		}
 	}
 
+	/** Encodes [text] into the byte representation [language] expects: clean
+	 *  UTF-8 without NUL bytes (preserving Devanagari, ZWJ/ZWNJ, ₹ and SPR
+	 *  annotations) for Hindi and Nepali, and ISO-8859-1 via [encode] for the
+	 *  eight Western modules. */
+	fun encodeForLanguage(text: String, language: Int): ByteArray {
+		if (!Eci.isUtf8Language(language)) return encode(text)
+		return try {
+			if (text.isEmpty()) return ByteArray(0)
+			val sb = StringBuilder(text.length)
+			var spaced = true
+			for (i in text.indices) {
+				val c = text[i]
+				when {
+					c == '\u0000' || c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
+						c == '\u00A0' || c == '\u2007' || c == '\u202F' -> {
+						if (!spaced) {
+							sb.append(' ')
+							spaced = true
+						}
+					}
+					c == '\u200B' || c == '\uFEFF' || c == '\u00AD' -> Unit
+					else -> {
+						sb.append(c)
+						spaced = false
+					}
+				}
+			}
+			while (sb.isNotEmpty() && sb[sb.length - 1] == ' ') sb.setLength(sb.length - 1)
+			if (sb.isEmpty()) ByteArray(0) else sb.toString().toByteArray(Charsets.UTF_8)
+		} catch (broken: Throwable) {
+			ByteArray(0)
+		}
+	}
+
 	private fun encodeDirect(text: String): ByteArray {
 		var start = 0
 		var end = text.length

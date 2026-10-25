@@ -33,6 +33,12 @@
 #if defined(EVV_ROM_JAJP)
 extern EvvRom *jp_rom_new(const char *dir);
 #endif
+#if defined(EVV_ROM_HIIN)
+extern EvvRom *hi_rom_new(const char *dir);
+#endif
+#if defined(EVV_ROM_NENP)
+extern EvvRom *ne_rom_new(const char *dir);
+#endif
 
 static EvvRomMaker linked(int32_t family, int32_t dialect)
 {
@@ -40,6 +46,16 @@ static EvvRomMaker linked(int32_t family, int32_t dialect)
     /* Japanese is family 8, dialect 0. */
     if (family == 8 && dialect == 0)
         return jp_rom_new;
+#endif
+#if defined(EVV_ROM_HIIN)
+    /* Hindi is family 16, dialect 0. */
+    if (family == 16 && dialect == 0)
+        return hi_rom_new;
+#endif
+#if defined(EVV_ROM_NENP)
+    /* Nepali is family 18, dialect 0. */
+    if (family == 18 && dialect == 0)
+        return ne_rom_new;
 #endif
     (void)family;
     (void)dialect;

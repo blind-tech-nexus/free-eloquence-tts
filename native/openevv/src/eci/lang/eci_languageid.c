@@ -207,6 +207,10 @@ THIS void li_setString(LanguageId *l)
         strcpy(l->major, "Da");
         strcpy(l->minor, "DK");
         break;
+    case 16:
+        strcpy(l->major, "Hi");
+        strcpy(l->minor, "IN");
+        break;
     /* And Polish, which is not IBM's: its own table stops at fifteen, and
        family seventeen -- which Polish is in this tree -- had no name at
        all, so a Polish document could not be named. See the head of
@@ -214,6 +218,10 @@ THIS void li_setString(LanguageId *l)
     case 17:
         strcpy(l->major, "Pl");
         strcpy(l->minor, "PL");
+        break;
+    case 18:
+        strcpy(l->major, "Ne");
+        strcpy(l->minor, "NP");
         break;
     default:
         strcpy(l->major, "");

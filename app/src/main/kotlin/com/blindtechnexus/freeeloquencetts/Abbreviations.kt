@@ -419,6 +419,6 @@ object Abbreviations {
 			return true
 		}
 
-		private fun isWordChar(c: Char): Boolean = c.isLetterOrDigit() || c == '\''
+		private fun isWordChar(c: Char): Boolean = WordIndex.isWordCharacter(c)
 	}
 }

@@ -1029,12 +1029,99 @@ static int32_t ipa_convert(const IpaOne *one, size_t nOne,
                            cur, next, out, used);                         \
     }
 
+static const IpaOne indic_one[] = {
+    { 0x002e, 0, "." },     /* . syllable break */
+    { 0x0061, 0, "a" },     /* a */
+    { 0x0062, 0, "b" },     /* b */
+    { 0x0063, 0, "C" },     /* c */
+    { 0x0064, 0, "d" },     /* d */
+    { 0x0065, 0, "e" },     /* e */
+    { 0x0066, 0, "f" },     /* f */
+    { 0x0067, 0, "g" },     /* g */
+    { 0x0068, 0, "h" },     /* h */
+    { 0x0069, 0, "i" },     /* i */
+    { 0x006a, 0, "y" },     /* j */
+    { 0x006b, 0, "k" },     /* k */
+    { 0x006c, 0, "l" },     /* l */
+    { 0x006d, 0, "m" },     /* m */
+    { 0x006e, 0, "n" },     /* n */
+    { 0x006f, 0, "o" },     /* o */
+    { 0x0070, 0, "p" },     /* p */
+    { 0x0071, 0, "q" },     /* q */
+    { 0x0072, 0, "r" },     /* r */
+    { 0x0073, 0, "s" },     /* s */
+    { 0x0074, 0, "t" },     /* t */
+    { 0x0075, 0, "u" },     /* u */
+    { 0x0076, 0, "v" },     /* v */
+    { 0x0077, 0, "w" },     /* w */
+    { 0x0078, 0, "x" },     /* x */
+    { 0x007a, 0, "z" },     /* z */
+    { 0x00e6, 0, "\xe6" },  /* æ */
+    { 0x014b, 0, "G" },     /* ŋ */
+    { 0x0251, 0, "a" },     /* ɑ */
+    { 0x0252, 0, "O" },     /* ɒ */
+    { 0x0254, 0, "c" },     /* ɔ */
+    { 0x0256, 0, "W" },     /* ɖ */
+    { 0x0259, 0, "\xf8" },  /* ə */
+    { 0x025b, 0, "E" },     /* ɛ */
+    { 0x0261, 0, "g" },     /* ɡ */
+    { 0x0263, 0, "A" },     /* ɣ */
+    { 0x0266, 0, "h" },     /* ɦ */
+    { 0x026a, 0, "I" },     /* ɪ */
+    { 0x0272, 0, "N" },     /* ɲ */
+    { 0x0273, 0, "X" },     /* ɳ */
+    { 0x027d, 0, "j" },     /* ɽ */
+    { 0x027e, 0, "r" },     /* ɾ */
+    { 0x0282, 0, "\xdf" },  /* ʂ */
+    { 0x0283, 0, "S" },     /* ʃ */
+    { 0x0288, 0, "M" },     /* ʈ */
+    { 0x028a, 0, "U" },     /* ʊ */
+    { 0x028b, 0, "\xe5" },  /* ʋ */
+    { 0x028c, 0, "\xf8" },  /* ʌ */
+    { 0x0292, 0, "Z" },     /* ʒ */
+    { 0x02b0, 0, "H" },     /* ʰ */
+    { 0x02b1, 0, "Q" },     /* ʱ */
+    { 0x02c8, 0, "1" },     /* ˈ */
+    { 0x02cc, 0, "2" },     /* ˌ */
+    { 0x02d0, 0, "" },      /* ː */
+};
+
+static const IpaTwo indic_two[] = {
+    { 0x0070, 0x02b0, 1, "P" },     /* pʰ */
+    { 0x0062, 0x02b1, 1, "B" },     /* bʱ */
+    { 0x0074, 0x02b0, 1, "F" },     /* tʰ */
+    { 0x0064, 0x02b1, 1, "V" },     /* dʱ */
+    { 0x0288, 0x02b0, 1, "\xf1" },  /* ʈʰ */
+    { 0x0256, 0x02b1, 1, "\xd1" },  /* ɖʱ */
+    { 0x006b, 0x02b0, 1, "K" },     /* kʰ */
+    { 0x0067, 0x02b1, 1, "Y" },     /* gʱ */
+    { 0x0261, 0x02b1, 1, "Y" },     /* ɡʱ */
+    { 0x027d, 0x02b1, 1, "\xfd" },  /* ɽʱ */
+    { 0x0074, 0x0283, 1, "C" },     /* tʃ */
+    { 0x0064, 0x0292, 1, "J" },     /* dʒ */
+    { 0x0074, 0x0073, 1, "T" },     /* ts */
+    { 0x0064, 0x007a, 1, "D" },     /* dz */
+    { 0x0259, 0x0303, 1, "\xe2" },  /* ə̃ */
+    { 0x028c, 0x0303, 1, "\xe2" },  /* ʌ̃ */
+    { 0x0061, 0x0303, 1, "\xe3" },  /* ã */
+    { 0x0251, 0x0303, 1, "\xe3" },  /* ɑ̃ */
+    { 0x026a, 0x0303, 1, "\xee" },  /* ɪ̃ */
+    { 0x0069, 0x0303, 1, "\xef" },  /* ĩ */
+    { 0x028a, 0x0303, 1, "\xfb" },  /* ʊ̃ */
+    { 0x0075, 0x0303, 1, "\xfc" },  /* ũ */
+    { 0x0065, 0x0303, 1, "\xea" },  /* ẽ */
+    { 0x025b, 0x0303, 1, "\xeb" },  /* ɛ̃ */
+    { 0x006f, 0x0303, 1, "\xf4" },  /* õ */
+    { 0x0254, 0x0303, 1, "\xf5" },  /* ɔ̃ */
+};
+
 CONVERTER(UsEnIPAToSPRConverter, usen)
 CONVERTER(UkEnIPAToSPRConverter, uken)
 CONVERTER(GrGrIPAToSPRConverter, grgr)
 CONVERTER(FrFrIPAToSPRConverter, frfr)
 CONVERTER(JpJpIPAToSPRConverter, jpjp)
 CONVERTER(KoKoIPAToSPRConverter, koko)
+CONVERTER(IndicIPAToSPRConverter, indic)
 
 /* ---- and the whole string -------------------------------------------- */
 
@@ -1070,6 +1157,11 @@ static int32_t ipa_forLanguage(int32_t lang, int32_t cur, int32_t next,
     case 0x90000:
     case 0xa0000:
         return KoKoIPAToSPRConverter(cur, next, out, used);
+    case 0x100000:
+    case 0x100800:
+    case 0x120000:
+    case 0x120800:
+        return IndicIPAToSPRConverter(cur, next, out, used);
     default:
         return 0;
     }

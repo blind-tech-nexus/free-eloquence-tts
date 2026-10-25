@@ -10,7 +10,7 @@ object Pauses {
 	const val END_ONLY = 1
 	const val ALL = 2
 
-	private const val MARKS = "-,.:;?!–—"
+	private const val MARKS = "-,.:;?!–—।॥"
 	private val MARK_SET = MARKS.toSet()
 	private const val BRIEF = "`p1"
 	private const val AT_THE_END = "`p100"
@@ -42,10 +42,10 @@ object Pauses {
 					// Find run of same mark
 					var j = i + 1
 					while (j < n && text[j] == c) j++
-					// Check preceding char: must be letter/digit/space
+					// Check preceding char: must be word char (incl. combining marks) or space
 					val prevOk = if (i > 0) {
 						val p = text[i - 1]
-						p.isLetterOrDigit() || p.isWhitespace()
+						WordIndex.isWordCharacter(p) || p.isWhitespace()
 					} else false
 					// Check following char: whitespace, slash, backslash, or end
 					val nextOk = if (j >= n) true else {

@@ -101,7 +101,7 @@ object TextPipeline {
 		try { text = Numbers.apply(text, s.numberMode) } catch (_: Throwable) {}
 		try { text = CapitalLetters.apply(text, s.capitalMode) } catch (_: Throwable) {}
 		try { text = Spelling.apply(text, s.spellingMode) } catch (_: Throwable) {}
-		return try { Symbols.apply(text, s.symbolMode, s.customSymbols) } catch (_: Throwable) { text }
+		return try { Symbols.apply(text, s.symbolMode, s.customSymbols, s.language) } catch (_: Throwable) { text }
 	}
 
 	/**

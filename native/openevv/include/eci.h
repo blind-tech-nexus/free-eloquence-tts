@@ -270,10 +270,12 @@ typedef enum {
     eciStandardNorwegian      = 0x000d0000,
     eciStandardSwedish        = 0x000e0000,
     eciStandardDanish         = 0x000f0000,
+    eciStandardHindi          = 0x00100000,
     /* Family seventeen is Thai in IBM's tables and Polish here, which is the
        twelfth deliberate divergence. There is no Thai in the SDK this engine
        came out of for that to cost anything. */
     eciStandardPolish         = 0x00110000,
+    eciStandardNepali         = 0x00120000,
     /* The bit that says the text is UTF-16 rather than bytes. */
     eciUnicodeCodeSet         = 0x00000800
 } ECILanguageDialect;

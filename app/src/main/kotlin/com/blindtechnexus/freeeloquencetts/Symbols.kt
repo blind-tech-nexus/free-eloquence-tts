@@ -127,8 +127,54 @@ object Symbols {
 		'÷' to Entry("divided by", SOME),
 		'≤' to Entry("less than or equal to", SOME),
 		'≥' to Entry("greater than or equal to", SOME),
-		'≠' to Entry("not equal to", SOME)
+		'≠' to Entry("not equal to", SOME),
+		'।' to Entry("full stop", ALL),
+		'॥' to Entry("double full stop", ALL)
 	)
+
+	private val HINDI_NAMES = mapOf(
+		'(' to "बायाँ कोष्ठक",
+		')' to "दायाँ कोष्ठक",
+		'[' to "बायाँ वर्ग कोष्ठक",
+		']' to "दायाँ वर्ग कोष्ठक",
+		'{' to "बायाँ मँझला कोष्ठक",
+		'}' to "दायाँ मँझला कोष्ठक",
+		'"' to "उद्धरण चिह्न",
+		'\'' to "एकल उद्धरण",
+		'?' to "प्रश्नवाचक चिह्न",
+		'!' to "विस्मयादिबोधक चिह्न",
+		';' to "अर्धविराम",
+		':' to "अपूर्ण विराम",
+		'.' to "बिंदु",
+		',' to "अल्पविराम",
+		'।' to "पूर्ण विराम",
+		'॥' to "दोहरा पूर्ण विराम"
+	)
+
+	private val NEPALI_NAMES = mapOf(
+		'(' to "बायाँ कोष्ठक",
+		')' to "दायाँ कोष्ठक",
+		'[' to "बायाँ वर्ग कोष्ठक",
+		']' to "दायाँ वर्ग कोष्ठक",
+		'{' to "बायाँ मझौला कोष्ठक",
+		'}' to "दायाँ मझौला कोष्ठक",
+		'"' to "उद्धरण चिन्ह",
+		'\'' to "एकल उद्धरण",
+		'?' to "प्रश्न चिन्ह",
+		'!' to "विस्मयादिबोधक चिन्ह",
+		';' to "अर्धविराम",
+		':' to "विवरण चिन्ह",
+		'.' to "थोप्लो",
+		',' to "अल्पविराम",
+		'।' to "पूर्णविराम",
+		'॥' to "दोहोरो पूर्णविराम"
+	)
+
+	private fun spokenName(c: Char, entry: Entry, language: Int): String = when (language) {
+		Eci.HINDI -> HINDI_NAMES[c] ?: entry.name
+		Eci.NEPALI -> NEPALI_NAMES[c] ?: entry.name
+		else -> entry.name
+	}
 
 	/**
 	 * The typographic characters turned into the plain ones they stand for,
@@ -164,7 +210,7 @@ object Symbols {
 	}
 
 	/** The marks the engine needs where they are, to leave its pauses alone. */
-	private const val PROSODY = ",.;:?!"
+	private const val PROSODY = ",.;:?!।॥"
 
 	/**
 	 * [text] with the symbols [mode] asks for named or silenced. [custom] is
@@ -173,7 +219,7 @@ object Symbols {
 	 * [SOME] is the engine's own reading with one repair: a comma that no
 	 * word stands against is taken out, because the engine would name it.
 	 */
-	fun apply(text: String, mode: Int, custom: String): String {
+	fun apply(text: String, mode: Int, custom: String, language: Int = Eci.ENGLISH_US): String {
 		if (text.isEmpty()) return text
 		if (mode == SOME) return withoutLoneCommas(text)
 		var relevant = false
@@ -244,7 +290,7 @@ object Symbols {
 						// mode: a mode that does not silence them leaves them
 						// to the engine.
 						attached(source, at) && entry.level >= MOST && names(mode, entry, c, listed) ->
-							out.append(' ').append(entry.name).append(' ')
+							out.append(' ').append(spokenName(c, entry, language)).append(' ')
 
 						// Standing alone, or already read by the engine.
 						else -> out.append(c)
@@ -301,8 +347,8 @@ object Symbols {
 			// and a comma inside "one, two" is the pause it makes anyway.
 			val before = at - 1
 			val after = at + 1
-			val worded = (before >= 0 && text[before].isLetterOrDigit()) ||
-				(after < n && text[after].isLetterOrDigit())
+			val worded = (before >= 0 && WordIndex.isWordCharacter(text[before])) ||
+				(after < n && WordIndex.isWordCharacter(text[after]))
 			if (worded) {
 				out?.append(c)
 				at++
@@ -392,7 +438,7 @@ object Symbols {
 	/** Whether the character at [at] has a letter or a digit on both sides. */
 	private fun betweenWordCharacters(text: String, at: Int): Boolean =
 		at > 0 && at < text.length - 1 &&
-			(text[at - 1].isLetterOrDigit() && text[at + 1].isLetterOrDigit())
+			(WordIndex.isWordCharacter(text[at - 1]) && WordIndex.isWordCharacter(text[at + 1]))
 
 	/** Whether the character at [at] has a digit on both sides. */
 	private fun betweenDigits(text: String, at: Int): Boolean =

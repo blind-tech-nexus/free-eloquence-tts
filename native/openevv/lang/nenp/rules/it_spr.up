@@ -1,0 +1,1906 @@
+# Complete 1-byte SPR phoneme inserter for Indo-Aryan + base inventory.
+rule insert_ital_spr_phone takes 3 from it_spr.obj
+  local in_l bytes 8
+  local ph_r bytes 8
+
+  call ZZget_parm_ptr2 addr in_l arg 1 addr ph_r arg 2
+  call ZZfence_null
+  plant test arm_1
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_1
+  end
+  call testFldeq 1 0 75
+  if answer is not 0
+    go to arm_1
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_1
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_1
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_gap 0
+  if answer is 0
+    match
+  end
+place arm_1
+  plant test arm_2
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_2
+  end
+  call testFldeq 1 0 11
+  if answer is not 0
+    go to arm_2
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_2
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_2
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_1 0
+  if answer is 0
+    match
+  end
+place arm_2
+  plant test arm_3
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_3
+  end
+  call testFldeq 1 0 22
+  if answer is not 0
+    go to arm_3
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_3
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_3
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_2 0
+  if answer is 0
+    match
+  end
+place arm_3
+  plant test arm_4
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_4
+  end
+  call testFldeq 1 0 13
+  if answer is not 0
+    go to arm_4
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_4
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_4
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_3 0
+  if answer is 0
+    match
+  end
+place arm_4
+  plant test arm_5
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_5
+  end
+  call testFldeq 1 0 26
+  if answer is not 0
+    go to arm_5
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_5
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_5
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_4 0
+  if answer is 0
+    match
+  end
+place arm_5
+  plant test arm_6
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_6
+  end
+  call testFldeq 1 0 18
+  if answer is not 0
+    go to arm_6
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_6
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_6
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_5 0
+  if answer is 0
+    match
+  end
+place arm_6
+  plant test arm_7
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_7
+  end
+  call testFldeq 1 0 15
+  if answer is not 0
+    go to arm_7
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_7
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_7
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_6 0
+  if answer is 0
+    match
+  end
+place arm_7
+  plant test arm_8
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_8
+  end
+  call testFldeq 1 0 27
+  if answer is not 0
+    go to arm_8
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_8
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_8
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_7 0
+  if answer is 0
+    match
+  end
+place arm_8
+  plant test arm_9
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_9
+  end
+  call testFldeq 1 0 14
+  if answer is not 0
+    go to arm_9
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_9
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_9
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_8 0
+  if answer is 0
+    match
+  end
+place arm_9
+  plant test arm_10
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_10
+  end
+  call testFldeq 1 0 31
+  if answer is not 0
+    go to arm_10
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_10
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_10
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_9 0
+  if answer is 0
+    match
+  end
+place arm_10
+  plant test arm_11
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_11
+  end
+  call testFldeq 1 0 25
+  if answer is not 0
+    go to arm_11
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_11
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_11
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_10 0
+  if answer is 0
+    match
+  end
+place arm_11
+  plant test arm_12
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_12
+  end
+  call testFldeq 1 0 52
+  if answer is not 0
+    go to arm_12
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_12
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_12
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_11 0
+  if answer is 0
+    match
+  end
+place arm_12
+  plant test arm_13
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_13
+  end
+  call testFldeq 1 0 46
+  if answer is not 0
+    go to arm_13
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_13
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_13
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_12 0
+  if answer is 0
+    match
+  end
+place arm_13
+  plant test arm_14
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_14
+  end
+  call testFldeq 1 0 38
+  if answer is not 0
+    go to arm_14
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_14
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_14
+  end
+  plant test nogem_13
+  call advance_tok
+  if answer is 0
+    call testFldeq 1 0 38
+    if answer is 0
+      call lpta_rpta_loadp addr in_l addr ph_r
+      call insert_2pt_s 2 1 sym ph_3 0
+      if answer is 0
+        match
+      end
+    end
+  end
+place nogem_13
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_13 0
+  if answer is 0
+    match
+  end
+place arm_14
+  plant test arm_15
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_15
+  end
+  call testFldeq 1 0 33
+  if answer is not 0
+    go to arm_15
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_15
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_15
+  end
+  plant test nogem_14
+  call advance_tok
+  if answer is 0
+    call testFldeq 1 0 33
+    if answer is 0
+      call lpta_rpta_loadp addr in_l addr ph_r
+      call insert_2pt_s 2 1 sym ph_4 0
+      if answer is 0
+        match
+      end
+    end
+  end
+place nogem_14
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_14 0
+  if answer is 0
+    match
+  end
+place arm_15
+  plant test arm_16
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_16
+  end
+  call testFldeq 1 0 34
+  if answer is not 0
+    go to arm_16
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_16
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_16
+  end
+  plant test nogem_15
+  call advance_tok
+  if answer is 0
+    call testFldeq 1 0 34
+    if answer is 0
+      call lpta_rpta_loadp addr in_l addr ph_r
+      call insert_2pt_s 2 1 sym ph_3 0
+      if answer is 0
+        match
+      end
+    end
+  end
+place nogem_15
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_15 0
+  if answer is 0
+    match
+  end
+place arm_16
+  plant test arm_17
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_17
+  end
+  call testFldeq 1 0 47
+  if answer is not 0
+    go to arm_17
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_17
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_17
+  end
+  plant test nogem_16
+  call advance_tok
+  if answer is 0
+    call testFldeq 1 0 47
+    if answer is 0
+      call lpta_rpta_loadp addr in_l addr ph_r
+      call insert_2pt_s 2 1 sym ph_4 0
+      if answer is 0
+        match
+      end
+    end
+  end
+place nogem_16
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_16 0
+  if answer is 0
+    match
+  end
+place arm_17
+  plant test arm_18
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_18
+  end
+  call testFldeq 1 0 20
+  if answer is not 0
+    go to arm_18
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_18
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_18
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_17 0
+  if answer is 0
+    match
+  end
+place arm_18
+  plant test arm_19
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_19
+  end
+  call testFldeq 1 0 21
+  if answer is not 0
+    go to arm_19
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_19
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_19
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_18 0
+  if answer is 0
+    match
+  end
+place arm_19
+  plant test arm_20
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_20
+  end
+  call testFldeq 1 0 42
+  if answer is not 0
+    go to arm_20
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_20
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_20
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_19 0
+  if answer is 0
+    match
+  end
+place arm_20
+  plant test arm_21
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_21
+  end
+  call testFldeq 1 0 36
+  if answer is not 0
+    go to arm_21
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_21
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_21
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_20 0
+  if answer is 0
+    match
+  end
+place arm_21
+  plant test arm_22
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_22
+  end
+  call testFldeq 1 0 24
+  if answer is not 0
+    go to arm_22
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_22
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_22
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_21 0
+  if answer is 0
+    match
+  end
+place arm_22
+  plant test arm_23
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_23
+  end
+  call testFldeq 1 0 45
+  if answer is not 0
+    go to arm_23
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_23
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_23
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_22 0
+  if answer is 0
+    match
+  end
+place arm_23
+  plant test arm_24
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_24
+  end
+  call testFldeq 1 0 19
+  if answer is not 0
+    go to arm_24
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_24
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_24
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_23 0
+  if answer is 0
+    match
+  end
+place arm_24
+  plant test arm_25
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_25
+  end
+  call testFldeq 1 0 40
+  if answer is not 0
+    go to arm_25
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_25
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_25
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_24 0
+  if answer is 0
+    match
+  end
+place arm_25
+  plant test arm_26
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_26
+  end
+  call testFldeq 1 0 30
+  if answer is not 0
+    go to arm_26
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_26
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_26
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_25 0
+  if answer is 0
+    match
+  end
+place arm_26
+  plant test arm_27
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_27
+  end
+  call testFldeq 1 0 28
+  if answer is not 0
+    go to arm_27
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_27
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_27
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_26 0
+  if answer is 0
+    match
+  end
+place arm_27
+  plant test arm_28
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_28
+  end
+  call testFldeq 1 0 3
+  if answer is not 0
+    go to arm_28
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_28
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_28
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_27 0
+  if answer is 0
+    match
+  end
+place arm_28
+  plant test arm_29
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_29
+  end
+  call testFldeq 1 0 2
+  if answer is not 0
+    go to arm_29
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_29
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_29
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_28 0
+  if answer is 0
+    match
+  end
+place arm_29
+  plant test arm_30
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_30
+  end
+  call testFldeq 1 0 7
+  if answer is not 0
+    go to arm_30
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_30
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_30
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_29 0
+  if answer is 0
+    match
+  end
+place arm_30
+  plant test arm_31
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_31
+  end
+  call testFldeq 1 0 1
+  if answer is not 0
+    go to arm_31
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_31
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_31
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_30 0
+  if answer is 0
+    match
+  end
+place arm_31
+  plant test arm_32
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_32
+  end
+  call testFldeq 1 0 5
+  if answer is not 0
+    go to arm_32
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_32
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_32
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_31 0
+  if answer is 0
+    match
+  end
+place arm_32
+  plant test arm_33
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_33
+  end
+  call testFldeq 1 0 4
+  if answer is not 0
+    go to arm_33
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_33
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_33
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_32 0
+  if answer is 0
+    match
+  end
+place arm_33
+  plant test arm_34
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_34
+  end
+  call testFldeq 1 0 12
+  if answer is not 0
+    go to arm_34
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_34
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_34
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_33 0
+  if answer is 0
+    match
+  end
+place arm_34
+  plant test arm_35
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_35
+  end
+  call testFldeq 1 0 43
+  if answer is not 0
+    go to arm_35
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_35
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_35
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_35 0
+  if answer is 0
+    match
+  end
+place arm_35
+  plant test arm_36
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_36
+  end
+  call testFldeq 1 0 32
+  if answer is not 0
+    go to arm_36
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_36
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_36
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_36 0
+  if answer is 0
+    match
+  end
+place arm_36
+  plant test arm_37
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_37
+  end
+  call testFldeq 1 0 35
+  if answer is not 0
+    go to arm_37
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_37
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_37
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_37 0
+  if answer is 0
+    match
+  end
+place arm_37
+  plant test arm_38
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_38
+  end
+  call testFldeq 1 0 48
+  if answer is not 0
+    go to arm_38
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_38
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_38
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_38 0
+  if answer is 0
+    match
+  end
+place arm_38
+  plant test arm_39
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_39
+  end
+  call testFldeq 1 0 41
+  if answer is not 0
+    go to arm_39
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_39
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_39
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_39 0
+  if answer is 0
+    match
+  end
+place arm_39
+  plant test arm_40
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_40
+  end
+  call testFldeq 1 0 155
+  if answer is not 0
+    go to arm_40
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_40
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_40
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_40 0
+  if answer is 0
+    match
+  end
+place arm_40
+  plant test arm_41
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_41
+  end
+  call testFldeq 1 0 49
+  if answer is not 0
+    go to arm_41
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_41
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_41
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_41 0
+  if answer is 0
+    match
+  end
+place arm_41
+  plant test arm_42
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_42
+  end
+  call testFldeq 1 0 156
+  if answer is not 0
+    go to arm_42
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_42
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_42
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_42 0
+  if answer is 0
+    match
+  end
+place arm_42
+  plant test arm_43
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_43
+  end
+  call testFldeq 1 0 50
+  if answer is not 0
+    go to arm_43
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_43
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_43
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_43 0
+  if answer is 0
+    match
+  end
+place arm_43
+  plant test arm_44
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_44
+  end
+  call testFldeq 1 0 17
+  if answer is not 0
+    go to arm_44
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_44
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_44
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_44 0
+  if answer is 0
+    match
+  end
+place arm_44
+  plant test arm_45
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_45
+  end
+  call testFldeq 1 0 149
+  if answer is not 0
+    go to arm_45
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_45
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_45
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_45 0
+  if answer is 0
+    match
+  end
+place arm_45
+  plant test arm_46
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_46
+  end
+  call testFldeq 1 0 151
+  if answer is not 0
+    go to arm_46
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_46
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_46
+  end
+  plant test nogem_45
+  call advance_tok
+  if answer is 0
+    call testFldeq 1 0 151
+    if answer is 0
+      call lpta_rpta_loadp addr in_l addr ph_r
+      call insert_2pt_s 2 1 sym ph_4 0
+      if answer is 0
+        match
+      end
+    end
+  end
+place nogem_45
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_46 0
+  if answer is 0
+    match
+  end
+place arm_46
+  plant test arm_47
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_47
+  end
+  call testFldeq 1 0 152
+  if answer is not 0
+    go to arm_47
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_47
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_47
+  end
+  plant test nogem_46
+  call advance_tok
+  if answer is 0
+    call testFldeq 1 0 152
+    if answer is 0
+      call lpta_rpta_loadp addr in_l addr ph_r
+      call insert_2pt_s 2 1 sym ph_3 0
+      if answer is 0
+        match
+      end
+    end
+  end
+place nogem_46
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_47 0
+  if answer is 0
+    match
+  end
+place arm_47
+  plant test arm_48
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_48
+  end
+  call testFldeq 1 0 153
+  if answer is not 0
+    go to arm_48
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_48
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_48
+  end
+  plant test nogem_47
+  call advance_tok
+  if answer is 0
+    call testFldeq 1 0 153
+    if answer is 0
+      call lpta_rpta_loadp addr in_l addr ph_r
+      call insert_2pt_s 2 1 sym ph_4 0
+      if answer is 0
+        match
+      end
+    end
+  end
+place nogem_47
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_48 0
+  if answer is 0
+    match
+  end
+place arm_48
+  plant test arm_49
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_49
+  end
+  call testFldeq 1 0 154
+  if answer is not 0
+    go to arm_49
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_49
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_49
+  end
+  plant test nogem_48
+  call advance_tok
+  if answer is 0
+    call testFldeq 1 0 154
+    if answer is 0
+      call lpta_rpta_loadp addr in_l addr ph_r
+      call insert_2pt_s 2 1 sym ph_3 0
+      if answer is 0
+        match
+      end
+    end
+  end
+place nogem_48
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_49 0
+  if answer is 0
+    match
+  end
+place arm_49
+  plant test arm_50
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_50
+  end
+  call testFldeq 1 0 39
+  if answer is not 0
+    go to arm_50
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_50
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_50
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_50 0
+  if answer is 0
+    match
+  end
+place arm_50
+  plant test arm_51
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_51
+  end
+  call testFldeq 1 0 51
+  if answer is not 0
+    go to arm_51
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_51
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_51
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_51 0
+  if answer is 0
+    match
+  end
+place arm_51
+  plant test arm_52
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_52
+  end
+  call testFldeq 1 0 23
+  if answer is not 0
+    go to arm_52
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_52
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_52
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_52 0
+  if answer is 0
+    match
+  end
+place arm_52
+  plant test arm_53
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_53
+  end
+  call testFldeq 1 0 29
+  if answer is not 0
+    go to arm_53
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_53
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_53
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_53 0
+  if answer is 0
+    match
+  end
+place arm_53
+  plant test arm_54
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_54
+  end
+  call testFldeq 1 0 6
+  if answer is not 0
+    go to arm_54
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_54
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_54
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_54 0
+  if answer is 0
+    match
+  end
+place arm_54
+  plant test arm_55
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_55
+  end
+  call testFldeq 1 0 159
+  if answer is not 0
+    go to arm_55
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_55
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_55
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_55 0
+  if answer is 0
+    match
+  end
+place arm_55
+  plant test arm_56
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_56
+  end
+  call testFldeq 1 0 141
+  if answer is not 0
+    go to arm_56
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_56
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_56
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_56 0
+  if answer is 0
+    match
+  end
+place arm_56
+  plant test arm_57
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_57
+  end
+  call testFldeq 1 0 16
+  if answer is not 0
+    go to arm_57
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_57
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_57
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_57 0
+  if answer is 0
+    match
+  end
+place arm_57
+  plant test arm_58
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_58
+  end
+  call testFldeq 1 0 37
+  if answer is not 0
+    go to arm_58
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_58
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_58
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_58 0
+  if answer is 0
+    match
+  end
+place arm_58
+  plant test arm_59
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_59
+  end
+  call testFldeq 1 0 44
+  if answer is not 0
+    go to arm_59
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_59
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_59
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_59 0
+  if answer is 0
+    match
+  end
+place arm_59
+  plant test arm_60
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_60
+  end
+  call testFldeq 1 0 147
+  if answer is not 0
+    go to arm_60
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_60
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_60
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_60 0
+  if answer is 0
+    match
+  end
+place arm_60
+  plant test arm_61
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_61
+  end
+  call testFldeq 1 0 8
+  if answer is not 0
+    go to arm_61
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_61
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_61
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_61 0
+  if answer is 0
+    match
+  end
+place arm_61
+  plant test arm_62
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_62
+  end
+  call testFldeq 1 0 10
+  if answer is not 0
+    go to arm_62
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_62
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_62
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_62 0
+  if answer is 0
+    match
+  end
+place arm_62
+  plant test arm_63
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_63
+  end
+  call testFldeq 1 0 9
+  if answer is not 0
+    go to arm_63
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_63
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_63
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_63 0
+  if answer is 0
+    match
+  end
+place arm_63
+  plant test arm_64
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_64
+  end
+  call testFldeq 1 0 143
+  if answer is not 0
+    go to arm_64
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_64
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_64
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_64 0
+  if answer is 0
+    match
+  end
+place arm_64
+  plant test arm_65
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_65
+  end
+  call testFldeq 1 0 131
+  if answer is not 0
+    go to arm_65
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_65
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_65
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_65 0
+  if answer is 0
+    match
+  end
+place arm_65
+  plant test arm_66
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_66
+  end
+  call testFldeq 1 0 134
+  if answer is not 0
+    go to arm_66
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_66
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_66
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_66 0
+  if answer is 0
+    match
+  end
+place arm_66
+  plant test arm_67
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_67
+  end
+  call testFldeq 1 0 136
+  if answer is not 0
+    go to arm_67
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_67
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_67
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_67 0
+  if answer is 0
+    match
+  end
+place arm_67
+  plant test arm_68
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_68
+  end
+  call testFldeq 1 0 139
+  if answer is not 0
+    go to arm_68
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_68
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_68
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_68 0
+  if answer is 0
+    match
+  end
+place arm_68
+  plant test arm_69
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_69
+  end
+  call testFldeq 1 0 117
+  if answer is not 0
+    go to arm_69
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_69
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_69
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_69 0
+  if answer is 0
+    match
+  end
+place arm_69
+  plant test arm_70
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_70
+  end
+  call testFldeq 1 0 127
+  if answer is not 0
+    go to arm_70
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_70
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_70
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_70 0
+  if answer is 0
+    match
+  end
+place arm_70
+  plant test arm_71
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_71
+  end
+  call testFldeq 1 0 119
+  if answer is not 0
+    go to arm_71
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_71
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_71
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_71 0
+  if answer is 0
+    match
+  end
+place arm_71
+  plant test arm_72
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_72
+  end
+  call testFldeq 1 0 133
+  if answer is not 0
+    go to arm_72
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_72
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_72
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_72 0
+  if answer is 0
+    match
+  end
+place arm_72
+  plant test arm_73
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_73
+  end
+  call testFldeq 1 0 121
+  if answer is not 0
+    go to arm_73
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_73
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_73
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_73 0
+  if answer is 0
+    match
+  end
+place arm_73
+  plant test arm_74
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_74
+  end
+  call testFldeq 1 0 135
+  if answer is not 0
+    go to arm_74
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_74
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_74
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_74 0
+  if answer is 0
+    match
+  end
+place arm_74
+  plant test arm_75
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_75
+  end
+  call testFldeq 1 0 118
+  if answer is not 0
+    go to arm_75
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_75
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_75
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_75 0
+  if answer is 0
+    match
+  end
+place arm_75
+  plant test arm_76
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_76
+  end
+  call testFldeq 1 0 132
+  if answer is not 0
+    go to arm_76
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_76
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_76
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_76 0
+  if answer is 0
+    match
+  end
+place arm_76
+  plant test arm_77
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to arm_77
+  end
+  call testFldeq 1 0 120
+  if answer is not 0
+    go to arm_77
+  end
+  call advance_tok
+  if answer is not 0
+    go to arm_77
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to arm_77
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_77 0
+  if answer is 0
+    match
+  end
+place arm_77
+  plant test gave_up
+  call ZZlpta_load__setscan_r__1 addr in_l
+  if answer is not 0
+    go to gave_up
+  end
+  call testFldeq 1 0 128
+  if answer is not 0
+    go to gave_up
+  end
+  call advance_tok
+  if answer is not 0
+    go to gave_up
+  end
+  call ZZlpta_loadp__test_ptr addr ph_r
+  if answer is not 0
+    go to gave_up
+  end
+  call lpta_rpta_loadp addr in_l addr ph_r
+  call insert_2pt_s 2 1 sym ph_78 0
+  if answer is 0
+    match
+  end
+  give up
+end
