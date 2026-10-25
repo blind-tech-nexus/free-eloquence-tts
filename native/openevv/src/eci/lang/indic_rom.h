@@ -1644,8 +1644,11 @@ static void indic_convert_span(IndicRom *rom, IndicBuf *out,
             continue;
         }
 
-        /* Sentence & clause punctuation (including Devanagari danda । and ॥) */
-        if (cp == 0x0964 || cp == 0x0965 || cp == '.') {
+        /* Sentence & clause punctuation (including Devanagari danda । and ॥,
+           the horizontal ellipsis … and the bullet •, all of which end a
+           clause the way a full stop does). */
+        if (cp == 0x0964 || cp == 0x0965 || cp == '.'
+            || cp == 0x2026 || cp == 0x2022) {
             ibuf_puts(out, ". ");
             continue;
         }
@@ -1898,6 +1901,15 @@ static void indic_convert_span(IndicRom *rom, IndicBuf *out,
                 continue;
             }
         }
+
+        /* Anything still unhandled: an emoji, an unfamiliar symbol or a
+           mark the pipeline did not name. Dropping it outright used to join
+           the words on either side of it into one; a separating space keeps
+           them two words, which is the lesser wrong by a wide margin.
+           Letters and digits never reach here: each has its own branch
+           above, so this fires only on non-word codepoints. */
+        if (out->len > 0 && out->data[out->len - 1] != ' ')
+            ibuf_putc(out, ' ');
     }
 }
 

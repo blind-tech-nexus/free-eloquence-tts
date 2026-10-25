@@ -92,7 +92,111 @@ static const NeLexEntry ne_lex[] = {
     { "हुँदैन", "1h\xfc.d\xe4.n\xf8" },
     { "हेर्न", "1her.n\xf8" },
     { "हो", "1ho" },
-    { "होइन", "1ho.i.n\xf8" }
+    { "होइन", "1ho.i.n\xf8" },
+    /* ---- high-frequency Nepali function words and everyday nouns.
+       Nepali phonology: च छ ज झ are dental-alveolar affricates
+       (T \xf0 D \xd0), श ष स merge to /s/, व is [b] initially and
+       [w] in clusters, इ/ई and उ/ऊ merge, and lexical stress is
+       root-initial. ---- */
+    { "यो", "1jo" },
+    { "त्यो", "1tjo" },
+    { "के", "1ke" },
+    { "को", "1ko" },
+    { "कहाँ", "1k\xf8.h\xe3" },
+    { "घर", "1Y\xf8r" },
+    { "पानी", "1pa.ni" },
+    { "दूध", "1duV" },
+    { "भात", "1Bat" },
+    { "दाल", "1dal" },
+    { "तरकारी", "1t\xf8r.ka.ri" },
+    { "राम्रो", "1r\xf8m.ro" },
+    { "नराम्रो", "1n\xf8.ram.ro" },
+    { "ठूलो", "1\xf1u.lo" },
+    { "सानो", "1sa.no" },
+    { "पछि", "1p\xf8.\xf0i" },
+    { "अगाडि", "1\xf8Ga.Wi" },
+    { "मान्छे", "1man.\xf0e" },
+    { "मानिस", "1ma.nis" },
+    { "देश", "1des" },
+    { "नेपाली", "1ne.pa.li" },
+    { "धन्यवाद", "1V\xf8.ny\xf8.bad" },
+    { "स्वागत", "1swa.G\xf8t" },
+    { "भयो", "1B\xf8.jo" },
+    { "थियो", "1Fi.jo" },
+    { "भएको", "1B\xf8.e.ko" },
+    { "गर्छु", "1g\xf8r.\xf0u" },
+    { "गर्छन्", "1g\xf8r.\xf0\xf8n" },
+    { "हुने", "1hu.ne" },
+    { "हाम्रो", "1ham.ro" },
+    { "तिम्रो", "1tim.ro" },
+    { "बुबा", "1bu.ba" },
+    { "आमा", "1a.ma" },
+    { "दाजु", "1da.Du" },
+    { "भाइ", "1Bai" },
+    { "बहिनी", "1B\xf8.hi.ni" },
+    { "छोरा", "1\xf0o.ra" },
+    { "छोरी", "1\xf0o.ri" },
+    { "पुस्तक", "1pus.t\xf8k" },
+    { "कलम", "1k\xf8.l\xf8m" },
+    { "कागज", "1kaG.\xf8D" },
+    { "शुभकामना", "1suV.k\xf8.ma.na" },
+    { "बिदाई", "1bi.da.i" },
+    { "खाना", "1Ka.na" },
+    { "पैसा", "1p\xe4.sa" },
+    { "बाटो", "1ba.Mo" },
+    { "गाउँ", "1G\xd6" },
+    { "शहर", "1s\xf8.h\xf8r" },
+    { "पहाड", "1p\xf8.ha.W" },
+    { "हिमाल", "1hi.mal" },
+    { "नदी", "1n\xf8.di" },
+    { "ताल", "1tal" },
+    { "जंगल", "1D\xf8G.\xf8l" },
+    { "फूल", "1Pul" },
+    { "रुख", "1ruK" },
+    { "पात", "1pat" },
+    { "आकाश", "1a.kas" },
+    { "धर्ती", "1V\xf8r.ti" },
+    { "महिला", "1m\xf8.hi.la" },
+    { "पुरुष", "1pu.rus" },
+    { "केटा", "1ke.Ma" },
+    { "केटी", "1ke.ti" },
+    { "स्कुल", "1skul" },
+    { "काम", "1kam" },
+    { "नयाँ", "1n\xf8.j\xe3" },
+    { "पुरानो", "1pu.ra.no" },
+    { "सुरक्षा", "1su.r\xf8k.sa" },
+    { "सरकार", "1s\xf8r.kar" },
+    { "राष्ट्र", "1ras.Mr" },
+    { "इतिहास", "1i.ti.has" },
+    { "विज्ञान", "1biG.gan" },
+    { "सूचना", "1suT.na" },
+    { "प्रविधि", "1pr\xf8.bi.Vi" },
+    { "इन्टरनेट", "1in.M\xf8r.ne.M" },
+    { "मोबाइल", "1mo.bail" },
+    { "फोन", "1Pon" },
+    { "समाचार", "1s\xf8.ma.Tar" },
+    { "रेडियो", "1re.Wi.jo" },
+    { "टेलिभिजन", "1Meli.bi.D\xf8n" },
+    { "अस्पताल", "1\xf8s.pa.tal" },
+    { "औषधि", "1\xf6s\xf8.Vi" },
+    { "शिक्षा", "1sik.sa" },
+    { "विकास", "1bi.kas" },
+    { "भाषा", "1Ba.sa" },
+    { "शब्द", "1s\xf8b.d\xf8" },
+    { "अर्थ", "1\xf8rF" },
+    { "नियम", "1ni.j\xf8m" },
+    { "सत्य", "1s\xf8t.j\xf8" },
+    { "शान्ति", "1san.ti" },
+    { "युद्ध", "1yud.V\xf8" },
+    { "दया", "1d\xf8.ja" },
+    { "माया", "1ma.ja" },
+    { "सपना", "1s\xf8p.na" },
+    { "यात्रा", "1ya.tra" },
+    { "समय", "1s\xf8m\xf8j" },
+    { "आज्ञा", "1aG.ja" },
+    { "बजार", "1b.Dar" },
+    { "पसल", "1p.sal" },
+    { "चोक", "1Tok" }
 };
 
 static const char *ne_lex_lookup(const uint32_t *cps, size_t n)
@@ -587,7 +691,26 @@ static const char *ne_lookup_abbrev(const char *tok, size_t len)
         { "रु.", "रुपैयाँ" }, { "रू.", "रुपैयाँ" },
         { "वि.", "विक्रम" }, { "सं.", "संवत्" },
         { "ई.", "ईस्वी" },
-        { "कि.", "किलो" }, { "मी.", "मीटर" }, { "से.", "सेन्टि" }
+        { "कि.", "किलो" }, { "मी.", "मीटर" }, { "से.", "सेन्टि" },
+        /* Titles, units and administrative shorthand, accepting both the
+           Latin dot and the Devanagari abbreviation dot ॰ (U+0970).
+           Values are ordinary Nepali words and go back through the
+           converter, so the rules decide their sounds. */
+        { "प्रो.", "प्रोफेसर" }, { "प्रो॰", "प्रोफेसर" },
+        { "मि.", "मिनेट" }, { "मि॰", "मिनेट" },
+        { "घं.", "घण्टा" }, { "घं॰", "घण्टा" },
+        { "नं.", "नम्बर" }, { "नं॰", "नम्बर" },
+        { "क्र.", "क्रम" }, { "क्र॰", "क्रम" },
+        { "पृ.", "पृष्ठ" }, { "पृ॰", "पृष्ठ" },
+        { "अ.", "अध्याय" }, { "अ॰", "अध्याय" },
+        { "सुश्री.", "सुश्री" },
+        { "किमी.", "किलोमीटर" }, { "किमी॰", "किलोमीटर" },
+        { "सेमी.", "सेन्टिमीटर" }, { "सेमी॰", "सेन्टिमीटर" },
+        { "मिमी.", "मिलिमीटर" }, { "मिमी॰", "मिलिमीटर" },
+        { "केजि.", "किलोग्राम" }, { "केजि॰", "किलोग्राम" },
+        { "लि.", "लिटर" }, { "लि॰", "लिटर" },
+        { "सेक.", "सेकेन्ड" }, { "सेक॰", "सेकेन्ड" },
+        { "ने.रू.", "नेपाली रुपैयाँ" }, { "ने.रू॰", "नेपाली रुपैयाँ" }
     };
     size_t i;
     for (i = 0; i < sizeof tab / sizeof tab[0]; i++) {
@@ -607,8 +730,39 @@ static const char *ne_lookup_symbol(uint32_t cp)
     case '#': return "ह्यास";
     case '/': return "भाग";
     case '$': return "डलर";
+    case '+': return "धन";
+    case '%': return "प्रतिशत";
+    case '^': return "क्यारेट";
+    case '~': return "लगभग";
+    case '\\': return "ब्याकस्ल्यास";
+    case '|': return "पाइप";
+    case '<': return "भन्दा कम";
+    case '>': return "भन्दा बढी";
+    case '_': return "अन्डरस्कोर";
+    case '`': return "ब्याकटिक";
+    case '{': return "खुलो घुँग्रो";
+    case '}': return "बन्द घुँग्रो";
+    case '[': return "खुलो ब्राकेट";
+    case ']': return "बन्द ब्राकेट";
     case 0x20ac: return "युरो";
     case 0x00a3: return "पाउन्ड";
+    case 0x00a5: return "येन";
+    case 0x20b9: return "रुपैयाँ";
+    case 0x00b0: return "डिग्री";
+    case 0x00b1: return "धन वा ऋण";
+    case 0x00d7: return "गुणन";
+    case 0x00f7: return "भाग";
+    case 0x2026: return "इत्यादि";
+    case 0x2122: return "ट्रेडमार्क";
+    case 0x00ae: return "दर्ता गरिएको";
+    case 0x00a9: return "प्रतिलिपि अधिकार";
+    case 0x00b6: return "अनुच्छेद";
+    case 0x00a7: return "दफा";
+    case 0x2192: return "तीर";
+    case 0x2605: return "तारा";
+    case 0x2665: return "मुटु";
+    case 0x2713: return "ठीक चिह्न";
+    case 0x2717: return "गलत चिह्न";
     default:  return NULL;
     }
 }

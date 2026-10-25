@@ -243,6 +243,12 @@ private fun VoiceCustomization(state: SettingsModel) {
 		checked = state.forceLanguage,
 		onChange = state::chooseForceLanguage
 	)
+	SwitchRow(
+		label = stringResource(R.string.auto_language_label),
+		description = stringResource(R.string.auto_language_description),
+		checked = state.autoLanguageSwitching,
+		onChange = state::chooseAutoLanguageSwitching
+	)
 	val voices = state.voiceProfileNames
 	ChoiceButton(
 		title = stringResource(R.string.voice_label),
