@@ -1,43 +1,90 @@
-# Indo-Aryan consonant acoustic rules.
+# Indo-Aryan consonant acoustic rules (nenp).
 rule indi_ret_Fv takes 1 from is_val.obj
   call ZZfence_null
-  set global half 2926 to 1550
-  set global half 2930 to 1550
-  set global half 2934 to 2050
-  set global half 2938 to 2050
-  set global half 2942 to 3150
-  set global half 2946 to 3150
+  set global half 2926 to 1680
+  set global half 2930 to 1680
+  set global half 2934 to 2110
+  set global half 2938 to 2110
+  set global half 2942 to 3180
+  set global half 2946 to 3180
+  match
+end
+
+rule indi_ph_t takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2918 to 260
+  set global half 2922 to 260
+  set global half 2926 to 1640
+  set global half 2930 to 1640
+  set global half 2934 to 2540
+  set global half 2938 to 2540
+  set global half 2818 to 44
+  set global half 2858 to 56
+  set global half 2894 to 52
+  set global half 2898 to 56
+  set global half 2902 to 54
+  match
+end
+
+rule indi_ph_d takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2918 to 210
+  set global half 2922 to 210
+  set global half 2926 to 1620
+  set global half 2930 to 1620
+  set global half 2934 to 2520
+  set global half 2938 to 2520
+  plant test d_vb
+  call do_ital_voice_bar
+place d_vb
+  set global half 2858 to 52
+  set global half 2894 to 48
+  set global half 2898 to 52
+  match
+end
+
+rule indi_ph_r takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2918 to 360
+  set global half 2922 to 360
+  set global half 2926 to 1540
+  set global half 2930 to 1540
+  set global half 2934 to 2280
+  set global half 2938 to 2280
+  set global half 2746 to 50
+  set global half 2726 to 120
+  set global half 2730 to 110
   match
 end
 
 rule indi_ph_M takes 1 from is_val.obj
   call ZZfence_null
-  set global half 2918 to 300
-  set global half 2922 to 300
+  set global half 2918 to 290
+  set global half 2922 to 290
   plant test m_fv
   call indi_ret_Fv
 place m_fv
-  set global half 2818 to 48
+  set global half 2818 to 50
   set global half 2858 to 60
-  set global half 2890 to 56
-  set global half 2894 to 62
+  set global half 2890 to 58
+  set global half 2894 to 63
   set global half 2898 to 54
   match
 end
 
 rule indi_ph_W takes 1 from is_val.obj
   call ZZfence_null
-  set global half 2918 to 200
-  set global half 2922 to 200
+  set global half 2918 to 210
+  set global half 2922 to 210
   plant test w_fv
   call indi_ret_Fv
 place w_fv
   plant test w_vb
   call do_ital_voice_bar
 place w_vb
-  set global half 2858 to 55
-  set global half 2890 to 52
-  set global half 2894 to 58
+  set global half 2858 to 56
+  set global half 2890 to 54
+  set global half 2894 to 59
   match
 end
 
@@ -45,29 +92,31 @@ rule indi_ph_X takes 1 from is_val.obj
   call ZZfence_null
   set global half 2918 to 280
   set global half 2922 to 280
-  set global half 2926 to 1480
-  set global half 2930 to 1480
-  set global half 2934 to 2080
-  set global half 2938 to 2080
-  set global half 2746 to 50
+  set global half 2926 to 1620
+  set global half 2930 to 1620
+  set global half 2934 to 2130
+  set global half 2938 to 2130
+  set global half 2746 to 53
+  set global half 2766 to 430
+  set global half 2758 to 54
   set global half 2866 to 1
   set global half 3014 to 4
-  set global half 2726 to 180
+  set global half 2726 to 165
   set global half 2730 to 120
   match
 end
 
 rule indi_ph_j takes 1 from is_val.obj
   call ZZfence_null
-  set global half 2918 to 340
-  set global half 2922 to 340
-  set global half 2926 to 1520
-  set global half 2930 to 1520
-  set global half 2934 to 1980
-  set global half 2938 to 1980
-  set global half 2746 to 49
-  set global half 2726 to 130
-  set global half 2730 to 110
+  set global half 2918 to 350
+  set global half 2922 to 350
+  set global half 2926 to 1660
+  set global half 2930 to 1660
+  set global half 2934 to 2070
+  set global half 2938 to 2070
+  set global half 2746 to 52
+  set global half 2726 to 120
+  set global half 2730 to 105
   match
 end
 
@@ -79,7 +128,7 @@ rule indi_ph_q takes 1 from is_val.obj
   set global half 2930 to 1020
   set global half 2934 to 2320
   set global half 2938 to 2320
-  set global half 2818 to 46
+  set global half 2818 to 48
   set global half 2858 to 60
   set global half 2890 to 62
   set global half 2894 to 54
@@ -109,7 +158,7 @@ rule indi_ph_A takes 1 from is_val.obj
   set global half 2930 to 1180
   set global half 2934 to 2360
   set global half 2938 to 2360
-  set global half 2746 to 44
+  set global half 2746 to 48
   set global half 2754 to 50
   set global half 2774 to 52
   set global half 2726 to 150
@@ -125,54 +174,57 @@ rule indi_ph_ss takes 1 from is_val.obj
 place ss_fv
   set global half 2754 to 56
   set global half 2774 to 56
-  set global half 2778 to 60
-  set global half 2782 to 56
-  set global half 2726 to 180
+  set global half 2778 to 61
+  set global half 2782 to 57
+  set global half 2726 to 170
   match
 end
 
 rule indi_ph_va takes 1 from is_val.obj
   call ZZfence_null
-  set global half 2918 to 320
-  set global half 2922 to 320
-  set global half 2926 to 1080
-  set global half 2930 to 1080
-  set global half 2934 to 2320
-  set global half 2938 to 2320
-  set global half 2746 to 52
-  set global half 2726 to 100
+  set global half 2918 to 335
+  set global half 2922 to 335
+  set global half 2926 to 860
+  set global half 2930 to 860
+  set global half 2934 to 2360
+  set global half 2938 to 2360
+  set global half 2746 to 54
+  set global half 2726 to 95
   set global half 2730 to 95
   match
 end
 
 rule indi_ph_h takes 1 from is_val.obj
   call ZZfence_null
-  set global half 2746 to 38
-  set global half 2750 to 50
-  set global half 2914 to 12
-  set global half 2726 to 240
-  set global half 2730 to 160
+  set global half 2714 to 43
+  set global half 2746 to 43
+  set global half 2750 to 52
+  set global half 2914 to 10
+  set global half 2726 to 220
+  set global half 2730 to 150
   match
 end
 
 rule indi_ph_H takes 1 from is_val.obj
   call ZZfence_null
-  set global half 2750 to 53
-  set global half 2914 to 8
-  set global half 2726 to 260
-  set global half 2730 to 160
+  set global half 2750 to 54
+  set global half 2914 to 6
+  set global half 2726 to 240
+  set global half 2730 to 150
   match
 end
 
 rule indi_ph_Q takes 1 from is_val.obj
   call ZZfence_null
-  set global half 2746 to 40
-  set global half 2750 to 50
-  set global half 2914 to 12
-  set global half 2726 to 250
-  set global half 2730 to 165
+  set global half 2714 to 44
+  set global half 2746 to 44
+  set global half 2750 to 53
+  set global half 2914 to 10
+  set global half 2726 to 230
+  set global half 2730 to 155
   match
 end
+
 
 rule ital_con_vals takes 1 from is_val.obj
   call ZZfence_null
@@ -204,7 +256,7 @@ place cv_2
     call testFldeq 2 0 4
     if answer is 0
       plant test cv_tail
-      call ital_ph_t
+      call indi_ph_t
       go to cv_tail
     end
   end
@@ -215,7 +267,7 @@ place cv_3
     call testFldeq 2 0 3
     if answer is 0
       plant test cv_tail
-      call ital_ph_d
+      call indi_ph_d
       go to cv_tail
     end
   end
@@ -380,7 +432,7 @@ place cv_18
     call testFldeq 2 0 21
     if answer is 0
       plant test cv_tail
-      call ital_ph_r
+      call indi_ph_r
       go to cv_tail
     end
   end

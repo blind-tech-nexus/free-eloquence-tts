@@ -554,22 +554,31 @@ static int32_t postAndCommit(SynthThread *t, ETImessage *m, int32_t seq,
                              int32_t units, int drop_on_failure)
 {
     int32_t rc = ERR_FAILED;
+    int32_t prev_posted = APP_POSTED(ST_APP(t));
+    int32_t prev_flag = ST_POSTED(t);
     int16_t sent;
 
     m->vt->addRef(m);
+    APP_POSTED(ST_APP(t)) = seq;
+    ST_PENDING(t) += units;
+    ST_POSTED(t) = 1;
     sent = qt_postMessage(t, m);
     if (sent != POST_FAILED) {
         rc = OK;
-        if (sent == POST_QUEUED) {
-            APP_POSTED(ST_APP(t)) = seq;
-            ST_PENDING(t) += units;
-            ST_POSTED(t) = 1;
+        if (sent != POST_QUEUED) {
+            APP_POSTED(ST_APP(t)) = prev_posted;
+            ST_PENDING(t) -= units;
+            ST_POSTED(t) = prev_flag;
         }
         m->vt->release(m);
-    } else if (drop_on_failure) {
-        m->vt->destroy(m, 1);
     } else {
-        m->vt->release(m);
+        APP_POSTED(ST_APP(t)) = prev_posted;
+        ST_PENDING(t) -= units;
+        ST_POSTED(t) = prev_flag;
+        if (drop_on_failure)
+            m->vt->destroy(m, 1);
+        else
+            m->vt->release(m);
     }
     return rc;
 }

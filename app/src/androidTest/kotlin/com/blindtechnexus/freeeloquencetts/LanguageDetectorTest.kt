@@ -173,6 +173,59 @@ class LanguageDetectorTest {
 	}
 
 	@Test
+	fun anUnmarkedWordTakesTheLanguageOfItsSentence() {
+		// घर and पानी are everyday words in both languages; the copula at
+		// the end of each sentence is what says which voice they belong to,
+		// and the whole sentence must follow it, word by word.
+		val hindi = LanguageDetector.split("मेरे घर में पानी है", base)
+		assertTrue(hindi.all { it.language == Eci.HINDI })
+		val nepali = LanguageDetector.split("मेरो घरमा पानी छ", base)
+		assertTrue(nepali.all { it.language == Eci.NEPALI })
+	}
+
+	@Test
+	fun adjacentSentencesMayChangeLanguage() {
+		val segments = LanguageDetector.split(
+			"मुझे स्कूल जाना है। म बिस्तारै बोल्नुहोस् भन्छु।", base
+		)
+		assertEquals(Eci.HINDI, segments.first().language)
+		assertEquals(Eci.NEPALI, segments.last().language)
+		assertEquals(
+			"मुझे स्कूल जाना है। म बिस्तारै बोल्नुहोस् भन्छु।",
+			segments.joinToString("") { it.text }
+		)
+	}
+
+	@Test
+	fun nepaliCliticsAndPoliteEndingsMarkTheirSentence() {
+		assertEquals(
+			Eci.NEPALI,
+			LanguageDetector.detect("मानिसहरूलाई कथा सुनाउनुहोस्", base)
+		)
+		assertEquals(
+			Eci.NEPALI,
+			LanguageDetector.detect("तपाईंको घर काठमाडौँमा छ", Eci.HINDI)
+		)
+		assertEquals(
+			Eci.HINDI,
+			LanguageDetector.detect("चायवाला आया और सब लोग हँसे", Eci.NEPALI)
+		)
+	}
+
+	@Test
+	fun anUnknownLatinWordBorrowsItsNeighboursLanguage() {
+		// A product name between French words is read in the French voice
+		// rather than bouncing the sentence into English for one word.
+		val segments = LanguageDetector.split("Bonjour, ouvre Microsoft Launcher maintenant", base)
+		assertTrue(segments.all { it.language == Eci.FRENCH_FRANCE })
+		// And between Hindi words an English product name stays English,
+		// because a Latin word has no Devanagari pronunciation.
+		val mixed = LanguageDetector.split("मेरा Microsoft Launcher खोलो", Eci.HINDI)
+		assertEquals(Eci.HINDI, mixed.first().language)
+		assertTrue(mixed.any { it.language == Eci.ENGLISH_US })
+	}
+
+	@Test
 	fun longMixedTextStaysFastAndComplete() {
 		val line = buildString {
 			repeat(200) {

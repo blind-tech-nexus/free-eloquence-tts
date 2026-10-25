@@ -335,6 +335,18 @@ class EvvTtsService : TextToSpeechService() {
 				val made = ensureEngineLocked(settings?.language ?: Eci.ENGLISH_US)
 				if (made == null) return@synchronized
 				settings?.let { applySettings(made, made.language, it) }
+				// The voices automatic detection reaches for most, warmed
+				// behind the listener's own: American English and the two
+				// Devanagari voices. A mixed sentence then switches between
+				// engines that are already open instead of paying for a
+				// first opening in the middle of the sentence. The rest
+				// still open on first use.
+				for (extra in intArrayOf(Eci.ENGLISH_US, Eci.HINDI, Eci.NEPALI)) {
+					if (!alive || speaking.get() > 0) break
+					if (extra == made.language) continue
+					val warmed = ensureEngineLocked(extra) ?: continue
+					settings?.let { applySettings(warmed, extra, it) }
+				}
 			}
 		}, "evv-warm").also { it.isDaemon = true }.start()
 	}
@@ -1021,7 +1033,17 @@ class EvvTtsService : TextToSpeechService() {
 
 		private fun produce(raw: String, s: Settings, replacements: Substitutions, prosody: String) {
 			try {
-				if (s.autoLanguageSwitching) {
+				// Detection also runs when the switch is off whenever the
+				// one voice chosen for the utterance cannot be the voice
+				// the text is in: Devanagari handed to a Western engine, or
+				// anything at all handed to a Hindi or Nepali engine, whose
+				// Latin-script words would otherwise be pronounced as
+				// Devanagari. A listener who forced one language keeps that
+				// one language, which is what forcing means.
+				val needsDetection = s.autoLanguageSwitching ||
+					(!s.forceLanguage && (baseLanguage == Eci.HINDI || baseLanguage == Eci.NEPALI ||
+						raw.any { it in '\u0900'..'\u097F' }))
+				if (needsDetection) {
 					produceAuto(raw, s, replacements, prosody)
 					return
 				}

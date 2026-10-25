@@ -427,7 +427,7 @@ THIS int32_t aq_synchronize(ETIappMessageQueue *q)
             m->result = 1;
             answer = ((ETImsgUser *)m)->answer;
             while (answer == APP_AGAIN) {
-                th_sleep(30, 0);
+                th_sleep(2, 0);
                 m->vt->run(m);
                 m->result = 1;
                 answer = ((ETImsgUser *)m)->answer;

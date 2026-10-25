@@ -46,7 +46,7 @@
    arrive about a hundred and thirty milliseconds sooner, and one utterance
    still spends only a few hundred locks and copies on frames that are already
    in cache. */
-#define FRAME_SAMPLES 512
+#define FRAME_SAMPLES 256
 #define RING_BYTES    (256 * 1024)
 
 /* How much of a frame one read will carry, and so how big the buffer that
@@ -59,8 +59,11 @@
 #define TEXT_INITIAL  (64 * 1024)
 
 /* How many milliseconds the end-of-utterance wait will spend watching for the
-   engine to take the work up before it stops waiting for that. */
-#define START_SPINS 200
+   engine to take the work up before it stops waiting for that. postAndCommit
+   now marks ST_POSTED before qt_postMessage wakes the synthesis thread, so
+   eciSpeaking answers on the first check whenever work was queued; two spins
+   remain only as a tiny guard for silent/empty input. */
+#define START_SPINS 2
 
 /* How long speak waits for the previous utterance to leave the engine before
    it gives up and answers failure. The wait is normally milliseconds -- the
