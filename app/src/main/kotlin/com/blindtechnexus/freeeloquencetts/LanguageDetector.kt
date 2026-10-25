@@ -165,7 +165,7 @@ object LanguageDetector {
 						val sc = scriptOf(next)
 						if (sc == SCRIPT_LATIN) {
 							at += Character.charCount(next)
-						} else if ((next == '\'' || next == '-' || next == 0x2019) &&
+						} else if ((next == '\''.code || next == '-'.code || next == 0x2019) &&
 							at + Character.charCount(next) < n &&
 							scriptOf(text.codePointAt(at + Character.charCount(next))) == SCRIPT_LATIN
 						) {
