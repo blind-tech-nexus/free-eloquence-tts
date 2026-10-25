@@ -124,6 +124,9 @@ class SettingsModel(context: Context) {
 	var forceLanguage by mutableStateOf(settings.forceLanguage)
 		private set
 
+	var autoLanguageSwitching by mutableStateOf(settings.autoLanguageSwitching)
+		private set
+
 	var synthesisRouting by mutableStateOf(settings.synthesisRouting)
 		private set
 
@@ -381,6 +384,11 @@ class SettingsModel(context: Context) {
 	fun chooseForceLanguage(on: Boolean) {
 		forceLanguage = on
 		settings.forceLanguage = on
+	}
+
+	fun chooseAutoLanguageSwitching(on: Boolean) {
+		autoLanguageSwitching = on
+		settings.autoLanguageSwitching = on
 	}
 
 	fun chooseSynthesisRouting(route: Int) {

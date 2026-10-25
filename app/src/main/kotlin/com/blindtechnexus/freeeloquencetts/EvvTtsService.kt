@@ -130,6 +130,12 @@ class EvvTtsService : TextToSpeechService() {
 		val abbreviations: List<Abbreviations.Entry>
 	)
 
+	/** A prepared piece tagged with the engine language it is spoken in.
+	 *  With automatic language switching off every piece carries the
+	 *  utterance's one language; with it on, adjacent pieces may differ and
+	 *  the synthesis loop picks the matching engine for each. */
+	private class PreparedPiece(val text: String, val language: Int)
+
 	/** Wakes a wait the moment silence is asked for, so a swipe does not sit
 	 *  out the rest of a sleep before the next element can start. */
 	private val gate = Object()
@@ -737,6 +743,26 @@ class EvvTtsService : TextToSpeechService() {
 	 * threads doing their own work at the same time, and the only thing that
 	 * orders them is the flag they both watch.
 	 */
+	/**
+	 * Applies the per-request voice parameters -- the abbreviation
+	 * dictionary, the caller's rate and pitch unless the settings screen
+	 * forces its own, and the forced volume -- to one engine. Called once
+	 * per engine an utterance actually uses, so an automatic-switching
+	 * utterance touching three languages configures exactly three engines
+	 * while the ordinary path still configures exactly one. Every call is
+	 * individually guarded because a refusal must not cost the utterance.
+	 */
+	private fun applyRequestVoice(engine: EvvEngine, request: SynthesisRequest, s: Settings) {
+		try { engine.setAbbreviations(s.abbreviations) } catch (_: Exception) {}
+		try {
+			if (!s.forceRate) engine.setRatePercent(request.speechRate)
+			if (!s.forcePitch) engine.setPitchPercent(request.pitch)
+		} catch (_: Exception) {}
+		if (s.forceVolume) {
+			try { s.activeVoiceShape()[Eci.VOICE_VOLUME]?.let { v -> engine.setVolume(v) } } catch (_: Exception) {}
+		}
+	}
+
 	private fun say(
 		target: EvvEngine,
 		request: SynthesisRequest,
@@ -744,14 +770,13 @@ class EvvTtsService : TextToSpeechService() {
 		s: Settings,
 		run: Run
 	) {
-		try { target.setAbbreviations(s.abbreviations) } catch (_: Exception) {}
-		try {
-			if (!s.forceRate) target.setRatePercent(request.speechRate)
-			if (!s.forcePitch) target.setPitchPercent(request.pitch)
-		} catch (_: Exception) {}
-		if (s.forceVolume) {
-			try { s.activeVoiceShape()[Eci.VOICE_VOLUME]?.let { v -> target.setVolume(v) } } catch (_: Exception) {}
-		}
+		// The engine the utterance opened in gets the request's voice first,
+		// so the ordinary, single-language path behaves exactly as before.
+		// With automatic switching every other engine the pieces reach is
+		// configured the same way, the first time a piece reaches it.
+		val configuredEngines = HashSet<Int>(4)
+		applyRequestVoice(target, request, s)
+		configuredEngines.add(target.language)
 		// No notification is posted here, whatever the battery screen says.
 		// The notification is the persistent one and only the persistent one:
 		// a person who has turned it off gets no notification at all, and one
@@ -804,7 +829,7 @@ class EvvTtsService : TextToSpeechService() {
 			// catches everything: the utterance ends finished, the engine is
 			// given back, and the thread that drove it goes back to the
 			// framework unharmed.
-			val work = Prefetcher(rawText, s, replacements, prosody)
+			val work = Prefetcher(rawText, s, replacements, prosody, target.language)
 			feeder = work
 			try {
 				// Pieces that threw, in a row. One bad piece is skipped and
@@ -817,16 +842,35 @@ class EvvTtsService : TextToSpeechService() {
 					// used to be the pipeline running on this thread, and it
 					// is now somebody else's thread working while the piece
 					// before it is still being spoken.
-					val audio = work.take() ?: break
+					val piece = work.take() ?: break
 					if (run.stopped) break
 					// A piece that carries nothing to say -- whitespace, say,
 					// or pauses the settings annotated onto nothing -- is not
 					// handed over. An utterance of nothing is a wait for
 					// audio that is never coming, and the engine refusing it
 					// is a refusal the caller should never have invited.
-					if (EvvEngine.isBlankSpeech(audio)) continue
+					if (EvvEngine.isBlankSpeech(piece.text)) continue
+					// Automatic switching: the piece names the engine that
+					// speaks its language. The lookup is a hash map read and,
+					// when the engine is not open yet, the same make-once as
+					// any other language; all engines run at the setting's
+					// sample rate, so the opening and the player above stay
+					// valid across switches.
+					val engine = if (piece.language == target.language) {
+						target
+					} else {
+						val switched = try {
+							synchronized(engineLock) { engineFor(piece.language) }
+						} catch (_: Throwable) {
+							null
+						}
+						switched ?: target
+					}
+					if (configuredEngines.add(engine.language)) {
+						applyRequestVoice(engine, request, s)
+					}
 					try {
-						if (!target.speak(audio, isStopped = { run.stopped })) {
+						if (!engine.speak(piece.text, isStopped = { run.stopped })) {
 							// A stopped utterance owes the framework nothing:
 							// done() here would report a cut utterance as
 							// heard out. A refusal anything else explains --
@@ -835,15 +879,15 @@ class EvvTtsService : TextToSpeechService() {
 							// next utterance opens a fresh one instead of
 							// queuing behind whatever went wrong.
 							if (run.stopped) return
-							Log.e(TAG, "engine refused ${audio.length} chars")
-							markSuspect(target.language)
+							Log.e(TAG, "engine refused ${piece.text.length} chars")
+							markSuspect(engine.language)
 							try {
 								if (opening.began) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
 							} catch (_: Throwable) {
 							}
 							return
 						}
-						when (pump(target, callback, pace, opening, buffer, optimizer, Stability.ENGINE_SILENCE_MS, lead, own, toFramework, run)) {
+						when (pump(engine, callback, pace, opening, buffer, optimizer, Stability.ENGINE_SILENCE_MS, lead, own, toFramework, run)) {
 							Pump.Next -> Unit
 							Pump.Over -> { remember(pace); finish(callback, opening, run); return }
 							// Gone while still wanted is a framework that
@@ -867,14 +911,14 @@ class EvvTtsService : TextToSpeechService() {
 						// utterance goes on with the next: a bad piece must
 						// cost its own words and never the message around
 						// them, and never the service either.
-						Log.e(TAG, "a piece failed (${audio.length} chars) and was skipped", failed)
+						Log.e(TAG, "a piece failed (${piece.text.length} chars) and was skipped", failed)
 						failures++
 						try {
-							target.stop()
+							engine.stop()
 						} catch (broken: Throwable) {
 							// The engine is being given back anyway.
 						}
-						markSuspect(target.language)
+						markSuspect(engine.language)
 						if (failures >= MAX_PIECE_FAILURES) {
 							remember(pace)
 							finish(callback, opening, run)
@@ -934,12 +978,13 @@ class EvvTtsService : TextToSpeechService() {
 		raw: String,
 		s: Settings,
 		replacements: Substitutions,
-		prosody: String
+		prosody: String,
+		private val baseLanguage: Int
 	) {
 
 		private val gate = Object()
 
-		private val ready = ArrayDeque<String>()
+		private val ready = ArrayDeque<PreparedPiece>()
 
 		/** A short screen-reader label costs less to prepare than it costs to
 		 * schedule a worker and wake this thread again. It is prepared inline;
@@ -976,6 +1021,10 @@ class EvvTtsService : TextToSpeechService() {
 
 		private fun produce(raw: String, s: Settings, replacements: Substitutions, prosody: String) {
 			try {
+				if (s.autoLanguageSwitching) {
+					produceAuto(raw, s, replacements, prosody)
+					return
+				}
 				// A document is cut first and rewritten one piece at a time,
 				// so the first syllable is one piece of work behind the
 				// request; a shorter text goes through the road whole and is
@@ -1001,7 +1050,7 @@ class EvvTtsService : TextToSpeechService() {
 						prosody + held.text
 					}
 					if (held.forced && !last) audio += Pauses.AT_A_BOUNDARY
-					if (!EvvEngine.isBlankSpeech(audio)) publish(audio)
+					if (!EvvEngine.isBlankSpeech(audio)) publish(audio, baseLanguage)
 					held = following ?: break
 				}
 			} catch (broken: Throwable) {
@@ -1010,6 +1059,64 @@ class EvvTtsService : TextToSpeechService() {
 				Log.e(TAG, "the text of an utterance could not be prepared", broken)
 			} finally {
 				finish()
+			}
+		}
+
+		/**
+		 * The same preparation with automatic language switching in force.
+		 *
+		 * The raw text is cut into the same pieces [TextPieces] makes, and
+		 * each piece is then split by [LanguageDetector] into language
+		 * segments. Every segment goes through the ordinary pipeline on its
+		 * own, with its own language handed to the steps that ask, and is
+		 * published tagged for the engine that speaks that language, so the
+		 * loop above the queue only has to pick the right instance per
+		 * piece. Detection runs on the raw text rather than on the
+		 * pipeline's output on purpose: the emoji names and number words
+		 * the pipeline adds are English regardless of the voice, and
+		 * detecting before they exist keeps a Hindi number spoken in the
+		 * Hindi voice.
+		 *
+		 * The detector is one linear pass with hash-set lookups and the
+		 * segmentation adds one short-lived list per piece, so the cost stays
+		 * underneath the engine call the segment is about to make.
+		 */
+		private fun produceAuto(raw: String, s: Settings, replacements: Substitutions, prosody: String) {
+			val pieces = TextPieces.pieceSequence(raw).iterator()
+			var held = next(pieces) ?: return
+			while (!isCancelled()) {
+				val following = next(pieces)
+				val last = following == null
+				val segments = try {
+					LanguageDetector.split(held.text, baseLanguage)
+				} catch (broken: Throwable) {
+					// A detector that loses its way on a strange text must
+					// never lose the text itself: speak the piece as one
+					// segment in the language the utterance opened in.
+					Log.e(TAG, "language detection failed; speaking the piece in the base language", broken)
+					listOf(LanguageDetector.Segment(held.text, baseLanguage))
+				}
+				for (segment in segments) {
+					if (isCancelled()) return
+					if (EvvEngine.isBlankSpeech(segment.text)) continue
+					val rewritten = try {
+						TextPipeline.apply(
+							segment.text, s, replacements.index, replacements.abbreviations,
+							segment.language
+						)
+					} catch (_: Throwable) {
+						segment.text
+					}
+					if (EvvEngine.isBlankSpeech(rewritten)) continue
+					var audio = try {
+						prosody + Pauses.apply(rewritten, s.pauses, last)
+					} catch (_: Throwable) {
+						prosody + rewritten
+					}
+					if (held.forced && !last) audio += Pauses.AT_A_BOUNDARY
+					if (!EvvEngine.isBlankSpeech(audio)) publish(audio, segment.language)
+				}
+				held = following ?: break
 			}
 		}
 
@@ -1023,7 +1130,7 @@ class EvvTtsService : TextToSpeechService() {
 		 *  Blocks only while the piece is being prepared, which is the work
 		 *  the engine is not waiting on because it is speaking the one
 		 *  before it. */
-		fun take(): String? {
+		fun take(): PreparedPiece? {
 			synchronized(gate) {
 				while (ready.isEmpty() && !finished && !cancelled) {
 					try {
@@ -1039,7 +1146,7 @@ class EvvTtsService : TextToSpeechService() {
 			}
 		}
 
-		private fun publish(audio: String) {
+		private fun publish(audio: String, language: Int) {
 			synchronized(gate) {
 				// The asynchronous path stays one piece ahead. The inline path
 				// may queue all pieces of its deliberately small input because
@@ -1053,7 +1160,7 @@ class EvvTtsService : TextToSpeechService() {
 					}
 				}
 				if (cancelled) return
-				ready.addLast(audio)
+				ready.addLast(PreparedPiece(audio, language))
 				gate.notifyAll()
 			}
 		}

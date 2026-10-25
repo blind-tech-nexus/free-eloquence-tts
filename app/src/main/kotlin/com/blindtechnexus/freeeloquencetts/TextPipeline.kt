@@ -67,9 +67,15 @@ object TextPipeline {
 		raw: String,
 		s: Settings,
 		index: WordIndex,
-		abbreviations: List<Abbreviations.Entry> = emptyList()
+		abbreviations: List<Abbreviations.Entry> = emptyList(),
+		languageOverride: Int = 0
 	): String {
 		if (raw.isEmpty()) return raw
+		// The automatic switcher routes each segment to its own engine, and
+		// the symbol table is the one step that asks which language it is
+		// speaking in. Zero means "the settings' language", which is what
+		// every caller that does not switch languages passes.
+		val symbolLanguage = if (languageOverride != 0) languageOverride else s.language
 		// Every step guarded on its own, against everything: a rewrite that
 		// throws -- on hostile input, on a text longer than anything tested
 		// -- costs its own change and never the utterance. Errors are caught
@@ -101,7 +107,7 @@ object TextPipeline {
 		try { text = Numbers.apply(text, s.numberMode) } catch (_: Throwable) {}
 		try { text = CapitalLetters.apply(text, s.capitalMode) } catch (_: Throwable) {}
 		try { text = Spelling.apply(text, s.spellingMode) } catch (_: Throwable) {}
-		return try { Symbols.apply(text, s.symbolMode, s.customSymbols, s.language) } catch (_: Throwable) { text }
+		return try { Symbols.apply(text, s.symbolMode, s.customSymbols, symbolLanguage) } catch (_: Throwable) { text }
 	}
 
 	/**

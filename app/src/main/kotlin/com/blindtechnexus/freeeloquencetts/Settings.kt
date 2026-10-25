@@ -240,6 +240,26 @@ class Settings(context: Context) {
 		get() = prefs.getBoolean(KEY_FORCE_LANGUAGE, false)
 		set(value) = prefs.edit().putBoolean(KEY_FORCE_LANGUAGE, value).apply()
 
+	/**
+	 * Whether one utterance may be spoken in more than one language.
+	 *
+	 * Off, the whole of every request goes to the one engine
+	 * [languageFor] picks, exactly as it always has. On, each piece of the
+	 * text is detected as it is reached -- Devanagari by its Hindi or
+	 * Nepali markers, Latin words by their letters and lexicons, numbers
+	 * and punctuation by the language of the word beside them -- and handed
+	 * to the engine that speaks that language. A line mixing "कान्छी" and
+	 * "Hello" therefore comes out in Nepali for the first word and English
+	 * for the second without anyone changing the language by hand. See
+	 * [LanguageDetector] and the routing in [EvvTtsService].
+	 *
+	 * Off by default: a listener who asked for one language keeps one
+	 * language until they turn the switch on.
+	 */
+	var autoLanguageSwitching: Boolean
+		get() = prefs.getBoolean(KEY_AUTO_LANGUAGE, false)
+		set(value) = prefs.edit().putBoolean(KEY_AUTO_LANGUAGE, value).apply()
+
 	/** How the samples are finished before they are handed over. One of the
 	 *  [AudioOptimization] modes, and not a voice's business: it is the
 	 *  level and the cleanliness of the sound, not the voice itself. */
@@ -607,6 +627,7 @@ class Settings(context: Context) {
 		const val MAX_CUSTOM_VOICES = 24
 		const val KEY_LANGUAGE = "language_dialect"
 		const val KEY_FORCE_LANGUAGE = "force_language"
+		const val KEY_AUTO_LANGUAGE = "auto_language_switch"
 		const val KEY_SYNTHESIS_ROUTING = "synthesis_routing"
 		const val KEY_READ_OTP_DIGITS = "read_otp_digits"
 		const val KEY_SAMPLE_RATE = "sample_rate_hz"

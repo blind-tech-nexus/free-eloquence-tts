@@ -54,6 +54,8 @@
 	<string name="language_description">Select your preferred language.</string>
 	<string name="force_language_label">Force this language</string>
 	<string name="force_language_description">Always use this language, even when another app requests a different one.</string>
+	<string name="auto_language_label">Automatic language switching across supported languages</string>
+	<string name="auto_language_description">Detect the language of each part of the text and read it in its own voice: Hindi and Nepali in their native Devanagari pronunciation, and English, Spanish, French, German and Italian in theirs. Numbers, dates, punctuation and emoji follow the language beside them.</string>
 	<string name="voice_label">Voice profile</string>
 	<string name="voice_description">Select a built-in or custom voice profile.</string>
 	<string name="gender_description">Select the voice gender.</string>
