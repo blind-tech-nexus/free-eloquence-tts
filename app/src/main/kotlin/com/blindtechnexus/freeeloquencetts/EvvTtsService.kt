@@ -580,7 +580,35 @@ class EvvTtsService : TextToSpeechService() {
 		} catch (_: Throwable) {
 		}
 		try {
-			target.applyVoice(s.activeVoicePreset, s.activeVoiceShape())
+			val baseShape = s.activeVoiceShape()
+			val finalShape = when (language) {
+				Eci.HINDI -> {
+					val merged = LinkedHashMap(baseShape)
+					for ((k, v) in Eci.INDIC_HINDI_SHAPE) {
+						val curr = merged[k]
+						if (curr == null) merged[k] = v
+						else if (k == Eci.VOICE_PITCH_BASELINE && curr < 60) merged[k] = v
+						else if (k == Eci.VOICE_PITCH_FLUCTUATION && curr < 55) merged[k] = v
+						else if (k == Eci.VOICE_HEAD_SIZE && curr > 55) merged[k] = v
+						else if (k == Eci.VOICE_BREATHINESS && curr < 20) merged[k] = v
+					}
+					merged
+				}
+				Eci.NEPALI -> {
+					val merged = LinkedHashMap(baseShape)
+					for ((k, v) in Eci.INDIC_NEPALI_SHAPE) {
+						val curr = merged[k]
+						if (curr == null) merged[k] = v
+						else if (k == Eci.VOICE_PITCH_BASELINE && curr < 60) merged[k] = v
+						else if (k == Eci.VOICE_PITCH_FLUCTUATION && curr < 55) merged[k] = v
+						else if (k == Eci.VOICE_HEAD_SIZE && curr > 55) merged[k] = v
+						else if (k == Eci.VOICE_BREATHINESS && curr < 20) merged[k] = v
+					}
+					merged
+				}
+				else -> baseShape
+			}
+			target.applyVoice(s.activeVoicePreset, finalShape)
 		} catch (_: Throwable) {
 		}
 		appliedRevisions[language] = s.revision
@@ -1627,7 +1655,7 @@ class EvvTtsService : TextToSpeechService() {
 		 * pass is cheaper than the per-piece calls and cuts the rewritten
 		 * text rather than the caller's, which is the better of the two.
 		 */
-		const val STREAM_FROM_CHARS = 2000
+		const val STREAM_FROM_CHARS = 80
 
 		/** What [EvvNative.read] answers when the engine has gone quiet rather
 		 *  than finished, which is the difference between a piece that ended and

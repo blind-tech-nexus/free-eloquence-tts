@@ -97,6 +97,12 @@ android {
 	}
 
 	signingConfigs {
+		create("debugConfig") {
+			storeFile = file("${rootDir}/debug.keystore")
+			storePassword = "android"
+			keyAlias = "androiddebugkey"
+			keyPassword = "android"
+		}
 		create("release") {
 			storeFile = rootProject.file("release.jks")
 			storePassword = "811015"
@@ -116,6 +122,7 @@ android {
 			proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
 		}
 		debug {
+			signingConfig = signingConfigs.getByName("debugConfig")
 			isJniDebuggable = true
 		}
 	}
@@ -152,8 +159,11 @@ android {
 	}
 }
 
-tasks.named("preBuild") {
-	dependsOn(buildNative)
+val ndkHome = System.getenv("ANDROID_NDK_HOME") ?: System.getenv("ANDROID_NDK_ROOT")
+if (!ndkHome.isNullOrEmpty() && file(ndkHome).exists()) {
+	tasks.named("preBuild") {
+		dependsOn(buildNative)
+	}
 }
 
 dependencies {

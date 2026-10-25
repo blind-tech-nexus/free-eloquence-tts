@@ -152,6 +152,27 @@ object Eci {
 		VOICE_VOLUME to 92
 	)
 
+	/** Natural Devanagari acoustic voice shapes for Hindi and Nepali:
+	 *  Lively baseline pitch, expressive pitch fluctuation, forward articulate
+	 *  formant resonances, and clear breathiness for authentic aspiration. */
+	val INDIC_HINDI_SHAPE: Map<Int, Int> = mapOf(
+		VOICE_PITCH_BASELINE to 72,
+		VOICE_PITCH_FLUCTUATION to 68,
+		VOICE_HEAD_SIZE to 46,
+		VOICE_ROUGHNESS to 2,
+		VOICE_BREATHINESS to 32,
+		VOICE_VOLUME to 96
+	)
+
+	val INDIC_NEPALI_SHAPE: Map<Int, Int> = mapOf(
+		VOICE_PITCH_BASELINE to 76,
+		VOICE_PITCH_FLUCTUATION to 72,
+		VOICE_HEAD_SIZE to 44,
+		VOICE_ROUGHNESS to 2,
+		VOICE_BREATHINESS to 34,
+		VOICE_VOLUME to 96
+	)
+
 	/**
 	 * What the two numbers that carry a voice's gender are doing, since
 	 * neither of them is called gender and both were tuned by ear rather

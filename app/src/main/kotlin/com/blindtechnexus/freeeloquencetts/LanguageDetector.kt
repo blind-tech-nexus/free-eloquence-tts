@@ -21,10 +21,11 @@ package com.blindtechnexus.freeeloquencetts
  *
  *  - Latin runs are English, Spanish, French, German or Italian. Diacritics
  *    that only one language owns (ß, ñ, ç, circumflexes ...) vote first,
- *    then a stopword lexicon per family, then a bigram scorer for words
- *    neither table knows. A small romanized-Indic lexicon catches words
- *    such as "Kanchi" or "namaste" written in Latin letters and sends them
- *    to the Hindi or Nepali engine rather than to an English one.
+ *    then an extensive stopword lexicon per family, then a bigram scorer for words
+ *    neither table knows. Single Latin characters ("I", "e", "o", "a", etc.) and
+ *    common UI/system vocabulary ("message", "launcher", "voice", "AI", "dictation",
+ *    "settings", etc.) stay strictly English rather than being misclassified into
+ *    Italian, Spanish, or Devanagari.
  *
  * Everything else -- ASCII and Devanagari digits, punctuation, symbols,
  * emoji, spaces -- is neutral and is spoken in the language of the word
@@ -36,9 +37,6 @@ package com.blindtechnexus.freeeloquencetts
  * are no regular expressions and no per-character allocations on the hot
  * path beyond the run buffers themselves -- one code-point loop, hash-set
  * lexicon lookups and buffers that start at the length they will need.
- *
- * The object is pure Kotlin with no Android dependency, so the same code
- * runs in the instrumented tests and in the service unchanged.
  */
 object LanguageDetector {
 
@@ -158,17 +156,12 @@ object LanguageDetector {
 						at += Character.charCount(text.codePointAt(at))
 					}
 					val word = text.substring(start, at)
-					// Decided by [resolveRuns], which sees the whole sentence:
-					// one Devanagari word alone rarely says which of the two
-					// languages it is, but the words around it usually do.
 					runs.add(RawRun(SCRIPT_DEVANAGARI, word))
 				}
 				SCRIPT_LATIN -> {
 					flushNeutral(runs, neutral)
 					val start = at
 					at += count
-					// Apostrophes and hyphens inside a word belong to it
-					// (don't, l'homme, mother-in-law); a dot does not.
 					while (at < n) {
 						val next = text.codePointAt(at)
 						val sc = scriptOf(next)
@@ -194,16 +187,7 @@ object LanguageDetector {
 				}
 			}
 		}
-		if (neutral.isNotEmpty()) {
-			val run = RawRun(SCRIPT_NEUTRAL, neutral.toString())
-			for (c in run.text) {
-				if (c == '।' || c == '॥' || c == '.' || c == '!' || c == '?' || c == '\n') {
-					run.endsSentence = true
-					break
-				}
-			}
-			runs.add(run)
-		}
+		flushNeutral(runs, neutral)
 		resolveRuns(runs, baseLanguage)
 		return runs
 	}
@@ -243,10 +227,7 @@ object LanguageDetector {
 	// ---- Devanagari: Hindi versus Nepali ---------------------------------
 
 	/** Strength of evidence a single Devanagari word carries: positive is
-	 *  Nepali, negative is Hindi, zero is shared or unknown vocabulary. Whole
-	 *  words are looked up in hash sets (O(1)); only a short list of clitic and
-	 *  verb endings is matched as a suffix, because Nepali case markers and
-	 *  polite imperatives attach to stems (मानिसहरू, गर्नुहोस्). */
+	 *  Nepali, negative is Hindi, zero is shared or unknown vocabulary. */
 	private fun devScore(word: String): Int {
 		if (word in NEPALI_WORDS) return 2
 		if (word in HINDI_WORDS) return -2
@@ -258,23 +239,6 @@ object LanguageDetector {
 	/**
 	 * Decide every Devanagari and Latin word in [runs], using the sentence
 	 * around each word rather than the word alone.
-	 *
-	 * Devanagari words are grouped into stretches -- consecutive words of the
-	 * script with no Latin word and no sentence ender between them. A stretch
-	 * is spoken in the language its marked words vote for, so an unmarked word
-	 * such as `नमस्ते` or `घर` is Hindi inside a Hindi sentence and Nepali
-	 * inside a Nepali one, whichever side of it the copula (है / छ) sits. A
-	 * stretch with no marked word at all takes the previous Devanagari
-	 * decision, then the listener's own Indic language, then Hindi.
-	 *
-	 * Latin words keep their own decision when they carry real evidence (a
-	 * lexicon word, a distinctive letter, a romanized Indic word). A word with
-	 * no evidence of its own -- a product name, a coinage, an unknown English
-	 * word between two French ones -- takes the language of the Latin words
-	 * around it in the same stretch; with nothing around it, it takes English
-	 * when the listener's voice is Indic (a Latin word has no Devanagari
-	 * pronunciation worth giving it), the listener's own Western family when
-	 * there is one, and English otherwise.
 	 */
 	private fun resolveRuns(runs: MutableList<RawRun>, baseLanguage: Int) {
 		val indicDefault = if (baseLanguage == Eci.NEPALI) Eci.NEPALI else Eci.HINDI
@@ -315,9 +279,6 @@ object LanguageDetector {
 		var latinStart = -1
 		fun closeLatin(endExclusive: Int) {
 			if (latinStart < 0) return
-			// Words with no evidence are un-decided until their neighbours
-			// have had their say, so the guesses [classifyLatin] made for
-			// them are set aside first and only the fallback restores one.
 			for (at in latinStart until endExclusive) {
 				val run = runs[at]
 				if (run.script == SCRIPT_LATIN && run.strength == 0) run.language = 0
@@ -367,10 +328,20 @@ object LanguageDetector {
 		val lower = word.lowercase()
 
 		// Romanized Indic words keep their language even in Latin letters:
-		// "Kanchi" is Nepali, "dhanyavad" Hindi, whatever the English words
-		// around them do.
 		if (lower in NEPALI_ROMAN) { run.strength = 3; return Eci.NEPALI }
 		if (lower in HINDI_ROMAN) { run.strength = 3; return Eci.HINDI }
+
+		// Single letters in Latin script (e.g. "I", "e", "o", "a", "x") are ALWAYS English
+		// when read in screen readers, Android UI, or mixed text, never Italian or Devanagari.
+		if (lower.length == 1 && lower[0] in 'a'..'z') {
+			run.strength = 3
+			val baseFamily = Eci.languageOf(baseLanguage).iso2Language
+			return if (baseFamily == "es" || baseFamily == "fr" || baseFamily == "de" || baseFamily == "it") {
+				familyToModule(baseFamily, baseLanguage)
+			} else {
+				Eci.ENGLISH_US
+			}
+		}
 
 		val scores = IntArray(5)
 		// Diacritics and punctuation only one family owns -- strong votes.
@@ -381,33 +352,34 @@ object LanguageDetector {
 				'ç', 'â', 'ê', 'î', 'ô', 'û', 'ë', 'ï', 'à', 'ù', 'œ', 'æ' ->
 					scores[IDX_FR] += 3
 				'ì', 'ò' -> scores[IDX_IT] += 2
-				'é', 'è', 'á', 'í', 'ó', 'ú' -> scores[IDX_IT] += 1 // shared, weak
+				'é', 'è', 'á', 'í', 'ó', 'ú' -> scores[IDX_IT] += 1
 			}
 		}
-		if (LEX_EN.contains(lower)) scores[IDX_EN] += 4
+
+		if (LEX_EN.contains(lower)) scores[IDX_EN] += 5
 		if (LEX_ES.contains(lower)) scores[IDX_ES] += 4
 		if (LEX_FR.contains(lower)) scores[IDX_FR] += 4
 		if (LEX_DE.contains(lower)) scores[IDX_DE] += 4
 		if (LEX_IT.contains(lower)) scores[IDX_IT] += 4
 
-		// A short Latin word does not carry enough evidence for reliable
-		// language identification from character n-grams alone. In particular,
-		// ordinary English words can share two-letter sequences with French,
-		// Spanish, German and Italian. When the configured voice is Hindi or
-		// Nepali, the safe and useful default for an otherwise unknown Latin
-		// token is English, not an accidental Indic or unrelated Western voice.
-		// Explicit lexicon words and distinctive diacritics above still switch
-		// normally; romanized Indic words were handled before this point.
+		val baseFamily = Eci.languageOf(baseLanguage).iso2Language
+		val isIndicBase = baseFamily == "hi" || baseFamily == "ne"
+
 		if (scores.all { it == 0 }) {
-			// No evidence of its own. [resolveRuns] gives it the language of
-			// the Latin words around it where there are any; the bigram vote
-			// and the standing defaults are what is left when there are not,
-			// and they are only a guess, which is why the strength stays at
-			// zero and the neighbours win.
-			val baseFamily = Eci.languageOf(baseLanguage).iso2Language
-			if (baseFamily == "hi" || baseFamily == "ne") return Eci.ENGLISH_US
+			// When the base is Indic (Hindi/Nepali), all Latin text without explicit foreign diacritics
+			// is English. A Latin word must never be pronounced as Devanagari or bounced to Italian/Spanish.
+			if (isIndicBase) return Eci.ENGLISH_US
 			return familyToModule(bigramFamily(lower, baseLanguage), baseLanguage)
 		}
+
+		// When configured voice is Indic, strongly favor English for Latin words unless another family has a clear win
+		if (isIndicBase) {
+			if (scores[IDX_EN] > 0 || (scores[IDX_ES] == 0 && scores[IDX_FR] == 0 && scores[IDX_DE] == 0 && scores[IDX_IT] == 0)) {
+				run.strength = 3
+				return Eci.ENGLISH_US
+			}
+		}
+
 		run.strength = 3
 		var best = 0
 		for (i in 1 until scores.size) {
@@ -416,15 +388,6 @@ object LanguageDetector {
 		return familyToModule(FAMILIES[best], baseLanguage)
 	}
 
-	/** Characteristic-bigram vote for a word no lexicon recognized.
-	 *
-	 *  A word with no characteristic bigram is a proper noun or a coinage, and
-	 *  the least surprising voice is the one the listener is already in (when
-	 *  it is a Western one); English is the standing default otherwise. A lone
-	 *  weak bigram against a Western base language is treated the same way, so
-	 *  one stray letter pair cannot bounce the whole sentence into another
-	 *  voice. Ties keep the family with the lowest index, putting English first
-	 *  on purpose. */
 	private fun bigramFamily(word: String, baseLanguage: Int): String {
 		val scores = IntArray(5)
 		val max = word.length - 1
@@ -444,8 +407,6 @@ object LanguageDetector {
 		}
 		val baseFamily = Eci.languageOf(baseLanguage).iso2Language
 		val atFamily = FAMILIES.indexOf(baseFamily)
-		// No evidence, or only a single weak bigram against a Western base
-		// language: stay in the voice the listener is already using.
 		if (bestScore == 0 || (bestScore <= 1 && atFamily >= 0)) {
 			if (atFamily >= 0) return FAMILIES[atFamily]
 			return FAMILY_EN
@@ -453,13 +414,6 @@ object LanguageDetector {
 		return FAMILIES[best]
 	}
 
-	/**
-	 * The module that speaks [family]. The listener's own choice wins when
-	 * it is of the same family, so a phone set to British English keeps
-	 * British English and a Mexican-Spanish choice keeps the Mexican voice;
-	 * otherwise the first module of the family (the mother-country one) is
-	 * used.
-	 */
 	private fun familyToModule(family: String, baseLanguage: Int): Int {
 		val baseLang = Eci.languageOf(baseLanguage)
 		if (baseLang.iso2Language == family) return baseLanguage
@@ -469,87 +423,113 @@ object LanguageDetector {
 		return baseLanguage
 	}
 
-	// ---- lexicons ---------------------------------------------------------
+	// ---- Lexicons: Rich Nepali & Hindi vocabularies -----------------------
 
-	/** Nepali-only words, clitics, endings and proper nouns.
-	 *
-	 *  Deliberately no bare postpositions such as को/का/की/ले/मा: Hindi uses
-	 *  the same particles and [contains] matching would misread every Hindi
-	 *  sentence. Everything here is a longer string that occurs in Nepali and
-	 *  not in Hindi, or an ending distinctively Nepali (the oblique -ओ/-ओइ). */
-	/** Nepali-only words. Whole-word lookup, so the postpositions the two
-	 *  languages share (को, का, की, ले, मा) are absent on purpose: they say
-	 *  nothing about which language a sentence is in, and the stretch vote in
-	 *  [resolveRuns] is what decides sentences built out of them. */
 	private val NEPALI_WORDS = setOf(
-		"हुन्छ", "हुँदैन", "हुने", "हुनु", "भएको", "भएका", "भएन", "गएन", "भयो", "थियो", "थिई", "थिए", "थिएन",
-		"गर्छु", "गर्छौं", "गर्छ", "गर्छन्", "गर्दै", "गरेको", "गरेर", "पर्छ", "पर्दैन", "सक्छ", "सक्दैन", "सकिन्छ",
-		"आउँछ", "आउँदैन", "आयो", "आएन", "जान्छ", "गयो", "गएन", "खायो", "खाएन", "दियो", "दिएन",
-		"छ", "छु", "छौँ", "छौ", "छन्", "छैन", "छैनन्", "हो", "होइन", "हैन", "चाहिन्छ", "चाहिँदैन", "थाहा",
-		"यो", "यी", "त्यो", "ती", "यिनी", "तिनी", "उनी", "उहाँ", "हामी", "तिमी", "तपाईं", "तपाईँ", "हजुर",
-		"मेरो", "तिम्रो", "हाम्रो", "उनको", "यसको", "त्यसको", "कसको", "कसले", "कसलाई", "कसरी",
-		"केटा", "केटी", "मान्छे", "मानिस", "राम्रो", "नराम्रो", "ठूलो", "ठुलो", "सानो", "नयाँ", "पुरानो", "साथी",
-		"पछि", "पछाडि", "अगाडि", "अघि", "भित्र", "बाहिर", "माथि", "मुनि", "वरिपरि", "देखि", "सम्म", "सँग", "सित",
-		"बाट", "लागि", "बारेमा", "अनुसार", "किनभने", "त्यसैले", "अनि", "अथवा", "सबै", "धेरै", "थोरै", "अझ", "अझै",
-		"कस्तो", "कस्ता", "कति", "कहिले", "कता", "कुन", "कुनै", "कोही", "केही",
-		"रुपैयाँ", "रुपैयां", "काठमाडौँ", "काठमाडौं", "विराटनगर", "पोखरा", "लुम्बिनी", "धरान", "इटहरी", "जनकपुर",
-		"नेपाली", "तरकारी", "गाउँ", "सहर", "पहाड", "हिमाल", "चोक", "बजार", "दाजु", "दाइ", "दिदी", "भाइ",
-		"बहिनी", "छोरा", "छोरी", "बुबा", "बुवा", "आमा", "कान्छी", "कान्छा", "अहिले", "भोलि", "हिजो", "पर्सि",
-		"बिहान", "दिउँसो", "साँझ", "राति", "मिनेट", "सेकेन्ड", "बजे", "बजेर", "चिया", "भात", "दाल",
-		"सगरमाथा", "कोशी", "बागमती", "गण्डकी", "कर्णाली", "मोरङ", "सुनसरी", "झापा", "नेपालगन्ज", "बुटवल", "भरतपुर"
+		// Copula & Auxiliaries
+		"छ", "छन्", "छैन", "छैनन्", "छु", "छौ", "छौँ", "थियो", "थिई", "थिए", "थिएन", "थिएनन्",
+		"हुन्", "हौ", "हो", "होइन", "हैन", "हुन्छ", "हुँदैन", "हुने", "हुनु", "हुनुहुन्छ", "हुनुहोस्", "नोस्",
+		// Verbs & Inflections
+		"गर्छु", "गर्छौं", "गर्छ", "गर्छन्", "गर्दै", "गरेको", "गरेका", "गरेकी", "गरेर", "गरिन्", "गरे",
+		"गर्थ्यो", "गर्थे", "गर्थिन्", "गर्छौ", "गर्नु", "गरौं", "गरौँ", "गरेन", "भयो", "भएन", "भएको", "भएका",
+		"भएकी", "भइन्", "भए", "आउँछ", "आउँदैन", "आयो", "आएन", "आए", "आउनु", "आउनुहोस्", "जान्छ", "जान्न",
+		"गयो", "गएन", "गए", "खायो", "खाएन", "खान्छ", "भन्छ", "भन्यो", "भनेन", "भने", "देख्छ", "देख्यो",
+		"देखे", "दिनु", "दियो", "दिएन", "दिन्छ", "दिँदैन", "लिन्छ", "लियो", "लिएन", "सुन्छ", "सुन्यो",
+		"बस्छ", "बस्यो", "पर्छ", "पर्दैन", "पर्थ्यो", "सक्छ", "सक्दैन", "सकिन्छ", "सकिँदैन", "सक्छु",
+		"चाहिन्छ", "चाहिँदैन", "थाहा",
+		// Pronouns & Possessives
+		"म", "मेरो", "मलाई", "मसँग", "मसित", "हामी", "हाम्रो", "हामीलाई", "हामीसँग", "तँ", "तेरो", "तँलाई",
+		"तिमी", "तिम्रो", "तिमीलाई", "तिमीसँग", "तपाईं", "तपाईँ", "तपाइँ", "तपाईंको", "तपाईँको", "तपाइँको",
+		"हजुर", "हजुरको", "उनी", "उनको", "उनलाई", "उनीहरू", "उनीहरूको", "उहाँ", "उहाँको", "उहाँलाई",
+		"यो", "यी", "यसको", "यसलाई", "यसमा", "यसले", "यिनीहरू", "त्यो", "ती", "त्यसको", "त्यसलाई",
+		"त्यसमा", "त्यसले", "तिनीहरू", "को", "कसको", "कसलाई", "कसले", "के", "कुन", "कुनै", "कोही", "केही",
+		"आफ्नो", "आफ्ना", "आफ्नी", "आफू", "आफूले", "आफूलाई",
+		// Adjectives & Adverbs
+		"राम्रो", "राम्रा", "राम्री", "नराम्रो", "मिठो", "मीठो", "नमिठो", "ठूलो", "ठुलो", "ठूला", "सानो", "साना",
+		"नयाँ", "पुरानो", "पुराना", "साथी", "धेरै", "थोरै", "अलि", "अलिकति", "साह्रै", "एकदम", "अझ", "अझै",
+		"कहिले", "कहाँ", "कता", "कसरी", "किन", "कस्तो", "कस्ता", "कस्ती", "कति", "चाँडो", "छिटो", "ढिलो",
+		"बिस्तारै", "सजिलो", "गाह्रो", "राम्ररी",
+		// Particles, Postpositions & Conjunctions
+		"लाई", "बाट", "देखि", "सम्म", "सँग", "सित", "बारेमा", "अनुसार", "द्वारा", "माथि", "मुनि", "भित्र",
+		"बाहिर", "अघि", "अगाडि", "पछि", "पछाडि", "वरिपरि", "नजिक", "टाढा", "किनभने", "त्यसैले", "त्यसकारण",
+		"अनि", "तर", "कि", "वा", "अथवा", "यदि", "भने", "पो", "त", "नै", "अरे", "खै", "खोइ", "क्यारे", "नि",
+		"रे", "ल", "बरु", "झन्", "मात्र", "मात्रै", "समेत", "पनि", "जस्तै", "जस्तो", "जस्ता", "जस्ती",
+		// Everyday Nouns & Social
+		"केटा", "केटी", "मान्छे", "मानिस", "दाजु", "दाइ", "दिदी", "भाइ", "बहिनी", "बुबा", "बुवा", "आमा",
+		"छोरा", "छोरी", "कान्छा", "कान्छी", "जेठा", "जेठी", "माइला", "माइली", "बाजे", "बज्यै", "हजुरबुबा", "हजुरआमा",
+		"श्रीमान्", "श्रीमती", "घर", "कोठा", "छाना", "आँगन", "बाटो", "सडक", "गाउँ", "सहर", "पहाड", "हिमाल",
+		"तराई", "खोला", "नदी", "ताल", "पुल", "चोक", "बजार", "पसल", "चिया", "भात", "दाल", "तरकारी", "अचार",
+		"पानी", "दूध", "घिउ", "मासु", "रोटी", "पिठो", "तेल", "नुन", "चिनी", "पैसा", "रुपैयाँ", "रुपियाँ",
+		// Time & Calendar
+		"आज", "भोलि", "हिजो", "पर्सि", "अस्ति", "बिहान", "दिउँसो", "साँझ", "राति", "घन्टा", "मिनेट", "सेकेन्ड",
+		"समय", "वर्ष", "महिना", "दिन", "गते", "बार", "आइतबार", "सोमबार", "मंगलबार", "मङ्गलबार", "बुधबार",
+		"बिहीबार", "शुक्रबार", "शनिबार", "बजे", "बजेर",
+		// Nepal Geographic & Cultural
+		"नेपाल", "नेपाली", "काठमाडौँ", "काठमाडौं", "ललितपुर", "भक्तपुर", "पोखरा", "विराटनगर", "धरान",
+		"इटहरी", "जनकपुर", "लुम्बिनी", "हेटौँडा", "हेटौंडा", "नारायणगढ", "भरतपुर", "चितवन", "बुटवल",
+		"भैरहवा", "नेपालगन्ज", "धनगढी", "मोरङ", "सुनसरी", "झापा", "इलाम", "पाँचथर", "ताप्लेजुङ",
+		"सङ्खुवासभा", "भोजपुर", "धनकुटा", "तेह्रथुम", "सिन्धुली", "मकवानपुर", "काभ्रे", "नुवाकोट",
+		"धादिङ", "गोरखा", "लमजुङ", "तनहुँ", "कास्की", "स्याङ्जा", "पाल्पा", "गुल्मी", "बागलुङ",
+		"म्याग्दी", "पर्वत", "रुपन्देही", "कपिलवस्तु", "दाङ", "बाँके", "बर्दिया", "सुर्खेत", "सल्यान",
+		"जाजरकोट", "जुम्ला", "हुम्ला", "मुगु", "डोल्पा", "कालिकोट", "बाजुरा", "अछाम", "डोटी", "डडेलधुरा",
+		"बैतडी", "दार्चुला", "सगरमाथा", "अन्नपूर्ण", "कोशी", "बागमती", "गण्डकी", "कर्णाली"
 	)
 
-	/** Hindi-only words, on the same whole-word terms. */
 	private val HINDI_WORDS = setOf(
+		// Copula & Auxiliaries
 		"हैं", "है", "हूँ", "हूं", "होगा", "होगी", "होंगे", "होता", "होती", "होते", "हुआ", "हुए", "हुई",
 		"रहा", "रही", "रहे", "रहता", "रहती", "रहते", "जाता", "जाती", "जाते", "करता", "करती", "करते",
-		"था", "थी", "थे", "थीं", "नहीं", "क्या", "क्यों", "कैसे", "कैसा", "कैसी", "कौन", "कब", "कितना", "कितनी",
-		"मुझे", "मुझको", "मुझसे", "हमें", "तुम्हें", "तुझे", "इसे", "उसे", "किसे", "जिसे", "इन्हें", "उन्हें", "किन्हें", "जिन्हें",
-		"मेरे", "तेरा", "तेरी", "तुम्हारा", "तुम्हारी", "आपका", "आपकी", "इसका", "उसका", "इनका", "उनका", "अपना", "अपनी", "अपने",
-		"वाला", "वाली", "वाले", "लिए", "लिये", "द्वारा", "चाहिए", "चाहिये", "चाहता", "चाहती", "बहुत", "अभी", "फिर", "लोग", "लोगों",
-		"शुक्रिया", "अलविदा", "कृपया", "हिंदुस्तान", "हिन्दुस्तान", "दिल्ली", "मुंबई", "बंबई", "कोलकाता", "चेन्नई", "लखनऊ",
-		"लड़का", "लड़की", "लड़के", "बच्चा", "बच्ची", "आदमी", "औरत", "सुबह", "दोपहर", "महीना", "महीने", "हफ़्ता", "हफ्ता",
-		"सप्ताह", "रुपये", "रुपया", "रुपए", "पैसा", "पैसे", "वक़्त", "वक्त", "ज़िंदगी", "जिन्दगी",
-		"इधर", "उधर", "ऊपर", "नीचे", "सामने", "पुराना", "पुरानी", "अंदर", "बाहर",
-		"यह", "ये", "वह", "वे", "इस", "उस", "हिंदी", "हिन्दी", "बात",
-		"अच्छा", "अच्छी", "ज़्यादा", "ज्यादा", "बिल्कुल", "ज़रूर", "शायद", "हमेशा", "कभी"
+		"किया", "किए", "की", "था", "थी", "थे", "थीं", "चाहिए", "चाहिये", "चाहता", "चाहती", "चाहते",
+		"सकता", "सकती", "सकते", "सकेगा", "सकेगी",
+		// Negations & Interrogatives
+		"नहीं", "मत", "ना", "क्या", "क्यों", "कैसे", "कैसा", "कैसी", "कौन", "कब", "कितना", "कितनी", "कितने",
+		"कहाँ", "किधर", "इधर", "उधर", "किसे", "किस", "किसको", "किससे", "किसका", "किसकी", "किसके",
+		"किन्हें", "जिनका", "जिनकी", "जिनके", "जिन्हें", "कुछ", "कोई", "किसी",
+		// Pronouns & Possessives
+		"मुझे", "मुझको", "मुझसे", "हमें", "हमको", "हमसे", "तुम्हें", "तुमको", "तुमसे", "तुझे", "तुझको", "तुझसे",
+		"इसे", "इसको", "इससे", "उसे", "उसको", "उससे", "इन्हें", "इनको", "इनसे", "उन्हें", "उनको", "उनसे",
+		"मेरा", "मेरी", "मेरे", "तेरा", "तेरी", "तेरे", "तुम्हारा", "तुम्हारी", "तुम्हारे", "आपका", "आपकी", "आपके",
+		"इसका", "इसकी", "इसके", "उसका", "उसकी", "उसके", "इनका", "इनकी", "इनके", "उनका", "उनकी", "उनके",
+		"अपना", "अपनी", "अपने", "यह", "ये", "वह", "वे", "इस", "उस", "इन", "उन",
+		// Prepositions & Postpositions
+		"ने", "को", "से", "का", "के", "की", "में", "पर", "पे", "तक", "लिए", "लिये", "द्वारा", "साथ", "बिना",
+		"बारे", "अनुसार", "सामने", "पीछे", "ऊपर", "नीचे", "अंदर", "बाहर", "बीच", "वाला", "वाली", "वाले",
+		// Adverbs & Common Nouns
+		"बहुत", "ज़्यादा", "ज्यादा", "कम", "थोड़ा", "थोड़ी", "थोड़े", "बिल्कुल", "ज़रूर", "शायद", "हमेशा", "कभी",
+		"अभी", "तभी", "जब", "तब", "फिर", "लोग", "लोगों", "बात", "बातें", "काम", "चीज", "चीज़", "लड़का", "लड़की",
+		"लड़के", "लड़कियां", "लड़कियाँ", "बच्चा", "बच्ची", "बच्चे", "आदमी", "औरत", "महिला", "पुरुष",
+		"सुबह", "दोपहर", "शाम", "रात", "दिन", "महीना", "महीने", "हफ़्ता", "हफ्ता", "सप्ताह", "साल", "वक़्त", "वक्त",
+		"ज़िंदगी", "जिन्दगी", "रुपये", "रुपया", "रुपए", "पैसा", "पैसे", "शुक्रिया", "अलविदा", "कृपया",
+		"अच्छा", "अच्छी", "अच्छे", "बड़ा", "बड़ी", "बड़े", "छोटा", "छोटी", "छोटे", "पुराना", "पुरानी", "पुराने",
+		"हिंदी", "हिन्दी", "हिंदुस्तान", "हिन्दुस्तान", "भारत", "दिल्ली", "मुंबई", "बंबई", "कोलकाता", "चेन्नई", "लखनऊ"
 	)
 
-	/** Nepali endings that attach to stems: polite imperatives, the plural
-	 *  and the case clitics. Matched as suffixes because the stem in front of
-	 *  them is any noun or verb at all. */
 	private val NEPALI_ENDINGS = listOf(
-		"नुहोस्", "नोस्", "हरू", "हरु", "लाई", "देखि", "सँग", "बाट", "हरूमा", "हरूले", "हरूबाट"
+		"नुहोस्", "नोस्", "हरू", "हरु", "लाई", "देखि", "सँग", "सित", "बाट", "हरूमा", "हरूले", "हरूबाट", "हरूलाई",
+		"एको", "एका", "एकी", "एर", "दै", "दा", "छन्", "छैन", "छौँ"
 	)
 
-	/** Hindi endings with no Nepali life: the -वाला family and -रहा forms
-	 *  written as one word. */
 	private val HINDI_ENDINGS = listOf(
-		"वाला", "वाली", "वाले", "रहा", "रही", "रहे", "चाहिए", "चाहिये"
+		"वाला", "वाली", "वाले", "रहा", "रही", "रहे", "चाहिए", "चाहिये", "ता", "ती", "ते", "ऊंगा", "ऊंगी", "एंगे", "एगा", "एगी"
 	)
 
-	/** Romanized words that are Nepali even though they are Latin letters. */
 	private val NEPALI_ROMAN = setOf(
-		"kanchi", "kanchhi", "kanchha", "namaskar",
-		"tapai", "tapain", "tapailai", "hunchha", "huncha", "hunxa", "chha", "chhaina", "chaina", "hoina", "haina",
-		"mero", "timro", "hamro", "timi", "hami", "hajur", "sanchai", "ramro", "ramri", "thik",
-		"khana", "pani", "ghar", "bato", "khola", "pahad", "himal", "mauka",
-		"kathmandu", "biratnagar", "pokhara", "dharan", "itahari", "janakpur", "lumbini", "gorkha",
-		"sherpa", "thapa", "gurung", "basnet", "basnyat", "nepal", "nepali", "dhanyabaad"
+		"kanchi", "kanchhi", "kanchha", "namaskar", "tapai", "tapain", "tapailai", "hunchha", "huncha",
+		"hunxa", "chha", "chhaina", "chaina", "hoina", "haina", "mero", "timro", "hamro", "hajur",
+		"sanchai", "ramro", "ramri", "khola", "pahad", "himal", "kathmandu", "biratnagar", "pokhara",
+		"dharan", "itahari", "janakpur", "lumbini", "gorkha", "nepal", "nepali"
 	)
 
-	/** Romanized words that are Hindi even though they are Latin letters. */
 	private val HINDI_ROMAN = setOf(
-		"dhanyavad", "dhanyavaad", "dhanyawad", "shukriya", "accha", "acha", "theek", "thik",
-		"kaisa", "kaisi", "kaise", "kahan", "kidhar", "idhar", "udhar", "kya", "kyon", "kyu", "kab",
-		"nahin", "nahi", "aap", "aapka", "hum", "tum", "mera", "meri", "tumhara", "bhai", "bhaiya", "didi",
-		"behan", "mata", "pita", "rupaya", "rupaye", "paise", "paisa", "namaste",
-		"hindi", "hindustan", "bharat", "delhi", "mumbai", "bambai", "kolkata", "chennai", "lucknow",
-		"kripya", "alvida", "bahut", "bohot", "abhi", "phir", "log", "chahiye", "mein", "mera"
+		"dhanyavad", "dhanyavaad", "dhanyawad", "shukriya", "accha", "acha", "theek", "kaisa", "kaisi",
+		"kaise", "kahan", "kidhar", "idhar", "udhar", "aapka", "tumhara", "bhaiya", "rupaya", "rupaye",
+		"namaste", "hindustan", "bharat", "kripya", "alvida", "bohot"
 	)
 
+	/** Extensive English vocabulary covering common language, UI controls, Android actions, and tech terms. */
 	private val LEX_EN = setOf(
-		"the", "and", "is", "are", "was", "were", "be", "been", "being", "of", "to", "in",
+		// Common Core
+		"a", "i", "the", "and", "is", "are", "was", "were", "be", "been", "being", "of", "to", "in",
 		"on", "at", "that", "this", "it", "for", "with", "as", "by", "from", "or", "but",
 		"not", "no", "yes", "you", "he", "she", "we", "they", "his", "her", "their", "our",
 		"your", "my", "me", "him", "them", "us", "have", "has", "had", "do", "does", "did",
@@ -557,27 +537,48 @@ object LanguageDetector {
 		"when", "where", "who", "how", "why", "which", "all", "each", "every", "some",
 		"any", "if", "then", "than", "so", "just", "about", "into", "over", "under",
 		"hello", "good", "morning", "evening", "night", "please", "thanks", "thank", "sorry",
-		"welcome", "name", "fine", "very", "much", "more", "most", "now", "here", "there"
+		"welcome", "name", "fine", "very", "much", "more", "most", "now", "here", "there",
+		"today", "tomorrow", "yesterday", "week", "month", "year", "number", "code", "word",
+		"words", "read", "reading", "say", "speak", "speech", "speed", "pitch", "rate",
+		// Android, Phone, Screen Reader & UI terms
+		"message", "messages", "messaging", "launcher", "microsoft", "google", "voice", "ai",
+		"dictation", "assistant", "system", "setting", "settings", "phone", "call", "dial",
+		"contact", "contacts", "app", "apps", "application", "applications", "notification",
+		"notifications", "screen", "home", "back", "recent", "menu", "button", "buttons",
+		"tap", "double", "press", "hold", "click", "swipe", "scroll", "open", "close", "cancel",
+		"ok", "save", "delete", "edit", "clear", "search", "share", "send", "copy", "cut",
+		"paste", "select", "selected", "unselected", "checkbox", "switch", "slider", "list",
+		"view", "play", "pause", "stop", "volume", "sound", "audio", "battery", "wifi",
+		"bluetooth", "network", "data", "internet", "device", "devices", "download", "install",
+		"update", "camera", "photo", "gallery", "video", "music", "file", "files", "folder",
+		"folders", "mail", "gmail", "chat", "whatsapp", "telegram", "facebook", "youtube",
+		"chrome", "clock", "alarm", "alarms", "time", "date", "calendar", "calculator",
+		"lock", "unlock", "power", "keyboard", "text", "tts", "eloquence", "mode", "status",
+		"info", "help", "about", "version", "permission", "permissions", "storage", "allow",
+		"deny", "error", "warning", "success", "failed", "loading", "ready", "done", "next",
+		"previous", "first", "last", "top", "bottom", "left", "right", "center", "row", "column",
+		"item", "items", "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
+		"nine", "ten", "percent", "hz", "second", "seconds", "minute", "minutes", "hour", "hours"
 	)
 
 	private val LEX_ES = setOf(
-		"el", "la", "los", "las", "un", "una", "unos", "unas", "y", "o", "de", "del", "al",
+		"el", "la", "los", "las", "un", "una", "unos", "unas", "y", "de", "del", "al",
 		"en", "con", "por", "para", "que", "qué", "como", "cómo", "donde", "dónde",
 		"cuando", "cuándo", "quien", "quién", "cual", "cuál", "cuanto", "cuánto", "es",
 		"son", "soy", "eres", "está", "están", "estoy", "tengo", "tienes", "tiene", "hay",
 		"muy", "pero", "más", "mas", "esto", "ese", "esa", "ella", "él", "nosotros",
 		"vosotros", "hola", "gracias", "adiós", "buenos", "días", "noches", "tarde",
 		"favor", "bien", "mal", "aquí", "ahí", "allí", "ahora", "también",
-		"todo", "nada", "algo", "uno", "dos", "tres", "cuatro", "cinco", "señor", "señora"
+		"todo", "nada", "algo", "dos", "tres", "cuatro", "cinco", "señor", "señora"
 	)
 
 	private val LEX_FR = setOf(
-		"le", "la", "les", "un", "une", "des", "du", "de", "et", "ou", "à", "a", "au",
-		"aux", "en", "dans", "pour", "par", "que", "quel", "quelle", "quels", "quelles",
+		"le", "la", "les", "un", "une", "des", "du", "de", "et", "ou", "à", "au",
+		"aux", "dans", "pour", "par", "que", "quel", "quelle", "quels", "quelles",
 		"quoi", "qui", "comment", "où", "quand", "pourquoi", "est", "sont", "suis", "es",
 		"avoir", "être", "mais", "plus", "très", "tres", "bien", "bonjour", "bonsoir",
 		"merci", "salut", "vous", "nous", "ils", "elles", "il", "elle", "ce",
-		"cette", "ces", "se", "ne", "pas", "avec", "sans", "sur", "sous", "tout", "tous",
+		"cette", "ces", "se", "pas", "avec", "sans", "sur", "sous", "tout", "tous",
 		"toute", "toutes", "moi", "toi", "lui", "leur", "oui", "non",
 		"maintenant", "ici", "là", "déjà", "encore", "aussi", "alors", "donc"
 	)
@@ -585,7 +586,7 @@ object LanguageDetector {
 	private val LEX_DE = setOf(
 		"der", "die", "das", "und", "oder", "aber", "ein", "eine", "einen", "einer",
 		"einem", "eines", "nicht", "ist", "sind", "war", "waren", "ich", "du", "er", "sie",
-		"es", "wir", "ihr", "mit", "von", "zu", "zur", "zum", "auf", "für", "auch", "noch",
+		"wir", "ihr", "mit", "von", "zu", "zur", "zum", "auf", "für", "auch", "noch",
 		"nur", "schon", "hallo", "guten", "morgen", "abend", "nacht", "danke", "bitte",
 		"sehr", "kein", "keine", "mein", "dein", "sein", "unser", "euer",
 		"wenn", "weil", "dass", "daß", "also", "hier", "dort", "jetzt", "immer", "wieder",
@@ -594,12 +595,12 @@ object LanguageDetector {
 	)
 
 	private val LEX_IT = setOf(
-		"il", "lo", "la", "i", "gli", "le", "un", "una", "e", "o", "di", "da", "del",
-		"della", "dei", "in", "con", "per", "tra", "fra", "che", "chi", "come", "dove",
+		"il", "lo", "la", "gli", "le", "un", "una", "di", "da", "del",
+		"della", "dei", "con", "per", "tra", "fra", "che", "chi", "come", "dove",
 		"quando", "perché", "perche", "quale", "quanto", "è", "sono", "sei", "ho", "hai",
 		"ha", "hanno", "ciao", "grazie", "prego", "buongiorno", "buonasera", "arrivederci",
 		"molto", "più", "anche", "sempre", "questa", "questo", "quello", "quella", "noi",
-		"voi", "lui", "lei", "loro", "mio", "tuo", "suo", "nostro", "vostro", "si", "no",
+		"voi", "lui", "lei", "loro", "mio", "tuo", "suo", "nostro", "vostro", "si",
 		"bene", "male", "qui", "qua", "lì", "ora", "adesso", "oggi", "ieri",
 		"domani", "tutto", "niente", "qualcosa", "signore", "signora", "favore"
 	)
@@ -608,13 +609,6 @@ object LanguageDetector {
 	private val BIGRAM_INDEX: Map<String, Int> = run {
 		val map = HashMap<String, Int>(160)
 		fun put(family: Int, vararg bigrams: String) {
-			// First writer wins. English is put first on purpose: a bigram
-			// several families share -- "en", "er", "ll", "ch" -- is at least
-			// as common in English and English is the standing default, so a
-			// contested pair votes English rather than bouncing an English
-			// word into a voice it never belonged to. The bigrams truly owned
-			// by another family ("sch", "que", "gli", "rr" ...) are absent
-			// from the English table and register normally.
 			for (bg in bigrams) map.putIfAbsent(bg, family)
 		}
 		put(IDX_EN, "th", "he", "er", "an", "re", "ou", "gh", "ht", "sh", "ch", "wh", "ph", "ng", "ck", "ll", "ve", "ow", "ea", "oo",

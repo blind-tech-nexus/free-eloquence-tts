@@ -1,0 +1,8 @@
+{
+  "name": "Free eloquence TTS",
+  "description": "Fast, flexible Eloquence TTS speech engine for everyday listening",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
