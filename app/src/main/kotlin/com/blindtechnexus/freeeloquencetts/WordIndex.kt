@@ -212,7 +212,7 @@ class WordIndex private constructor(
     private fun fold(c: Char): Char =
         if (c in 'A'..'Z') (c + 32) else Character.toLowerCase(c)
 
-    private fun isWordChar(c: Char): Boolean = c.isLetterOrDigit() || c == '\''
+    private fun isWordChar(c: Char): Boolean = isWordCharacter(c)
 
     /**
      * The index being made, one entry at a time, with the bound on it.
@@ -434,7 +434,7 @@ class WordIndex private constructor(
             var at = 0
             while (at < length) {
                 val c = text[from + at]
-                if (!(c.isLetterOrDigit() || c == '\'')) break
+                if (!isWordCharacter(c)) break
                 at++
             }
             return at
@@ -482,6 +482,19 @@ class WordIndex private constructor(
         /** Buckets for keys that begin with something that is not a word:
          *  one per first character, which is what has to match anyway. */
         private const val PUNCT_BUCKETS = 256
+
+        /** Whether [c] belongs inside a word, including combining vowel/nasal
+         *  marks and ZWJ/ZWNJ joiners in abugida scripts such as Devanagari. */
+        internal fun isWordCharacter(c: Char): Boolean {
+            if (c.isLetterOrDigit() || c == '\'') return true
+            if (c == '\u200C' || c == '\u200D') return true
+            return when (Character.getType(c).toByte()) {
+                Character.NON_SPACING_MARK,
+                Character.COMBINING_SPACING_MARK,
+                Character.ENCLOSING_MARK -> true
+                else -> false
+            }
+        }
 
         /** An index over [entries], built for a caller that has a list rather
          *  than a file -- the tests, and any place that has the pairs already.

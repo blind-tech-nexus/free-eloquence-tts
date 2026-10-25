@@ -1,0 +1,717 @@
+rule get_stanital_nuc_AV takes 1 from is_sival.obj
+  call ZZfence_null
+  set global half 2718 to 0
+  set global half 2714 to 53
+  call ZZlpta_load_vvg__setscan_0035r__2
+  if answer is not 0
+    go to av_adj
+  end
+  # High vowels: i(27), u(31), I(61), U(62), nI(71), ni(72), nU(73), nu(74) -> 55
+  plant test av_open
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 27
+  if answer is 0
+    set global half 2714 to 55
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 31
+  if answer is 0
+    set global half 2714 to 55
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 61
+  if answer is 0
+    set global half 2714 to 54
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 62
+  if answer is 0
+    set global half 2714 to 54
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 71
+  if answer is 0
+    set global half 2714 to 54
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 72
+  if answer is 0
+    set global half 2714 to 55
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 73
+  if answer is 0
+    set global half 2714 to 54
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 74
+  if answer is 0
+    set global half 2714 to 55
+    go to av_adj
+  end
+place av_open
+  # Low/open vowels: a(30)->48, E(29)->51, c(33)->51, O(63)->49, ae(64)->49, na(70)->49, nE(76)->51, nc(78)->51
+  plant test av_adj
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 30
+  if answer is 0
+    set global half 2714 to 48
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 63
+  if answer is 0
+    set global half 2714 to 49
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 64
+  if answer is 0
+    set global half 2714 to 49
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 70
+  if answer is 0
+    set global half 2714 to 49
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 29
+  if answer is 0
+    set global half 2714 to 51
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 33
+  if answer is 0
+    set global half 2714 to 51
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 76
+  if answer is 0
+    set global half 2714 to 51
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 78
+  if answer is 0
+    set global half 2714 to 51
+    go to av_adj
+  end
+place av_adj
+  plant test av_end
+  call adjust_AV_for_fem_voice
+place av_end
+  if global half 2718 is 0
+    set global half 2718 to global half 2714
+    add -2 to global half 2718
+  end
+  match
+end
+
+# Indo-Aryan vowel & nasalized vowel acoustic target rules.
+rule indi_vow_schwa takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 595
+  set global half 2922 to 65535
+  set global half 2926 to 1110
+  set global half 2930 to 65535
+  set global half 2934 to 2480
+  set global half 2938 to 65535
+  set global half 2726 to 100
+  set global half 2730 to 95
+  set global half 2734 to 130
+place done
+  match
+end
+
+rule indi_vow_a takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 795
+  set global half 2922 to 65535
+  set global half 2926 to 1360
+  set global half 2930 to 65535
+  set global half 2934 to 2540
+  set global half 2938 to 65535
+  set global half 2726 to 110
+  set global half 2730 to 95
+  set global half 2734 to 130
+place done
+  match
+end
+
+rule indi_vow_I takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 365
+  set global half 2922 to 65535
+  set global half 2926 to 1990
+  set global half 2930 to 65535
+  set global half 2934 to 2640
+  set global half 2938 to 65535
+  set global half 2726 to 90
+  set global half 2730 to 100
+  set global half 2734 to 130
+place done
+  match
+end
+
+rule indi_vow_U takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 380
+  set global half 2922 to 65535
+  set global half 2926 to 960
+  set global half 2930 to 65535
+  set global half 2934 to 2420
+  set global half 2938 to 65535
+  set global half 2726 to 90
+  set global half 2730 to 90
+  set global half 2734 to 130
+place done
+  match
+end
+
+rule indi_vow_E takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 560
+  set global half 2922 to 65535
+  set global half 2926 to 1790
+  set global half 2930 to 65535
+  set global half 2934 to 2560
+  set global half 2938 to 65535
+  set global half 2726 to 105
+  set global half 2730 to 105
+  set global half 2734 to 130
+place done
+  match
+end
+
+rule indi_vow_c takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 575
+  set global half 2922 to 65535
+  set global half 2926 to 950
+  set global half 2930 to 65535
+  set global half 2934 to 2480
+  set global half 2938 to 65535
+  set global half 2726 to 105
+  set global half 2730 to 95
+  set global half 2734 to 130
+place done
+  match
+end
+
+rule indi_vow_O takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 650
+  set global half 2922 to 65535
+  set global half 2926 to 1020
+  set global half 2930 to 65535
+  set global half 2934 to 2490
+  set global half 2938 to 65535
+  set global half 2726 to 110
+  set global half 2730 to 95
+  set global half 2734 to 130
+place done
+  match
+end
+
+rule indi_vow_ae takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 680
+  set global half 2922 to 65535
+  set global half 2926 to 1720
+  set global half 2930 to 65535
+  set global half 2934 to 2540
+  set global half 2938 to 65535
+  set global half 2726 to 110
+  set global half 2730 to 105
+  set global half 2734 to 130
+place done
+  match
+end
+
+rule indi_vow_nschwa takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 605
+  set global half 2922 to 65535
+  set global half 2926 to 1100
+  set global half 2930 to 65535
+  set global half 2934 to 2490
+  set global half 2938 to 65535
+  set global half 2726 to 240
+  set global half 2730 to 150
+  set global half 2734 to 130
+  set global half 2726 to 430
+  set global half 2730 to 360
+  set global half 3014 to 4
+place done
+  match
+end
+
+rule indi_vow_na takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 775
+  set global half 2922 to 65535
+  set global half 2926 to 1340
+  set global half 2930 to 65535
+  set global half 2934 to 2550
+  set global half 2938 to 65535
+  set global half 2726 to 250
+  set global half 2730 to 155
+  set global half 2734 to 130
+  set global half 2726 to 430
+  set global half 2730 to 360
+  set global half 3014 to 4
+place done
+  match
+end
+
+rule indi_vow_nI takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 385
+  set global half 2922 to 65535
+  set global half 2926 to 1960
+  set global half 2930 to 65535
+  set global half 2934 to 2650
+  set global half 2938 to 65535
+  set global half 2726 to 220
+  set global half 2730 to 150
+  set global half 2734 to 130
+  set global half 2726 to 430
+  set global half 2730 to 360
+  set global half 3014 to 4
+place done
+  match
+end
+
+rule indi_vow_ni takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 315
+  set global half 2922 to 65535
+  set global half 2926 to 2240
+  set global half 2930 to 65535
+  set global half 2934 to 2900
+  set global half 2938 to 65535
+  set global half 2726 to 220
+  set global half 2730 to 155
+  set global half 2734 to 130
+  set global half 2726 to 430
+  set global half 2730 to 360
+  set global half 3014 to 4
+place done
+  match
+end
+
+rule indi_vow_nU takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 400
+  set global half 2922 to 65535
+  set global half 2926 to 950
+  set global half 2930 to 65535
+  set global half 2934 to 2430
+  set global half 2938 to 65535
+  set global half 2726 to 220
+  set global half 2730 to 145
+  set global half 2734 to 130
+  set global half 2726 to 430
+  set global half 2730 to 360
+  set global half 3014 to 4
+place done
+  match
+end
+
+rule indi_vow_nu takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 330
+  set global half 2922 to 65535
+  set global half 2926 to 830
+  set global half 2930 to 65535
+  set global half 2934 to 2380
+  set global half 2938 to 65535
+  set global half 2726 to 220
+  set global half 2730 to 145
+  set global half 2734 to 130
+  set global half 2726 to 430
+  set global half 2730 to 360
+  set global half 3014 to 4
+place done
+  match
+end
+
+rule indi_vow_ne takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 430
+  set global half 2922 to 65535
+  set global half 2926 to 2000
+  set global half 2930 to 65535
+  set global half 2934 to 2680
+  set global half 2938 to 65535
+  set global half 2726 to 230
+  set global half 2730 to 150
+  set global half 2734 to 130
+  set global half 2726 to 430
+  set global half 2730 to 360
+  set global half 3014 to 4
+place done
+  match
+end
+
+rule indi_vow_nE takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 580
+  set global half 2922 to 65535
+  set global half 2926 to 1750
+  set global half 2930 to 65535
+  set global half 2934 to 2570
+  set global half 2938 to 65535
+  set global half 2726 to 245
+  set global half 2730 to 155
+  set global half 2734 to 130
+  set global half 2726 to 430
+  set global half 2730 to 360
+  set global half 3014 to 4
+place done
+  match
+end
+
+rule indi_vow_no takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 445
+  set global half 2922 to 65535
+  set global half 2926 to 890
+  set global half 2930 to 65535
+  set global half 2934 to 2460
+  set global half 2938 to 65535
+  set global half 2726 to 230
+  set global half 2730 to 145
+  set global half 2734 to 130
+  set global half 2726 to 430
+  set global half 2730 to 360
+  set global half 3014 to 4
+place done
+  match
+end
+
+rule indi_vow_nc takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 590
+  set global half 2922 to 65535
+  set global half 2926 to 950
+  set global half 2930 to 65535
+  set global half 2934 to 2490
+  set global half 2938 to 65535
+  set global half 2726 to 245
+  set global half 2730 to 150
+  set global half 2734 to 130
+  set global half 2726 to 430
+  set global half 2730 to 360
+  set global half 3014 to 4
+place done
+  match
+end
+
+rule stanital_vals takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test sv_1
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 27
+    if answer is 0
+      plant test sv_tail
+      call stanital_ph_i
+      go to sv_tail
+    end
+  end
+place sv_1
+  plant test sv_2
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 28
+    if answer is 0
+      plant test sv_tail
+      call stanital_ph_e
+      go to sv_tail
+    end
+  end
+place sv_2
+  plant test sv_3
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 29
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_E
+      go to sv_tail
+    end
+  end
+place sv_3
+  plant test sv_4
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 30
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_a
+      go to sv_tail
+    end
+  end
+place sv_4
+  plant test sv_5
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 31
+    if answer is 0
+      plant test sv_tail
+      call stanital_ph_u
+      go to sv_tail
+    end
+  end
+place sv_5
+  plant test sv_6
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 32
+    if answer is 0
+      plant test sv_tail
+      call stanital_ph_o
+      go to sv_tail
+    end
+  end
+place sv_6
+  plant test sv_7
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 33
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_c
+      go to sv_tail
+    end
+  end
+place sv_7
+  plant test sv_8
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 25
+    if answer is 0
+      plant test sv_tail
+      call stanital_ph_y
+      go to sv_tail
+    end
+  end
+place sv_8
+  plant test sv_9
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 26
+    if answer is 0
+      plant test sv_tail
+      call stanital_ph_w
+      go to sv_tail
+    end
+  end
+place sv_9
+  plant test sv_10
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 60
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_schwa
+      go to sv_tail
+    end
+  end
+place sv_10
+  plant test sv_11
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 61
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_I
+      go to sv_tail
+    end
+  end
+place sv_11
+  plant test sv_12
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 62
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_U
+      go to sv_tail
+    end
+  end
+place sv_12
+  plant test sv_13
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 63
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_O
+      go to sv_tail
+    end
+  end
+place sv_13
+  plant test sv_14
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 64
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_ae
+      go to sv_tail
+    end
+  end
+place sv_14
+  plant test sv_15
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 69
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_nschwa
+      go to sv_tail
+    end
+  end
+place sv_15
+  plant test sv_16
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 70
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_na
+      go to sv_tail
+    end
+  end
+place sv_16
+  plant test sv_17
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 71
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_nI
+      go to sv_tail
+    end
+  end
+place sv_17
+  plant test sv_18
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 72
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_ni
+      go to sv_tail
+    end
+  end
+place sv_18
+  plant test sv_19
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 73
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_nU
+      go to sv_tail
+    end
+  end
+place sv_19
+  plant test sv_20
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 74
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_nu
+      go to sv_tail
+    end
+  end
+place sv_20
+  plant test sv_21
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 75
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_ne
+      go to sv_tail
+    end
+  end
+place sv_21
+  plant test sv_22
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 76
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_nE
+      go to sv_tail
+    end
+  end
+place sv_22
+  plant test sv_23
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 77
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_no
+      go to sv_tail
+    end
+  end
+place sv_23
+  plant test sv_tail
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 78
+    if answer is 0
+      plant test sv_tail
+      call indi_vow_nc
+      go to sv_tail
+    end
+  end
+place sv_tail
+  plant test sv_nas
+  if global half 3012 is 1
+    call modify_breathiness_for_femV
+  end
+place sv_nas
+  plant test sv_ins
+  call nasalize_vow
+place sv_ins
+  plant test matched
+  call insert_acoustic_vals
+  match
+end

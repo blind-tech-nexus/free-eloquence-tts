@@ -24,7 +24,19 @@ object TextFixes {
 	private const val OPENERS = "~#\$%^*({|[<\"•"
 
 	private val OPENERS_SET = OPENERS.toSet()
-	private val MARKS = setOf(':', '.', '!', ';', ',', '?')
+	private val MARKS = setOf(':', '.', '!', ';', ',', '?', '।', '॥')
+
+	private fun isWordEndChar(c: Char): Boolean {
+		if (c.isLetter()) return true
+		return when (Character.getType(c).toByte()) {
+			Character.NON_SPACING_MARK,
+			Character.COMBINING_SPACING_MARK,
+			Character.ENCLOSING_MARK -> true
+			else -> false
+		}
+	}
+
+	private fun isIndicChar(c: Char): Boolean = c in '\u0900'..'\u097F'
 
 	fun apply(raw: String): String {
 		if (raw.isEmpty()) return raw
@@ -40,7 +52,7 @@ object TextFixes {
 		var needBracket = false
 		var needMark = false
 		for (c in text) {
-			if (!needLetterDigit && c.isLetter()) needLetterDigit = true
+			if (!needLetterDigit && isWordEndChar(c)) needLetterDigit = true
 			if (!needOpener && c in OPENERS_SET) needOpener = true
 			if (!needBracket && c == '(') needBracket = true
 			if (!needMark && c in MARKS) needMark = true
@@ -63,7 +75,7 @@ object TextFixes {
 					// Check "(s)" case: spaces + "(s)" after a letter
 					if (needBracket && next == '(' && j + 2 < n && text[j + 1] == 's' && text[j + 2] == ')') {
 						// If previous output ends with letter, skip spaces
-						if (out.isNotEmpty() && out.last().isLetter()) {
+						if (out.isNotEmpty() && isWordEndChar(out.last())) {
 							// Skip spaces, will handle '(' in next iteration
 							i = j
 							continue
@@ -72,7 +84,7 @@ object TextFixes {
 					// Space before punctuation mark: if next is mark and not followed by letter/digit
 					if (needMark && next in MARKS) {
 						val afterNext = if (j + 1 < n) text[j + 1] else '\u0000'
-						if (afterNext == '\u0000' || (!afterNext.isLetter() && !afterNext.isDigit())) {
+						if (afterNext == '\u0000' || (!isWordEndChar(afterNext) && !afterNext.isDigit())) {
 							// Skip spaces
 							i = j
 							continue
@@ -88,7 +100,7 @@ object TextFixes {
 			// Letter + digit: insert space
 			if (c.isDigit() && out.isNotEmpty()) {
 				val prev = out.last()
-				if (prev.isLetter()) {
+				if (isWordEndChar(prev)) {
 					out.append(' ')
 				}
 			}
@@ -96,7 +108,7 @@ object TextFixes {
 			// Letter + opener: insert space
 			if (c in OPENERS_SET && out.isNotEmpty()) {
 				val prev = out.last()
-				if (prev.isLetter()) {
+				if (isWordEndChar(prev)) {
 					// Check if previous char in original was not already space
 					if (prev != ' ') out.append(' ')
 				}
@@ -144,10 +156,14 @@ object TextFixes {
 		}
 		if (!needed) return text
 		val out = StringBuilder(text.length)
-		for (c in text) {
+		for (idx in text.indices) {
+			val c = text[idx]
 			when {
 				c == '\u00A0' || c == '\u1680' || (c in '\u2000'..'\u200A') ||
 					c == '\u202F' || c == '\u205F' || c == '\u3000' -> out.append(' ')
+				(c == '\u200C' || c == '\u200D') &&
+					((idx > 0 && isIndicChar(text[idx - 1])) || (idx + 1 < text.length && isIndicChar(text[idx + 1]))) ->
+					out.append(c)
 				c == '\u200B' || c == '\u200C' || c == '\u200D' || c == '\u2060' ||
 					c == '\uFEFF' || c == '\u00AD' || c == '\uFFFC' || c == '\u180E' -> Unit
 				else -> out.append(c)

@@ -1,0 +1,100 @@
+# Authored phoneme byte sequences for SPR insertion and subsegment expansion.
+bytes ph_gap 22
+bytes ph_1 01
+bytes ph_2 02
+bytes ph_3 03
+bytes ph_4 04
+bytes ph_5 05
+bytes ph_6 06
+bytes ph_7 07
+bytes ph_8 08
+bytes ph_9 09
+bytes ph_10 0a
+bytes ph_11 0b
+bytes ph_12 0c
+bytes ph_13 0d
+bytes ph_14 0e
+bytes ph_15 0f
+bytes ph_16 10
+bytes ph_17 11
+bytes ph_18 12
+bytes ph_19 13
+bytes ph_20 14
+bytes ph_21 15
+bytes ph_22 16
+bytes ph_23 17
+bytes ph_24 18
+bytes ph_25 19
+bytes ph_26 1a
+bytes ph_27 1b
+bytes ph_28 1c
+bytes ph_29 1d
+bytes ph_30 1e
+bytes ph_31 1f
+bytes ph_32 20
+bytes ph_33 21
+bytes ph_35 23
+bytes ph_36 24
+bytes ph_37 25
+bytes ph_38 26
+bytes ph_39 27
+bytes ph_40 28
+bytes ph_41 29
+bytes ph_42 2a
+bytes ph_43 2b
+bytes ph_44 2c
+bytes ph_45 2d
+bytes ph_46 2e
+bytes ph_47 2f
+bytes ph_48 30
+bytes ph_49 31
+bytes ph_50 32
+bytes ph_51 33
+bytes ph_52 34
+bytes ph_53 35
+bytes ph_54 36
+bytes ph_55 37
+bytes ph_56 38
+bytes ph_57 39
+bytes ph_58 3a
+bytes ph_59 3b
+bytes ph_60 3c
+bytes ph_61 3d
+bytes ph_62 3e
+bytes ph_63 3f
+bytes ph_64 40
+bytes ph_65 41
+bytes ph_66 42
+bytes ph_67 43
+bytes ph_68 44
+bytes ph_69 45
+bytes ph_70 46
+bytes ph_71 47
+bytes ph_72 48
+bytes ph_73 49
+bytes ph_74 4a
+bytes ph_75 4b
+bytes ph_76 4c
+bytes ph_77 4d
+bytes ph_78 4e
+bytes exp_C 04 0c
+bytes exp_J 03 0b
+bytes exp_T 04 0a
+bytes exp_D 03 09
+bytes exp_P 02 3a
+bytes exp_B 01 3b
+bytes exp_F 04 3a
+bytes exp_V 03 3b
+bytes exp_ret_th 27 3a
+bytes exp_ret_dh 29 3b
+bytes exp_rh 2c 3b
+bytes exp_K 05 3a
+bytes exp_Y 06 3b
+bytes exp_chh 04 0c 3a
+bytes exp_jhh 03 0b 3b
+bytes exp_tsh 04 0a 3a
+bytes exp_dzh 03 09 3b
+bytes exp_ai 3c 19
+bytes exp_au 3c 1a
+bytes exp_ain 45 19
+bytes exp_aun 45 1a

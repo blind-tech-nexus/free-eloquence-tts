@@ -169,7 +169,9 @@ ROMS := $(sort $(foreach l,$(LANGS),$(wildcard rom/$(notdir $(l))/*.c)))
 # romanizer is found. IBM answers that question with the presence of a
 # link-time symbol; a build of ours can hold several languages, so it is
 # answered by name.
-ROMDEFS := $(if $(filter jajp,$(TAGS)),-DEVV_ROM_JAJP)
+ROMDEFS := $(if $(filter jajp,$(TAGS)),-DEVV_ROM_JAJP) \
+           $(if $(filter hiin,$(TAGS)),-DEVV_ROM_HIIN) \
+           $(if $(filter nenp,$(TAGS)),-DEVV_ROM_NENP)
 
 # The engine, plus every language beside it. port_win32.c is the Windows
 # porting layer and belongs to the reference build; the two rule tables are

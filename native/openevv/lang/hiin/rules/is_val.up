@@ -1,0 +1,567 @@
+# Indo-Aryan consonant acoustic rules.
+rule indi_ret_Fv takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2926 to 1550
+  set global half 2930 to 1550
+  set global half 2934 to 2050
+  set global half 2938 to 2050
+  set global half 2942 to 3150
+  set global half 2946 to 3150
+  match
+end
+
+rule indi_ph_M takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2918 to 300
+  set global half 2922 to 300
+  plant test m_fv
+  call indi_ret_Fv
+place m_fv
+  set global half 2818 to 48
+  set global half 2858 to 60
+  set global half 2890 to 56
+  set global half 2894 to 62
+  set global half 2898 to 54
+  match
+end
+
+rule indi_ph_W takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2918 to 200
+  set global half 2922 to 200
+  plant test w_fv
+  call indi_ret_Fv
+place w_fv
+  plant test w_vb
+  call do_ital_voice_bar
+place w_vb
+  set global half 2858 to 55
+  set global half 2890 to 52
+  set global half 2894 to 58
+  match
+end
+
+rule indi_ph_X takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2918 to 280
+  set global half 2922 to 280
+  set global half 2926 to 1480
+  set global half 2930 to 1480
+  set global half 2934 to 2080
+  set global half 2938 to 2080
+  set global half 2746 to 50
+  set global half 2866 to 1
+  set global half 3014 to 4
+  set global half 2726 to 180
+  set global half 2730 to 120
+  match
+end
+
+rule indi_ph_j takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2918 to 340
+  set global half 2922 to 340
+  set global half 2926 to 1520
+  set global half 2930 to 1520
+  set global half 2934 to 1980
+  set global half 2938 to 1980
+  set global half 2746 to 49
+  set global half 2726 to 130
+  set global half 2730 to 110
+  match
+end
+
+rule indi_ph_q takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2918 to 360
+  set global half 2922 to 360
+  set global half 2926 to 1020
+  set global half 2930 to 1020
+  set global half 2934 to 2320
+  set global half 2938 to 2320
+  set global half 2818 to 46
+  set global half 2858 to 60
+  set global half 2890 to 62
+  set global half 2894 to 54
+  match
+end
+
+rule indi_ph_x takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2918 to 380
+  set global half 2922 to 380
+  set global half 2926 to 1180
+  set global half 2930 to 1180
+  set global half 2934 to 2360
+  set global half 2938 to 2360
+  set global half 2754 to 56
+  set global half 2774 to 58
+  set global half 2778 to 54
+  set global half 2726 to 180
+  match
+end
+
+rule indi_ph_A takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2918 to 340
+  set global half 2922 to 340
+  set global half 2926 to 1180
+  set global half 2930 to 1180
+  set global half 2934 to 2360
+  set global half 2938 to 2360
+  set global half 2746 to 44
+  set global half 2754 to 50
+  set global half 2774 to 52
+  set global half 2726 to 150
+  match
+end
+
+rule indi_ph_ss takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2918 to 320
+  set global half 2922 to 320
+  plant test ss_fv
+  call indi_ret_Fv
+place ss_fv
+  set global half 2754 to 56
+  set global half 2774 to 56
+  set global half 2778 to 60
+  set global half 2782 to 56
+  set global half 2726 to 180
+  match
+end
+
+rule indi_ph_va takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2918 to 320
+  set global half 2922 to 320
+  set global half 2926 to 1080
+  set global half 2930 to 1080
+  set global half 2934 to 2320
+  set global half 2938 to 2320
+  set global half 2746 to 52
+  set global half 2726 to 100
+  set global half 2730 to 95
+  match
+end
+
+rule indi_ph_h takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2746 to 38
+  set global half 2750 to 50
+  set global half 2914 to 12
+  set global half 2726 to 240
+  set global half 2730 to 160
+  match
+end
+
+rule indi_ph_H takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2750 to 53
+  set global half 2914 to 8
+  set global half 2726 to 260
+  set global half 2730 to 160
+  match
+end
+
+rule indi_ph_Q takes 1 from is_val.obj
+  call ZZfence_null
+  set global half 2746 to 40
+  set global half 2750 to 50
+  set global half 2914 to 12
+  set global half 2726 to 250
+  set global half 2730 to 165
+  match
+end
+
+rule ital_con_vals takes 1 from is_val.obj
+  call ZZfence_null
+  plant test cv_1
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 2
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_p
+      go to cv_tail
+    end
+  end
+place cv_1
+  plant test cv_2
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 1
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_b
+      go to cv_tail
+    end
+  end
+place cv_2
+  plant test cv_3
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 4
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_t
+      go to cv_tail
+    end
+  end
+place cv_3
+  plant test cv_4
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 3
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_d
+      go to cv_tail
+    end
+  end
+place cv_4
+  plant test cv_5
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 5
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_k
+      go to cv_tail
+    end
+  end
+place cv_5
+  plant test cv_6
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 6
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_g
+      go to cv_tail
+    end
+  end
+place cv_6
+  plant test cv_7
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 8
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_f
+      go to cv_tail
+    end
+  end
+place cv_7
+  plant test cv_8
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 7
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_v
+      go to cv_tail
+    end
+  end
+place cv_8
+  plant test cv_9
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 10
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_s
+      go to cv_tail
+    end
+  end
+place cv_9
+  plant test cv_10
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 9
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_z
+      go to cv_tail
+    end
+  end
+place cv_10
+  plant test cv_11
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 12
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_S
+      go to cv_tail
+    end
+  end
+place cv_11
+  plant test cv_12
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 11
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_Z
+      go to cv_tail
+    end
+  end
+place cv_12
+  plant test cv_13
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 17
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_m
+      go to cv_tail
+    end
+  end
+place cv_13
+  plant test cv_14
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 18
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_n
+      go to cv_tail
+    end
+  end
+place cv_14
+  plant test cv_15
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 19
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_N
+      go to cv_tail
+    end
+  end
+place cv_15
+  plant test cv_16
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 20
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_G
+      go to cv_tail
+    end
+  end
+place cv_16
+  plant test cv_17
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 23
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_l
+      go to cv_tail
+    end
+  end
+place cv_17
+  plant test cv_18
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 24
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_L
+      go to cv_tail
+    end
+  end
+place cv_18
+  plant test cv_19
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 21
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_r
+      go to cv_tail
+    end
+  end
+place cv_19
+  plant test cv_20
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 22
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_R
+      go to cv_tail
+    end
+  end
+place cv_20
+  plant test cv_21
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 25
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_y
+      go to cv_tail
+    end
+  end
+place cv_21
+  plant test cv_22
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 26
+    if answer is 0
+      plant test cv_tail
+      call ital_ph_w
+      go to cv_tail
+    end
+  end
+place cv_22
+  plant test cv_23
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 39
+    if answer is 0
+      plant test cv_tail
+      call indi_ph_M
+      go to cv_tail
+    end
+  end
+place cv_23
+  plant test cv_24
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 41
+    if answer is 0
+      plant test cv_tail
+      call indi_ph_W
+      go to cv_tail
+    end
+  end
+place cv_24
+  plant test cv_25
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 43
+    if answer is 0
+      plant test cv_tail
+      call indi_ph_X
+      go to cv_tail
+    end
+  end
+place cv_25
+  plant test cv_26
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 44
+    if answer is 0
+      plant test cv_tail
+      call indi_ph_j
+      go to cv_tail
+    end
+  end
+place cv_26
+  plant test cv_27
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 52
+    if answer is 0
+      plant test cv_tail
+      call indi_ph_q
+      go to cv_tail
+    end
+  end
+place cv_27
+  plant test cv_28
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 53
+    if answer is 0
+      plant test cv_tail
+      call indi_ph_x
+      go to cv_tail
+    end
+  end
+place cv_28
+  plant test cv_29
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 54
+    if answer is 0
+      plant test cv_tail
+      call indi_ph_A
+      go to cv_tail
+    end
+  end
+place cv_29
+  plant test cv_30
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 55
+    if answer is 0
+      plant test cv_tail
+      call indi_ph_ss
+      go to cv_tail
+    end
+  end
+place cv_30
+  plant test cv_31
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 56
+    if answer is 0
+      plant test cv_tail
+      call indi_ph_va
+      go to cv_tail
+    end
+  end
+place cv_31
+  plant test cv_32
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 57
+    if answer is 0
+      plant test cv_tail
+      call indi_ph_h
+      go to cv_tail
+    end
+  end
+place cv_32
+  plant test cv_33
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 58
+    if answer is 0
+      plant test cv_tail
+      call indi_ph_H
+      go to cv_tail
+    end
+  end
+place cv_33
+  plant test cv_tail
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 59
+    if answer is 0
+      plant test cv_tail
+      call indi_ph_Q
+      go to cv_tail
+    end
+  end
+place cv_tail
+  plant test cv_ins
+  if global signed half 2914 is more than 0
+    if global signed half 2754 is more than 0
+      call adjust_AH_AF_for_TLv_w
+    else
+      if global signed half 2818 is more than 0
+        call adjust_AH_AF_for_TLv_w
+      end
+    end
+  end
+place cv_ins
+  plant test matched
+  call insert_acoustic_vals
+  match
+end

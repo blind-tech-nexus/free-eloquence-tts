@@ -83,7 +83,7 @@ static int8_t inLanguages(LanguageId *id, const int32_t *list, size_t n)
 int8_t langSupportProsody(LanguageId id)
 {
     static const int32_t LANGS[] = {
-        0x10000, 0x10001, 0x30000, 0x40000, 0x110000
+        0x10000, 0x10001, 0x30000, 0x40000, 0x100000, 0x110000, 0x120000
     };
 
     return inLanguages(&id, LANGS, sizeof LANGS / sizeof LANGS[0]);
@@ -93,7 +93,8 @@ int8_t langSupportProsody(LanguageId id)
 int8_t langSupportProsodyRate(LanguageId id)
 {
     static const int32_t LANGS[] = {
-        0x10000, 0x10001, 0x30000, 0x40000, 0x80000, 0x110000
+        0x10000, 0x10001, 0x30000, 0x40000, 0x80000, 0x100000, 0x110000,
+        0x120000
     };
 
     return inLanguages(&id, LANGS, sizeof LANGS / sizeof LANGS[0]);
@@ -105,7 +106,7 @@ int8_t langSupportEmphasis(LanguageId id)
 {
     static const int32_t LANGS[] = {
         0x10000, 0x10001, 0x30000, 0x40000, 0x20000, 0x50000, 0x70000,
-        0x90000, 0x20001, 0x30001, 0x110000
+        0x90000, 0x20001, 0x30001, 0x100000, 0x110000, 0x120000
     };
 
     return inLanguages(&id, LANGS, sizeof LANGS / sizeof LANGS[0]);

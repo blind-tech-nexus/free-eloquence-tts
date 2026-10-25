@@ -1,0 +1,790 @@
+# Indo-Aryan consonant duration rules (ms in 2082, burst ms in 2990).
+rule indi_ph_M_dur takes 1 from is_dur.obj
+  call ZZfence_null
+  set global half 2082 to 58
+  set global half 2990 to 14
+  plant test check_right
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 39
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+  end
+place check_right
+  plant test check_asp
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 39
+    if answer is 0
+      set global half 2082 to 92
+      match
+    end
+  end
+place check_asp
+  plant test dur_done
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 4 9
+    if answer is 0
+      set global half 2082 to 42
+      match
+    end
+    call testFldeq 2 4 10
+    if answer is 0
+      set global half 2082 to 42
+      match
+    end
+  end
+place dur_done
+  match
+end
+
+rule indi_ph_W_dur takes 1 from is_dur.obj
+  call ZZfence_null
+  set global half 2082 to 50
+  set global half 2990 to 10
+  plant test check_right
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 41
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+  end
+place check_right
+  plant test check_asp
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 41
+    if answer is 0
+      set global half 2082 to 84
+      match
+    end
+  end
+place check_asp
+  plant test dur_done
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 4 9
+    if answer is 0
+      set global half 2082 to 38
+      match
+    end
+    call testFldeq 2 4 10
+    if answer is 0
+      set global half 2082 to 38
+      match
+    end
+  end
+place dur_done
+  match
+end
+
+rule indi_ph_X_dur takes 1 from is_dur.obj
+  call ZZfence_null
+  set global half 2082 to 58
+  plant test check_right
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 43
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+  end
+place check_right
+  plant test check_asp
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 43
+    if answer is 0
+      set global half 2082 to 88
+      match
+    end
+  end
+place check_asp
+  match
+end
+
+rule indi_ph_j_dur takes 1 from is_dur.obj
+  call ZZfence_null
+  set global half 2082 to 24
+  plant test check_right
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 44
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+  end
+place check_right
+  plant test check_asp
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 44
+    if answer is 0
+      set global half 2082 to 50
+      match
+    end
+  end
+place check_asp
+  plant test dur_done
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 4 9
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+    call testFldeq 2 4 10
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+  end
+place dur_done
+  match
+end
+
+rule indi_ph_q_dur takes 1 from is_dur.obj
+  call ZZfence_null
+  set global half 2082 to 60
+  set global half 2990 to 15
+  plant test check_right
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 52
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+  end
+place check_right
+  plant test check_asp
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 52
+    if answer is 0
+      set global half 2082 to 92
+      match
+    end
+  end
+place check_asp
+  match
+end
+
+rule indi_ph_x_dur takes 1 from is_dur.obj
+  call ZZfence_null
+  set global half 2082 to 74
+  plant test check_right
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 53
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+  end
+place check_right
+  plant test check_asp
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 53
+    if answer is 0
+      set global half 2082 to 98
+      match
+    end
+  end
+place check_asp
+  match
+end
+
+rule indi_ph_A_dur takes 1 from is_dur.obj
+  call ZZfence_null
+  set global half 2082 to 64
+  plant test check_right
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 54
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+  end
+place check_right
+  plant test check_asp
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 54
+    if answer is 0
+      set global half 2082 to 88
+      match
+    end
+  end
+place check_asp
+  match
+end
+
+rule indi_ph_ss_dur takes 1 from is_dur.obj
+  call ZZfence_null
+  set global half 2082 to 74
+  plant test check_right
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 55
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+  end
+place check_right
+  plant test check_asp
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 55
+    if answer is 0
+      set global half 2082 to 98
+      match
+    end
+  end
+place check_asp
+  match
+end
+
+rule indi_ph_va_dur takes 1 from is_dur.obj
+  call ZZfence_null
+  set global half 2082 to 52
+  plant test check_right
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 56
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+  end
+place check_right
+  plant test check_asp
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 56
+    if answer is 0
+      set global half 2082 to 82
+      match
+    end
+  end
+place check_asp
+  match
+end
+
+rule indi_ph_h_dur takes 1 from is_dur.obj
+  call ZZfence_null
+  set global half 2082 to 60
+  plant test check_right
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 57
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+  end
+place check_right
+  plant test check_asp
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 57
+    if answer is 0
+      set global half 2082 to 84
+      match
+    end
+  end
+place check_asp
+  match
+end
+
+rule indi_ph_H_dur takes 1 from is_dur.obj
+  call ZZfence_null
+  set global half 2082 to 50
+  plant test check_right
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 58
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+  end
+place check_right
+  plant test check_asp
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 58
+    if answer is 0
+      set global half 2082 to 50
+      match
+    end
+  end
+place check_asp
+  match
+end
+
+rule indi_ph_Q_dur takes 1 from is_dur.obj
+  call ZZfence_null
+  set global half 2082 to 54
+  plant test check_right
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 59
+    if answer is 0
+      set global half 2082 to 20
+      match
+    end
+  end
+place check_right
+  plant test check_asp
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 59
+    if answer is 0
+      set global half 2082 to 54
+      match
+    end
+  end
+place check_asp
+  match
+end
+
+rule ital_cons_durs takes 3 from is_dur.obj
+  local p_start bytes 8
+  local p_end bytes 8
+  local lim bytes 8
+  local g832
+  local g840
+  local g2080
+  local g584
+
+  set g832 to state
+  add 832 to g832
+  set g840 to state
+  add 840 to g840
+  set g2080 to state
+  add 2080 to g2080
+  set g584 to state
+  add 584 to g584
+  call ZZget_parm_ptr2 addr p_start arg 1 addr p_end arg 2
+  call push_ptr_init addr lim
+  call ZZfence_null
+  plant test matched as 1
+  call ZZlpta_load_move_storepr_2 addr p_start g832
+  call ZZlpta_load_move_storepr_2 addr p_end addr lim
+  call forall_to_test g832 addr lim
+  if answer is not 0
+    backtrack
+  end
+place cd_loop on 3
+  plant choice cd_step as 2
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is not 0
+    backtrack
+  end
+  call advance_tok
+  if answer is not 0
+    backtrack
+  end
+  call savescptr 4 g840
+place cd_saved on 4
+  set global half 2990 to 0
+  plant test cd_1
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 25
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_y_dur
+      go to cd_apply
+    end
+  end
+place cd_1
+  plant test cd_2
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 26
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_w_dur
+      go to cd_apply
+    end
+  end
+place cd_2
+  plant test cd_3
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 23
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_l_dur
+      go to cd_apply
+    end
+  end
+place cd_3
+  plant test cd_4
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 24
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_L_dur
+      go to cd_apply
+    end
+  end
+place cd_4
+  plant test cd_5
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 21
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_r_dur
+      go to cd_apply
+    end
+  end
+place cd_5
+  plant test cd_6
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 22
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_R_dur
+      go to cd_apply
+    end
+  end
+place cd_6
+  plant test cd_7
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 2
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_p_dur
+      go to cd_apply
+    end
+  end
+place cd_7
+  plant test cd_8
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 4
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_t_dur
+      go to cd_apply
+    end
+  end
+place cd_8
+  plant test cd_9
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 5
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_k_dur
+      go to cd_apply
+    end
+  end
+place cd_9
+  plant test cd_10
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 1
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_b_dur
+      go to cd_apply
+    end
+  end
+place cd_10
+  plant test cd_11
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 3
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_d_dur
+      go to cd_apply
+    end
+  end
+place cd_11
+  plant test cd_12
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 6
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_g_dur
+      go to cd_apply
+    end
+  end
+place cd_12
+  plant test cd_13
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 8
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_f_dur
+      go to cd_apply
+    end
+  end
+place cd_13
+  plant test cd_14
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 7
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_v_dur
+      go to cd_apply
+    end
+  end
+place cd_14
+  plant test cd_15
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 10
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_s_dur
+      go to cd_apply
+    end
+  end
+place cd_15
+  plant test cd_16
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 9
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_z_dur
+      go to cd_apply
+    end
+  end
+place cd_16
+  plant test cd_17
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 12
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_S_dur
+      go to cd_apply
+    end
+  end
+place cd_17
+  plant test cd_18
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 11
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_Z_dur
+      go to cd_apply
+    end
+  end
+place cd_18
+  plant test cd_19
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 19
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_N_dur
+      go to cd_apply
+    end
+  end
+place cd_19
+  plant test cd_20
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 17
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_m_dur
+      go to cd_apply
+    end
+  end
+place cd_20
+  plant test cd_21
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 20
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_G_dur
+      go to cd_apply
+    end
+  end
+place cd_21
+  plant test cd_22
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 18
+    if answer is 0
+      plant test cd_apply
+      call ital_ph_n_dur
+      go to cd_apply
+    end
+  end
+place cd_22
+  plant test cd_23
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 39
+    if answer is 0
+      plant test cd_apply
+      call indi_ph_M_dur
+      go to cd_apply
+    end
+  end
+place cd_23
+  plant test cd_24
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 41
+    if answer is 0
+      plant test cd_apply
+      call indi_ph_W_dur
+      go to cd_apply
+    end
+  end
+place cd_24
+  plant test cd_25
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 43
+    if answer is 0
+      plant test cd_apply
+      call indi_ph_X_dur
+      go to cd_apply
+    end
+  end
+place cd_25
+  plant test cd_26
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 44
+    if answer is 0
+      plant test cd_apply
+      call indi_ph_j_dur
+      go to cd_apply
+    end
+  end
+place cd_26
+  plant test cd_27
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 52
+    if answer is 0
+      plant test cd_apply
+      call indi_ph_q_dur
+      go to cd_apply
+    end
+  end
+place cd_27
+  plant test cd_28
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 53
+    if answer is 0
+      plant test cd_apply
+      call indi_ph_x_dur
+      go to cd_apply
+    end
+  end
+place cd_28
+  plant test cd_29
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 54
+    if answer is 0
+      plant test cd_apply
+      call indi_ph_A_dur
+      go to cd_apply
+    end
+  end
+place cd_29
+  plant test cd_30
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 55
+    if answer is 0
+      plant test cd_apply
+      call indi_ph_ss_dur
+      go to cd_apply
+    end
+  end
+place cd_30
+  plant test cd_31
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 56
+    if answer is 0
+      plant test cd_apply
+      call indi_ph_va_dur
+      go to cd_apply
+    end
+  end
+place cd_31
+  plant test cd_32
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 57
+    if answer is 0
+      plant test cd_apply
+      call indi_ph_h_dur
+      go to cd_apply
+    end
+  end
+place cd_32
+  plant test cd_33
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 58
+    if answer is 0
+      plant test cd_apply
+      call indi_ph_H_dur
+      go to cd_apply
+    end
+  end
+place cd_33
+  plant test cd_step
+  call ZZlpta_load_vvg__setscan_0103r__2
+  if answer is 0
+    call testFldeq 2 0 59
+    if answer is 0
+      plant test cd_apply
+      call indi_ph_Q_dur
+      go to cd_apply
+    end
+  end
+  go to cd_step
+place cd_apply
+  plant test cd_burst
+  call insert_dur g2080 g832 g840 g584
+place cd_burst
+  if global half 2990 is not 0
+    plant test cd_step
+    call insert_burst_dur
+  end
+place cd_step
+  call ZZforto_adv_upto_r__1__2 3 2 g832 addr lim
+  if answer is 0
+    match
+  end
+  backtrack
+end

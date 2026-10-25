@@ -10,16 +10,16 @@ plugins {
 val abis = (findProperty("evvdroid.abis") as String? ?: "arm64-v8a,armeabi-v7a,x86_64")
 	.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 val rulesForm = findProperty("evvdroid.rules") as String? ?: "c"
-// The eight language modules this app speaks, which are the eight IBM
-// finished: English (United States) and (United Kingdom), German, Spanish
-// (Spain) and (Mexico), French (France) and (Canada), and Italian. All eight
+// The ten language modules this app speaks: the eight Western modules
+// (American and British English, German, Castilian and Mexican Spanish,
+// French and Canadian French, and Italian) plus Hindi and Nepali. All ten
 // are offered above -- on the settings screen, in the voices the service
 // answers with, and in what a caller can ask for by locale -- so the weight of
 // each is weight the app can speak in. See [Eci.LANGUAGES], which lists the
-// same eight and is checked against this by a test. The Japanese and the
+// same ten and is checked against this by a test. The Japanese and the
 // unfinished Polish modules are left out on purpose. American English stays
 // first: the engine's Makefile takes the first as its default language.
-val languages = "lang/enus lang/engb lang/dede lang/eses lang/esus lang/frfr lang/frca lang/itit"
+val languages = "lang/enus lang/engb lang/dede lang/eses lang/esus lang/frfr lang/frca lang/itit lang/hiin lang/nenp"
 val nativeOut = layout.buildDirectory.dir("native/jniLibs")
 
 // The engine is built by its own Makefile rather than by CMake, because that
@@ -32,12 +32,13 @@ val buildNative by tasks.registering(Exec::class) {
 	val script = rootProject.layout.projectDirectory.file("native/build-native.sh")
 	// The engine is vendored in native/openevv rather than fetched as a
 	// submodule, so its sources are inputs like any other and an edit to one of
-	// them is a rebuild. Only src/ and lib/ are named: the language modules
-	// under lang/ are thirteen megabytes of text data that never changes, and
+	// them is a rebuild. Only src/, rom/ and lib/ are named: the language modules
+	// under lang/ are megabytes of text data that rarely changes, and
 	// hashing them on every build would cost more than the build saves. The
 	// generated rule tables are written under native/openevv/build/, which is
 	// outside the tree named here and output rather than input.
 	inputs.files(rootProject.fileTree("native/openevv/src"))
+	inputs.files(rootProject.fileTree("native/openevv/rom"))
 	inputs.files(rootProject.fileTree("native/openevv/lib"))
 	inputs.file(rootProject.layout.projectDirectory.file("native/android.mk"))
 	inputs.file(script)

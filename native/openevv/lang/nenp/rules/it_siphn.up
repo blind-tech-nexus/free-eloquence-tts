@@ -1,0 +1,300 @@
+# Expand affricates, aspirated/murmured stops, and falling diphthongs.
+rule break_into_stanital_phones takes 1 from it_siphn.obj
+  local cur bytes 8
+  local nxt bytes 8
+  local lim bytes 8
+
+  call ZZpush_ptr_init3 addr cur addr nxt addr lim
+  call ZZfence_null
+  plant test matched as 1
+  call ZZlpta_loadpn_vvg0087
+  call ZZlpta_mover_2
+  call lpta_storep addr cur
+  call ZZlpta_loadpn_vvg0088
+  call ZZlpta_mover_2
+  call lpta_storep addr lim
+  call forall_to_test addr cur addr lim
+  if answer is not 0
+    backtrack
+  end
+place loop_body on 3
+  plant choice done_tok as 2
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is not 0
+    backtrack
+  end
+  call advance_tok
+  if answer is not 0
+    backtrack
+  end
+  call savescptr 4 addr nxt
+place after_save on 4
+  plant test exp_alt_1
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 14
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_C 0
+      if answer is 0
+        call lpta_rpta_loadp addr cur addr nxt
+        call mark_s 2 11 1 0
+      end
+      go to done_tok
+    end
+  end
+place exp_alt_1
+  plant test exp_alt_2
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 13
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_J 0
+      if answer is 0
+        call lpta_rpta_loadp addr cur addr nxt
+        call mark_s 2 11 2 0
+      end
+      go to done_tok
+    end
+  end
+place exp_alt_2
+  plant test exp_alt_3
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 16
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_T 0
+      if answer is 0
+        call lpta_rpta_loadp addr cur addr nxt
+        call mark_s 2 11 4 0
+      end
+      go to done_tok
+    end
+  end
+place exp_alt_3
+  plant test exp_alt_4
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 15
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_D 0
+      if answer is 0
+        call lpta_rpta_loadp addr cur addr nxt
+        call mark_s 2 11 3 0
+      end
+      go to done_tok
+    end
+  end
+place exp_alt_4
+  plant test exp_alt_5
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 46
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 3 sym exp_chh 0
+      if answer is 0
+        call lpta_rpta_loadp addr cur addr nxt
+        call mark_s 2 11 1 0
+      end
+      go to done_tok
+    end
+  end
+place exp_alt_5
+  plant test exp_alt_6
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 47
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 3 sym exp_jhh 0
+      if answer is 0
+        call lpta_rpta_loadp addr cur addr nxt
+        call mark_s 2 11 2 0
+      end
+      go to done_tok
+    end
+  end
+place exp_alt_6
+  plant test exp_alt_7
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 48
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 3 sym exp_tsh 0
+      if answer is 0
+        call lpta_rpta_loadp addr cur addr nxt
+        call mark_s 2 11 4 0
+      end
+      go to done_tok
+    end
+  end
+place exp_alt_7
+  plant test exp_alt_8
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 49
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 3 sym exp_dzh 0
+      if answer is 0
+        call lpta_rpta_loadp addr cur addr nxt
+        call mark_s 2 11 3 0
+      end
+      go to done_tok
+    end
+  end
+place exp_alt_8
+  plant test exp_alt_9
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 35
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_P 0
+      go to done_tok
+    end
+  end
+place exp_alt_9
+  plant test exp_alt_10
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 36
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_B 0
+      go to done_tok
+    end
+  end
+place exp_alt_10
+  plant test exp_alt_11
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 37
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_F 0
+      go to done_tok
+    end
+  end
+place exp_alt_11
+  plant test exp_alt_12
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 38
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_V 0
+      go to done_tok
+    end
+  end
+place exp_alt_12
+  plant test exp_alt_13
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 40
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_ret_th 0
+      go to done_tok
+    end
+  end
+place exp_alt_13
+  plant test exp_alt_14
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 42
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_ret_dh 0
+      go to done_tok
+    end
+  end
+place exp_alt_14
+  plant test exp_alt_15
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 45
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_rh 0
+      go to done_tok
+    end
+  end
+place exp_alt_15
+  plant test exp_alt_16
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 50
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_K 0
+      go to done_tok
+    end
+  end
+place exp_alt_16
+  plant test exp_alt_17
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 51
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_Y 0
+      go to done_tok
+    end
+  end
+place exp_alt_17
+  plant test exp_alt_18
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 65
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_ai 0
+      go to done_tok
+    end
+  end
+place exp_alt_18
+  plant test exp_alt_19
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 66
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_au 0
+      go to done_tok
+    end
+  end
+place exp_alt_19
+  plant test exp_alt_20
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 67
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_ain 0
+      go to done_tok
+    end
+  end
+place exp_alt_20
+  plant test done_tok
+  call ZZlpta_load__setscan_r__2 addr cur
+  if answer is 0
+    call testFldeq 2 0 68
+    if answer is 0
+      call lpta_rpta_loadp addr cur addr nxt
+      call insert_2pt_s 2 2 sym exp_aun 0
+      go to done_tok
+    end
+  end
+place done_tok
+  call ZZforto_adv_upto_r__1__2 3 2 addr cur addr lim
+  if answer is 0
+    match
+  end
+  backtrack
+end

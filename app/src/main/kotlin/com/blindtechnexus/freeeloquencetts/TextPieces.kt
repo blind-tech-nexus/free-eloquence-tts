@@ -59,7 +59,7 @@ object TextPieces {
 	/** Closing marks that may sit after the punctuation that ends a sentence. */
 	private const val CLOSERS = "\"')]}»”’"
 
-	private const val ENDERS = "?!…。！？"
+	private const val ENDERS = "?!…。！？।॥"
 
 	/** Whether a word ends a sentence rather than being a dotted abbreviation. */
 	fun endsSentence(word: String): Boolean = endsSentence(word, 0, word.length)

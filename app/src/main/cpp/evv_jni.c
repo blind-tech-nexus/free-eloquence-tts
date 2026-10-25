@@ -108,9 +108,20 @@ typedef struct {
 	size_t          textroom;
 	unsigned char*  scratch;
 	int             waiters;
+	int             language;
 	ECIDictHand     dict;
 	short           frame[FRAME_SAMPLES];
 } instance;
+
+static int is_utf8_language(int language) {
+	return language == eciStandardHindi || language == eciStandardNepali;
+}
+
+static int dict_volume_for(int language, jint volume) {
+	if (is_utf8_language(language) && volume == eciMainDict)
+		return eciMainDictExt;
+	return (int)volume;
+}
 
 static instance* unwrap(jlong handle) {
 	return (instance*)(intptr_t)handle;
@@ -369,6 +380,7 @@ JNIEXPORT jlong JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_creat
 		return 0;
 	}
 	in->eci = eciNewEx(language);
+	in->language = (int)language;
 	if (in->eci == NULL_ECI_HAND) {
 		LOGE("eciNewEx(%#x) gave no instance", language);
 		free(in->scratch);
@@ -665,7 +677,7 @@ JNIEXPORT jint JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_loadDi
 	name = (*env)->GetStringUTFChars(env, path, NULL);
 	if (name == NULL)
 		return -1;
-	answer = eciLoadDict(in->eci, in->dict, volume, name);
+	answer = eciLoadDict(in->eci, in->dict, dict_volume_for(in->language, volume), name);
 	(*env)->ReleaseStringUTFChars(env, path, name);
 	return answer;
 }
@@ -690,7 +702,7 @@ JNIEXPORT jint JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_teachW
 	pair[keyLen] = 0;
 	(*env)->GetByteArrayRegion(env, say, 0, sayLen, (jbyte*)(pair + keyLen + 1));
 	pair[keyLen + 1 + sayLen] = 0;
-	answer = eciUpdateDict(in->eci, in->dict, volume, pair, pair + keyLen + 1);
+	answer = eciUpdateDict(in->eci, in->dict, dict_volume_for(in->language, volume), pair, pair + keyLen + 1);
 	free(pair);
 	return answer;
 }
@@ -712,19 +724,64 @@ JNIEXPORT jstring JNICALL Java_com_blindtechnexus_freeeloquencetts_EvvNative_loo
 		return NULL;
 	(*env)->GetByteArrayRegion(env, key, 0, keyLen, (jbyte*)want);
 	want[keyLen] = 0;
-	found = eciDictLookup(in->eci, in->dict, volume, want);
+	found = eciDictLookup(in->eci, in->dict, dict_volume_for(in->language, volume), want);
 	if (found != NULL) {
-		/* The engine stores Western single-byte text (ISO-8859-1), not
-		   Modified UTF-8, so handing bytes >= 0x80 straight to NewStringUTF
-		   aborts CheckJNI. Every ISO-8859-1 byte maps to the same UTF-16
-		   code unit. */
 		size_t n = strlen(found);
 		jchar* wide = (jchar*)malloc((n == 0 ? 1 : n) * sizeof(jchar));
 		if (wide != NULL) {
-			size_t i;
-			for (i = 0; i < n; i++)
-				wide[i] = (jchar)(unsigned char)found[i];
-			answer = (*env)->NewString(env, wide, (jsize)n);
+			if (is_utf8_language(in->language)) {
+				/* Indic romanizer dictionaries store standard UTF-8; decode
+				   each UTF-8 sequence into UTF-16 code units cleanly. */
+				size_t i = 0, out = 0;
+				while (i < n) {
+					unsigned int b0 = (unsigned char)found[i];
+					unsigned int cp;
+					if (b0 < 0x80) {
+						cp = b0;
+						i += 1;
+					} else if ((b0 & 0xe0) == 0xc0 && i + 1 < n
+					           && ((unsigned char)found[i + 1] & 0xc0) == 0x80) {
+						cp = ((b0 & 0x1f) << 6) | ((unsigned char)found[i + 1] & 0x3f);
+						i += 2;
+					} else if ((b0 & 0xf0) == 0xe0 && i + 2 < n
+					           && ((unsigned char)found[i + 1] & 0xc0) == 0x80
+					           && ((unsigned char)found[i + 2] & 0xc0) == 0x80) {
+						cp = ((b0 & 0x0f) << 12)
+						   | (((unsigned char)found[i + 1] & 0x3f) << 6)
+						   | ((unsigned char)found[i + 2] & 0x3f);
+						i += 3;
+					} else if ((b0 & 0xf8) == 0xf0 && i + 3 < n
+					           && ((unsigned char)found[i + 1] & 0xc0) == 0x80
+					           && ((unsigned char)found[i + 2] & 0xc0) == 0x80
+					           && ((unsigned char)found[i + 3] & 0xc0) == 0x80) {
+						cp = ((b0 & 0x07) << 18)
+						   | (((unsigned char)found[i + 1] & 0x3f) << 12)
+						   | (((unsigned char)found[i + 2] & 0x3f) << 6)
+						   | ((unsigned char)found[i + 3] & 0x3f);
+						i += 4;
+					} else {
+						cp = b0;
+						i += 1;
+					}
+					if (cp <= 0xffff) {
+						wide[out++] = (jchar)cp;
+					} else if (cp <= 0x10ffff) {
+						cp -= 0x10000;
+						wide[out++] = (jchar)(0xd800 | (cp >> 10));
+						wide[out++] = (jchar)(0xdc00 | (cp & 0x3ff));
+					}
+				}
+				answer = (*env)->NewString(env, wide, (jsize)out);
+			} else {
+				/* The Western modules store single-byte text (ISO-8859-1), not
+				   Modified UTF-8, so handing bytes >= 0x80 straight to
+				   NewStringUTF aborts CheckJNI. Every ISO-8859-1 byte maps to
+				   the same UTF-16 code unit. */
+				size_t i;
+				for (i = 0; i < n; i++)
+					wide[i] = (jchar)(unsigned char)found[i];
+				answer = (*env)->NewString(env, wide, (jsize)n);
+			}
 			free(wide);
 		}
 	}
