@@ -94,7 +94,7 @@ object TextPipeline {
 		// textual markup is skipped here while source code is being read.
 		try { if (s.readTextStyles && !s.codeMode) text = MarkupStyles.annotate(text) } catch (_: Throwable) {}
 		try { if (s.stripSsml && !s.codeMode) text = Ssml.strip(text) } catch (_: Throwable) {}
-		try { text = Emoji.apply(text, s.readEmoji) } catch (_: Throwable) {}
+		try { text = Emoji.apply(text, s.readEmoji, symbolLanguage) } catch (_: Throwable) {}
 		try { text = index.apply(text) } catch (_: Throwable) {}
 		if (s.expandAbbreviations) {
 			try { text = Abbreviations.apply(text, abbreviations) } catch (_: Throwable) {}
@@ -104,6 +104,10 @@ object TextPipeline {
 		if (s.readOtpDigits) {
 			try { text = Otp.apply(text) } catch (_: Throwable) {}
 		}
+		// Dates and times in a Hindi or Nepali segment become words before
+		// the digits are regrouped: 25/10/2026 is a date there, not three
+		// numbers with punctuation between them. See [IndicText].
+		try { text = IndicText.apply(text, symbolLanguage) } catch (_: Throwable) {}
 		try { text = Numbers.apply(text, s.numberMode) } catch (_: Throwable) {}
 		try { text = CapitalLetters.apply(text, s.capitalMode) } catch (_: Throwable) {}
 		try { text = Spelling.apply(text, s.spellingMode) } catch (_: Throwable) {}

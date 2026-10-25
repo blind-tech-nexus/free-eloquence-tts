@@ -1,110 +1,132 @@
 rule get_stanital_nuc_AV takes 1 from is_sival.obj
   call ZZfence_null
   set global half 2718 to 0
-  set global half 2714 to 53
+  set global half 2714 to 56
   call ZZlpta_load_vvg__setscan_0035r__2
   if answer is not 0
     go to av_adj
   end
-  # High vowels: i(27), u(31), I(61), U(62), nI(71), ni(72), nU(73), nu(74) -> 55
   plant test av_open
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 27
   if answer is 0
-    set global half 2714 to 55
+    set global half 2714 to 57
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 31
   if answer is 0
-    set global half 2714 to 55
+    set global half 2714 to 57
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 61
   if answer is 0
-    set global half 2714 to 54
+    set global half 2714 to 56
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 62
   if answer is 0
-    set global half 2714 to 54
+    set global half 2714 to 56
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 71
   if answer is 0
-    set global half 2714 to 54
+    set global half 2714 to 56
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 72
   if answer is 0
-    set global half 2714 to 55
+    set global half 2714 to 57
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 73
   if answer is 0
-    set global half 2714 to 54
+    set global half 2714 to 56
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 74
   if answer is 0
-    set global half 2714 to 55
+    set global half 2714 to 57
     go to av_adj
   end
 place av_open
-  # Low/open vowels: a(30)->48, E(29)->51, c(33)->51, O(63)->49, ae(64)->49, na(70)->49, nE(76)->51, nc(78)->51
   plant test av_adj
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 30
   if answer is 0
-    set global half 2714 to 48
+    set global half 2714 to 54
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 60
+  if answer is 0
+    set global half 2714 to 55
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 69
+  if answer is 0
+    set global half 2714 to 55
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 63
   if answer is 0
-    set global half 2714 to 49
+    set global half 2714 to 54
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 64
   if answer is 0
-    set global half 2714 to 49
+    set global half 2714 to 54
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 70
   if answer is 0
-    set global half 2714 to 49
+    set global half 2714 to 55
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 29
   if answer is 0
-    set global half 2714 to 51
+    set global half 2714 to 55
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 33
   if answer is 0
-    set global half 2714 to 51
+    set global half 2714 to 55
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 75
+  if answer is 0
+    set global half 2714 to 56
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 76
   if answer is 0
-    set global half 2714 to 51
+    set global half 2714 to 55
+    go to av_adj
+  end
+  call ZZlpta_load_vvg__setscan_0035r__2
+  call testFldeq 2 0 77
+  if answer is 0
+    set global half 2714 to 56
     go to av_adj
   end
   call ZZlpta_load_vvg__setscan_0035r__2
   call testFldeq 2 0 78
   if answer is 0
-    set global half 2714 to 51
+    set global half 2714 to 55
     go to av_adj
   end
 place av_adj
@@ -118,19 +140,82 @@ place av_end
   match
 end
 
-# Indo-Aryan vowel & nasalized vowel acoustic target rules.
+rule indi_vow_i takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 290
+  set global half 2922 to 65535
+  set global half 2926 to 2320
+  set global half 2930 to 65535
+  set global half 2934 to 2940
+  set global half 2938 to 65535
+  set global half 2726 to 80
+  set global half 2730 to 95
+  set global half 2734 to 125
+place done
+  match
+end
+
+rule indi_vow_e takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 425
+  set global half 2922 to 65535
+  set global half 2926 to 2070
+  set global half 2930 to 65535
+  set global half 2934 to 2690
+  set global half 2938 to 65535
+  set global half 2726 to 85
+  set global half 2730 to 95
+  set global half 2734 to 125
+place done
+  match
+end
+
+rule indi_vow_u takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 305
+  set global half 2922 to 65535
+  set global half 2926 to 825
+  set global half 2930 to 65535
+  set global half 2934 to 2350
+  set global half 2938 to 65535
+  set global half 2726 to 80
+  set global half 2730 to 90
+  set global half 2734 to 125
+place done
+  match
+end
+
+rule indi_vow_o takes 1 from is_sival.obj
+  call ZZfence_null
+  plant test done
+  set global half 2918 to 440
+  set global half 2922 to 65535
+  set global half 2926 to 895
+  set global half 2930 to 65535
+  set global half 2934 to 2450
+  set global half 2938 to 65535
+  set global half 2726 to 85
+  set global half 2730 to 90
+  set global half 2734 to 125
+place done
+  match
+end
+
 rule indi_vow_schwa takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 525
+  set global half 2918 to 555
   set global half 2922 to 65535
-  set global half 2926 to 1380
+  set global half 2926 to 1310
   set global half 2930 to 65535
   set global half 2934 to 2490
   set global half 2938 to 65535
-  set global half 2726 to 100
+  set global half 2726 to 92
   set global half 2730 to 95
-  set global half 2734 to 130
+  set global half 2734 to 125
 place done
   match
 end
@@ -138,15 +223,15 @@ end
 rule indi_vow_a takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 780
+  set global half 2918 to 765
   set global half 2922 to 65535
-  set global half 2926 to 1250
+  set global half 2926 to 1230
   set global half 2930 to 65535
   set global half 2934 to 2520
   set global half 2938 to 65535
-  set global half 2726 to 110
+  set global half 2726 to 100
   set global half 2730 to 95
-  set global half 2734 to 130
+  set global half 2734 to 125
 place done
   match
 end
@@ -154,15 +239,15 @@ end
 rule indi_vow_I takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 370
+  set global half 2918 to 365
   set global half 2922 to 65535
-  set global half 2926 to 1980
+  set global half 2926 to 2060
   set global half 2930 to 65535
-  set global half 2934 to 2640
+  set global half 2934 to 2670
   set global half 2938 to 65535
-  set global half 2726 to 90
-  set global half 2730 to 100
-  set global half 2734 to 130
+  set global half 2726 to 85
+  set global half 2730 to 95
+  set global half 2734 to 125
 place done
   match
 end
@@ -170,15 +255,15 @@ end
 rule indi_vow_U takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 385
+  set global half 2918 to 380
   set global half 2922 to 65535
-  set global half 2926 to 960
+  set global half 2926 to 955
   set global half 2930 to 65535
   set global half 2934 to 2420
   set global half 2938 to 65535
-  set global half 2726 to 90
+  set global half 2726 to 85
   set global half 2730 to 90
-  set global half 2734 to 130
+  set global half 2734 to 125
 place done
   match
 end
@@ -186,15 +271,15 @@ end
 rule indi_vow_E takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 575
+  set global half 2918 to 605
   set global half 2922 to 65535
-  set global half 2926 to 1775
+  set global half 2926 to 1780
   set global half 2930 to 65535
   set global half 2934 to 2560
   set global half 2938 to 65535
-  set global half 2726 to 105
-  set global half 2730 to 105
-  set global half 2734 to 130
+  set global half 2726 to 95
+  set global half 2730 to 100
+  set global half 2734 to 125
 place done
   match
 end
@@ -204,13 +289,13 @@ rule indi_vow_c takes 1 from is_sival.obj
   plant test done
   set global half 2918 to 585
   set global half 2922 to 65535
-  set global half 2926 to 945
+  set global half 2926 to 965
   set global half 2930 to 65535
-  set global half 2934 to 2480
+  set global half 2934 to 2470
   set global half 2938 to 65535
-  set global half 2726 to 105
+  set global half 2726 to 95
   set global half 2730 to 95
-  set global half 2734 to 130
+  set global half 2734 to 125
 place done
   match
 end
@@ -218,15 +303,15 @@ end
 rule indi_vow_O takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 655
+  set global half 2918 to 645
   set global half 2922 to 65535
-  set global half 2926 to 1020
+  set global half 2926 to 1015
   set global half 2930 to 65535
-  set global half 2934 to 2490
+  set global half 2934 to 2485
   set global half 2938 to 65535
-  set global half 2726 to 110
+  set global half 2726 to 100
   set global half 2730 to 95
-  set global half 2734 to 130
+  set global half 2734 to 125
 place done
   match
 end
@@ -234,15 +319,15 @@ end
 rule indi_vow_ae takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 685
+  set global half 2918 to 680
   set global half 2922 to 65535
   set global half 2926 to 1720
   set global half 2930 to 65535
   set global half 2934 to 2540
   set global half 2938 to 65535
-  set global half 2726 to 110
-  set global half 2730 to 105
-  set global half 2734 to 130
+  set global half 2726 to 100
+  set global half 2730 to 100
+  set global half 2734 to 125
 place done
   match
 end
@@ -250,17 +335,18 @@ end
 rule indi_vow_nschwa takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 540
+  set global half 2918 to 570
   set global half 2922 to 65535
-  set global half 2926 to 1360
+  set global half 2926 to 1295
   set global half 2930 to 65535
-  set global half 2934 to 2500
+  set global half 2934 to 2490
   set global half 2938 to 65535
-  set global half 2726 to 240
-  set global half 2730 to 150
-  set global half 2734 to 130
-  set global half 2726 to 430
-  set global half 2730 to 360
+  set global half 2726 to 170
+  set global half 2730 to 130
+  set global half 2734 to 140
+  set global half 2766 to 440
+  set global half 2758 to 54
+  set global half 2866 to 1
   set global half 3014 to 4
 place done
   match
@@ -269,17 +355,18 @@ end
 rule indi_vow_na takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 760
+  set global half 2918 to 755
   set global half 2922 to 65535
-  set global half 2926 to 1240
+  set global half 2926 to 1220
   set global half 2930 to 65535
-  set global half 2934 to 2530
+  set global half 2934 to 2520
   set global half 2938 to 65535
-  set global half 2726 to 250
-  set global half 2730 to 155
-  set global half 2734 to 130
-  set global half 2726 to 430
-  set global half 2730 to 360
+  set global half 2726 to 175
+  set global half 2730 to 130
+  set global half 2734 to 140
+  set global half 2766 to 440
+  set global half 2758 to 54
+  set global half 2866 to 1
   set global half 3014 to 4
 place done
   match
@@ -288,17 +375,18 @@ end
 rule indi_vow_nI takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 390
+  set global half 2918 to 380
   set global half 2922 to 65535
-  set global half 2926 to 1950
+  set global half 2926 to 2030
   set global half 2930 to 65535
-  set global half 2934 to 2650
+  set global half 2934 to 2670
   set global half 2938 to 65535
-  set global half 2726 to 220
-  set global half 2730 to 150
-  set global half 2734 to 130
-  set global half 2726 to 430
-  set global half 2730 to 360
+  set global half 2726 to 160
+  set global half 2730 to 130
+  set global half 2734 to 140
+  set global half 2766 to 440
+  set global half 2758 to 54
+  set global half 2866 to 1
   set global half 3014 to 4
 place done
   match
@@ -307,17 +395,18 @@ end
 rule indi_vow_ni takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 315
+  set global half 2918 to 310
   set global half 2922 to 65535
-  set global half 2926 to 2240
+  set global half 2926 to 2270
   set global half 2930 to 65535
-  set global half 2934 to 2900
+  set global half 2934 to 2910
   set global half 2938 to 65535
-  set global half 2726 to 220
-  set global half 2730 to 155
-  set global half 2734 to 130
-  set global half 2726 to 430
-  set global half 2730 to 360
+  set global half 2726 to 160
+  set global half 2730 to 130
+  set global half 2734 to 140
+  set global half 2766 to 440
+  set global half 2758 to 54
+  set global half 2866 to 1
   set global half 3014 to 4
 place done
   match
@@ -326,17 +415,18 @@ end
 rule indi_vow_nU takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 405
+  set global half 2918 to 395
   set global half 2922 to 65535
-  set global half 2926 to 950
+  set global half 2926 to 945
   set global half 2930 to 65535
-  set global half 2934 to 2430
+  set global half 2934 to 2420
   set global half 2938 to 65535
-  set global half 2726 to 220
-  set global half 2730 to 145
-  set global half 2734 to 130
-  set global half 2726 to 430
-  set global half 2730 to 360
+  set global half 2726 to 160
+  set global half 2730 to 125
+  set global half 2734 to 140
+  set global half 2766 to 440
+  set global half 2758 to 54
+  set global half 2866 to 1
   set global half 3014 to 4
 place done
   match
@@ -345,17 +435,18 @@ end
 rule indi_vow_nu takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 330
+  set global half 2918 to 325
   set global half 2922 to 65535
-  set global half 2926 to 830
+  set global half 2926 to 825
   set global half 2930 to 65535
-  set global half 2934 to 2380
+  set global half 2934 to 2370
   set global half 2938 to 65535
-  set global half 2726 to 220
-  set global half 2730 to 145
-  set global half 2734 to 130
-  set global half 2726 to 430
-  set global half 2730 to 360
+  set global half 2726 to 160
+  set global half 2730 to 125
+  set global half 2734 to 140
+  set global half 2766 to 440
+  set global half 2758 to 54
+  set global half 2866 to 1
   set global half 3014 to 4
 place done
   match
@@ -364,17 +455,18 @@ end
 rule indi_vow_ne takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 430
+  set global half 2918 to 435
   set global half 2922 to 65535
-  set global half 2926 to 2000
+  set global half 2926 to 2030
   set global half 2930 to 65535
-  set global half 2934 to 2680
+  set global half 2934 to 2690
   set global half 2938 to 65535
-  set global half 2726 to 230
-  set global half 2730 to 150
-  set global half 2734 to 130
-  set global half 2726 to 430
-  set global half 2730 to 360
+  set global half 2726 to 165
+  set global half 2730 to 130
+  set global half 2734 to 140
+  set global half 2766 to 440
+  set global half 2758 to 54
+  set global half 2866 to 1
   set global half 3014 to 4
 place done
   match
@@ -383,17 +475,18 @@ end
 rule indi_vow_nE takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 585
+  set global half 2918 to 615
   set global half 2922 to 65535
-  set global half 2926 to 1740
+  set global half 2926 to 1750
   set global half 2930 to 65535
-  set global half 2934 to 2570
+  set global half 2934 to 2560
   set global half 2938 to 65535
-  set global half 2726 to 245
-  set global half 2730 to 155
-  set global half 2734 to 130
-  set global half 2726 to 430
-  set global half 2730 to 360
+  set global half 2726 to 170
+  set global half 2730 to 135
+  set global half 2734 to 140
+  set global half 2766 to 440
+  set global half 2758 to 54
+  set global half 2866 to 1
   set global half 3014 to 4
 place done
   match
@@ -402,17 +495,18 @@ end
 rule indi_vow_no takes 1 from is_sival.obj
   call ZZfence_null
   plant test done
-  set global half 2918 to 445
+  set global half 2918 to 450
   set global half 2922 to 65535
-  set global half 2926 to 890
+  set global half 2926 to 885
   set global half 2930 to 65535
-  set global half 2934 to 2460
+  set global half 2934 to 2450
   set global half 2938 to 65535
-  set global half 2726 to 230
-  set global half 2730 to 145
-  set global half 2734 to 130
-  set global half 2726 to 430
-  set global half 2730 to 360
+  set global half 2726 to 165
+  set global half 2730 to 125
+  set global half 2734 to 140
+  set global half 2766 to 440
+  set global half 2758 to 54
+  set global half 2866 to 1
   set global half 3014 to 4
 place done
   match
@@ -423,15 +517,16 @@ rule indi_vow_nc takes 1 from is_sival.obj
   plant test done
   set global half 2918 to 595
   set global half 2922 to 65535
-  set global half 2926 to 950
+  set global half 2926 to 965
   set global half 2930 to 65535
-  set global half 2934 to 2490
+  set global half 2934 to 2470
   set global half 2938 to 65535
-  set global half 2726 to 245
-  set global half 2730 to 150
-  set global half 2734 to 130
-  set global half 2726 to 430
-  set global half 2730 to 360
+  set global half 2726 to 170
+  set global half 2730 to 130
+  set global half 2734 to 140
+  set global half 2766 to 440
+  set global half 2758 to 54
+  set global half 2866 to 1
   set global half 3014 to 4
 place done
   match
@@ -445,7 +540,7 @@ rule stanital_vals takes 1 from is_sival.obj
     call testFldeq 2 0 27
     if answer is 0
       plant test sv_tail
-      call stanital_ph_i
+      call indi_vow_i
       go to sv_tail
     end
   end
@@ -456,7 +551,7 @@ place sv_1
     call testFldeq 2 0 28
     if answer is 0
       plant test sv_tail
-      call stanital_ph_e
+      call indi_vow_e
       go to sv_tail
     end
   end
@@ -489,7 +584,7 @@ place sv_4
     call testFldeq 2 0 31
     if answer is 0
       plant test sv_tail
-      call stanital_ph_u
+      call indi_vow_u
       go to sv_tail
     end
   end
@@ -500,7 +595,7 @@ place sv_5
     call testFldeq 2 0 32
     if answer is 0
       plant test sv_tail
-      call stanital_ph_o
+      call indi_vow_o
       go to sv_tail
     end
   end
@@ -703,6 +798,41 @@ place sv_23
     end
   end
 place sv_tail
+  plant test sv_murmur_done
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 59
+    if answer is 0
+      set global half 2914 to 6
+      add 35 to global half 2726
+      go to sv_murmur_done
+    end
+    call testFldeq 2 0 57
+    if answer is 0
+      set global half 2914 to 6
+      add 30 to global half 2726
+      go to sv_murmur_done
+    end
+  end
+place sv_murmur_done
+  plant test sv_ret_r
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 5 4
+    if answer is 0
+      set global half 2934 to 2060
+    end
+  end
+place sv_ret_r
+  plant test sv_ret_done
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 5 4
+    if answer is 0
+      set global half 2938 to 2060
+    end
+  end
+place sv_ret_done
   plant test sv_nas
   if global half 3012 is 1
     call modify_breathiness_for_femV

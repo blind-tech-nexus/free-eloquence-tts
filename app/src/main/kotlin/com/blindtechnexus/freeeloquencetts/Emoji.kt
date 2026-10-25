@@ -273,7 +273,19 @@ object Emoji {
 	 * that copy, on the way to every utterance -- which is the sort of cost
 	 * that reads as "the engine is slow" and has nothing to do with the engine.
 	 */
-	fun apply(text: String, read: Boolean): String {
+	fun apply(text: String, read: Boolean): String = apply(text, read, 0)
+
+	/**
+	 * The same, with the names in [language] where it has names of its own.
+	 *
+	 * An emoji named in English inside a Hindi or Nepali sentence used to be
+	 * handed to the Indic voice as English words, which is exactly the
+	 * accent nobody asked for; the names below are ordinary Devanagari words
+	 * and the voice says them as its own. Emoji neither table names keep the
+	 * English name, which the Indic voices can still say, and every other
+	 * language keeps the English names it has always had.
+	 */
+	fun apply(text: String, read: Boolean, language: Int): String {
 		if (text.isEmpty()) return text
 		var emoji = false
 		var emoticon = false
@@ -294,7 +306,7 @@ object Emoji {
 			at++
 		}
 		if (!emoji && !emoticon && !spacing) return text
-		val built = if (emoji) name(text, read) else collapse(text)
+		val built = if (emoji) name(text, read, language) else collapse(text)
 		if (!emoticon) return built
 		var out = built
 		for (pattern in EMOTICONS) {
@@ -306,13 +318,14 @@ object Emoji {
 
 	/** [text] with every emoji the table knows turned into its name, or into
 	 *  nothing, and with runs of spaces run into one as they go. */
-	private fun name(text: String, read: Boolean): String {
+	private fun name(text: String, read: Boolean, language: Int = 0): String {
 		val out = StringBuilder(text.length + 16)
 		var at = 0
 		while (at < text.length) {
 			val c = text[at]
 			if (c.isHighSurrogate() && at + 1 < text.length && text[at + 1].isLowSurrogate()) {
-				val pair = BY_PAIR[text.substring(at, at + 2)]
+				val emoji = text.substring(at, at + 2)
+				val pair = if (read) localized(emoji, language) ?: BY_PAIR[emoji] else BY_PAIR[emoji]
 				if (pair == null) {
 					append(out, c)
 					append(out, text[at + 1])
@@ -322,7 +335,7 @@ object Emoji {
 				at += 2
 				continue
 			}
-			val known = BY_CHAR[c]
+			val known = if (read) localized(c.toString(), language) ?: BY_CHAR[c] else BY_CHAR[c]
 			if (known == null) append(out, c) else append(out, if (read) " " + known + " " else " ")
 			at++
 		}
@@ -347,6 +360,50 @@ object Emoji {
 		}
 		return false
 	}
+
+	/** The name of [emoji] in [language], or nothing when that language has
+	 *  no name of its own for it and the English one should stand. */
+	private fun localized(emoji: String, language: Int): String? = when (language) {
+		Eci.HINDI -> NAMES_HI[emoji]
+		Eci.NEPALI -> NAMES_NE[emoji]
+		else -> null
+	}
+
+	/** Emoji names in Hindi, in words the Hindi voice says as its own. */
+	private val NAMES_HI = mapOf(
+		"😀" to "मुस्कुराता चेहरा", "😁" to "मुस्कुराता चेहरा", "😂" to "खुशी के आँसुओं वाला चेहरा",
+		"😄" to "मुस्कुराता चेहरा", "😅" to "पसीने के साथ मुस्कुराता चेहरा", "😆" to "हँसता चेहरा",
+		"😉" to "आँख मारता चेहरा", "😊" to "मुस्कुराता चेहरा", "😍" to "दिलों वाला मुस्कुराता चेहरा",
+		"😘" to "चुंबन भेजता चेहरा", "🙂" to "हल्का मुस्कुराता चेहरा", "🤔" to "सोचता चेहरा",
+		"😐" to "भावहीन चेहरा", "😴" to "सोता चेहरा", "😢" to "रोता चेहरा", "😭" to "ज़ोर से रोता चेहरा",
+		"😠" to "गुस्सा चेहरा", "😡" to "गुस्सा चेहरा", "😱" to "डर से चीखता चेहरा",
+		"❤" to "लाल दिल", "💔" to "टूटा दिल", "💕" to "दो दिल", "💖" to "चमकता दिल",
+		"👍" to "अँगूठा ऊपर", "👎" to "अँगूठा नीचे", "👌" to "ठीक हाथ", "👏" to "ताली बजाते हाथ",
+		"🙏" to "जुड़े हाथ", "👋" to "हिलाता हाथ", "🤝" to "हाथ मिलाना", "💪" to "तनी हुई बाँह",
+		"✅" to "सही का निशान", "❌" to "गलत का निशान", "❓" to "प्रश्न चिह्न", "❗" to "विस्मय चिह्न",
+		"⚠" to "चेतावनी", "⭐" to "तारा", "🔥" to "आग", "🎉" to "पार्टी पॉपर", "🎂" to "जन्मदिन का केक",
+		"📱" to "मोबाइल फ़ोन", "💻" to "लैपटॉप", "🔔" to "घंटी", "🔕" to "बिना आवाज़ घंटी",
+		"🔋" to "बैटरी", "💡" to "बल्ब", "🚗" to "कार", "✈" to "हवाई जहाज़", "🚀" to "रॉकेट",
+		"🌙" to "चाँद", "☀" to "सूरज", "🌈" to "इंद्रधनुष", "❄" to "बर्फ़ का फूल"
+	)
+
+	/** Emoji names in Nepali, in words the Nepali voice says as its own. */
+	private val NAMES_NE = mapOf(
+		"😀" to "मुस्कुराउने अनुहार", "😁" to "मुस्कुराउने अनुहार", "😂" to "खुसीका आँसुसहितको अनुहार",
+		"😄" to "मुस्कुराउने अनुहार", "😅" to "पसिनासहित मुस्कुराउने अनुहार", "😆" to "हाँस्ने अनुहार",
+		"😉" to "आँखा झिम्क्याउने अनुहार", "😊" to "मुस्कुराउने अनुहार", "😍" to "मुटुसहित मुस्कुराउने अनुहार",
+		"😘" to "चुम्बन पठाउने अनुहार", "🙂" to "हल्का मुस्कुराउने अनुहार", "🤔" to "सोच्ने अनुहार",
+		"😐" to "भावहीन अनुहार", "😴" to "सुतेको अनुहार", "😢" to "रुने अनुहार", "😭" to "ठूलो स्वरले रुने अनुहार",
+		"😠" to "रिसाएको अनुहार", "😡" to "रिसाएको अनुहार", "😱" to "डरले चिच्याउने अनुहार",
+		"❤" to "रातो मुटु", "💔" to "टुटेको मुटु", "💕" to "दुई मुटु", "💖" to "चम्कने मुटु",
+		"👍" to "बुढी औँला माथि", "👎" to "बुढी औँला तल", "👌" to "ठीक हात", "👏" to "ताली बजाउने हात",
+		"🙏" to "जोडिएका हात", "👋" to "हल्लाउने हात", "🤝" to "हात मिलाउने", "💪" to "तन्किएको पाखुरा",
+		"✅" to "ठीक चिन्ह", "❌" to "गलत चिन्ह", "❓" to "प्रश्न चिन्ह", "❗" to "विस्मय चिन्ह",
+		"⚠" to "चेतावनी", "⭐" to "तारा", "🔥" to "आगो", "🎉" to "पार्टी पपर", "🎂" to "जन्मदिनको केक",
+		"📱" to "मोबाइल फोन", "💻" to "ल्यापटप", "🔔" to "घण्टी", "🔕" to "आवाज नभएको घण्टी",
+		"🔋" to "ब्याट्री", "💡" to "बत्ती", "🚗" to "कार", "✈" to "हवाईजहाज", "🚀" to "रकेट",
+		"🌙" to "चन्द्रमा", "☀" to "सूर्य", "🌈" to "इन्द्रेणी", "❄" to "हिउँको फूल"
+	)
 
 	/** Into [out], keeping runs of spaces down to one space as they go. That
 	 *  is what the whole rebuilt text used to be handed to a regular

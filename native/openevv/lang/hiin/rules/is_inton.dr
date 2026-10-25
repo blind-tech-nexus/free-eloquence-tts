@@ -378,8 +378,8 @@ label L0 was _ital_nucl_high_tone
   push state 0
   store movw imm 50 slot -10
   store movw imm 70 slot -6
-  store movw imm 10 slot -14
-  store movw imm 40 slot -2
+  store movw imm 15 slot -14
+  store movw imm 58 slot -2
   call ZZstarttest1 arity 1 depth 2
   load movl slotaddr -12 into r0
   push slotaddr -12
@@ -1740,10 +1740,10 @@ label L6 was at_0x163
   cmp cmpw ind reg r6 1988 reg r0w
   popreg r1
   branch je to L7
-  alu addw imm 10 slot -2
+  alu addw imm 30 slot -2
   jump to L8
 label L7 was at_0x180
-  alu addw imm 20 slot -2
+  alu addw imm 48 slot -2
 label L8 was at_0x185
   push reg r6
   call ZZstarttest11 arity 1 depth 1
@@ -2482,7 +2482,7 @@ label L1 was $X1$90803
   store movw reg r3w slot -18
   store movw imm 99 slot -14
   store movw imm 99 ind reg r6 634
-  store movw imm 120 slot -2
+  store movw imm 136 slot -2
   call ZZstarttest2 arity 1 depth 1
   push reg r6
   call ZZbspush_ca__3 arity 1 depth 2

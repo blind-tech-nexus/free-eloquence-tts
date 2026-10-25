@@ -40,6 +40,11 @@ val buildNative by tasks.registering(Exec::class) {
 	inputs.files(rootProject.fileTree("native/openevv/src"))
 	inputs.files(rootProject.fileTree("native/openevv/rom"))
 	inputs.files(rootProject.fileTree("native/openevv/lib"))
+	inputs.files(
+		rootProject.fileTree("native/openevv/lang") {
+			include("*/*.settings", "*/*.statements", "*/*.phonemes", "*/*.codepoints", "*/rules/*")
+		}
+	)
 	inputs.file(rootProject.layout.projectDirectory.file("native/android.mk"))
 	inputs.file(script)
 	inputs.file(layout.projectDirectory.file("src/main/cpp/evv_jni.c"))

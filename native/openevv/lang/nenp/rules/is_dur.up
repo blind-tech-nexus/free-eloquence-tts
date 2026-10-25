@@ -1,14 +1,40 @@
-# Indo-Aryan consonant duration rules (ms in 2082, burst ms in 2990).
+# Indo-Aryan consonant duration rules (nenp).
+rule indi_ph_r_dur takes 1 from is_dur.obj
+  call ZZfence_null
+  set global half 2082 to 26
+  plant test check_right
+  call ZZlpta_load_vvg__setscan_0103l__2
+  if answer is 0
+    call testFldeq 2 0 21
+    if answer is 0
+      set global half 2082 to 18
+      match
+    end
+  end
+place check_right
+  plant test check_gem
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 21
+    if answer is 0
+      set global half 2082 to 48
+      match
+    end
+  end
+place check_gem
+  match
+end
+
 rule indi_ph_M_dur takes 1 from is_dur.obj
   call ZZfence_null
-  set global half 2082 to 58
-  set global half 2990 to 14
+  set global half 2082 to 50
+  set global half 2990 to 12
   plant test check_right
   call ZZlpta_load_vvg__setscan_0103l__2
   if answer is 0
     call testFldeq 2 0 39
     if answer is 0
-      set global half 2082 to 20
+      set global half 2082 to 18
       match
     end
   end
@@ -18,7 +44,7 @@ place check_right
   if answer is 0
     call testFldeq 2 0 39
     if answer is 0
-      set global half 2082 to 92
+      set global half 2082 to 76
       match
     end
   end
@@ -28,12 +54,7 @@ place check_asp
   if answer is 0
     call testFldeq 2 4 9
     if answer is 0
-      set global half 2082 to 42
-      match
-    end
-    call testFldeq 2 4 10
-    if answer is 0
-      set global half 2082 to 42
+      set global half 2082 to 38
       match
     end
   end
@@ -43,14 +64,14 @@ end
 
 rule indi_ph_W_dur takes 1 from is_dur.obj
   call ZZfence_null
-  set global half 2082 to 50
+  set global half 2082 to 44
   set global half 2990 to 10
   plant test check_right
   call ZZlpta_load_vvg__setscan_0103l__2
   if answer is 0
     call testFldeq 2 0 41
     if answer is 0
-      set global half 2082 to 20
+      set global half 2082 to 18
       match
     end
   end
@@ -60,7 +81,7 @@ place check_right
   if answer is 0
     call testFldeq 2 0 41
     if answer is 0
-      set global half 2082 to 84
+      set global half 2082 to 70
       match
     end
   end
@@ -70,12 +91,7 @@ place check_asp
   if answer is 0
     call testFldeq 2 4 9
     if answer is 0
-      set global half 2082 to 38
-      match
-    end
-    call testFldeq 2 4 10
-    if answer is 0
-      set global half 2082 to 38
+      set global half 2082 to 34
       match
     end
   end
@@ -85,13 +101,13 @@ end
 
 rule indi_ph_X_dur takes 1 from is_dur.obj
   call ZZfence_null
-  set global half 2082 to 58
+  set global half 2082 to 48
   plant test check_right
   call ZZlpta_load_vvg__setscan_0103l__2
   if answer is 0
     call testFldeq 2 0 43
     if answer is 0
-      set global half 2082 to 20
+      set global half 2082 to 18
       match
     end
   end
@@ -101,7 +117,7 @@ place check_right
   if answer is 0
     call testFldeq 2 0 43
     if answer is 0
-      set global half 2082 to 88
+      set global half 2082 to 74
       match
     end
   end
@@ -111,38 +127,13 @@ end
 
 rule indi_ph_j_dur takes 1 from is_dur.obj
   call ZZfence_null
-  set global half 2082 to 24
-  plant test check_right
-  call ZZlpta_load_vvg__setscan_0103l__2
-  if answer is 0
-    call testFldeq 2 0 44
-    if answer is 0
-      set global half 2082 to 20
-      match
-    end
-  end
-place check_right
-  plant test check_asp
-  call ZZlpta_load_vvg__setscan_0104r__2
-  if answer is 0
-    call testFldeq 2 0 44
-    if answer is 0
-      set global half 2082 to 50
-      match
-    end
-  end
-place check_asp
+  set global half 2082 to 22
   plant test dur_done
   call ZZlpta_load_vvg__setscan_0104r__2
   if answer is 0
     call testFldeq 2 4 9
     if answer is 0
-      set global half 2082 to 20
-      match
-    end
-    call testFldeq 2 4 10
-    if answer is 0
-      set global half 2082 to 20
+      set global half 2082 to 18
       match
     end
   end
@@ -152,118 +143,38 @@ end
 
 rule indi_ph_q_dur takes 1 from is_dur.obj
   call ZZfence_null
-  set global half 2082 to 60
-  set global half 2990 to 15
-  plant test check_right
-  call ZZlpta_load_vvg__setscan_0103l__2
-  if answer is 0
-    call testFldeq 2 0 52
-    if answer is 0
-      set global half 2082 to 20
-      match
-    end
-  end
-place check_right
-  plant test check_asp
-  call ZZlpta_load_vvg__setscan_0104r__2
-  if answer is 0
-    call testFldeq 2 0 52
-    if answer is 0
-      set global half 2082 to 92
-      match
-    end
-  end
-place check_asp
+  set global half 2082 to 52
+  set global half 2990 to 14
   match
 end
 
 rule indi_ph_x_dur takes 1 from is_dur.obj
   call ZZfence_null
-  set global half 2082 to 74
-  plant test check_right
-  call ZZlpta_load_vvg__setscan_0103l__2
-  if answer is 0
-    call testFldeq 2 0 53
-    if answer is 0
-      set global half 2082 to 20
-      match
-    end
-  end
-place check_right
-  plant test check_asp
-  call ZZlpta_load_vvg__setscan_0104r__2
-  if answer is 0
-    call testFldeq 2 0 53
-    if answer is 0
-      set global half 2082 to 98
-      match
-    end
-  end
-place check_asp
+  set global half 2082 to 62
   match
 end
 
 rule indi_ph_A_dur takes 1 from is_dur.obj
   call ZZfence_null
-  set global half 2082 to 64
-  plant test check_right
-  call ZZlpta_load_vvg__setscan_0103l__2
-  if answer is 0
-    call testFldeq 2 0 54
-    if answer is 0
-      set global half 2082 to 20
-      match
-    end
-  end
-place check_right
-  plant test check_asp
-  call ZZlpta_load_vvg__setscan_0104r__2
-  if answer is 0
-    call testFldeq 2 0 54
-    if answer is 0
-      set global half 2082 to 88
-      match
-    end
-  end
-place check_asp
+  set global half 2082 to 54
   match
 end
 
 rule indi_ph_ss_dur takes 1 from is_dur.obj
   call ZZfence_null
-  set global half 2082 to 74
-  plant test check_right
-  call ZZlpta_load_vvg__setscan_0103l__2
-  if answer is 0
-    call testFldeq 2 0 55
-    if answer is 0
-      set global half 2082 to 20
-      match
-    end
-  end
-place check_right
-  plant test check_asp
-  call ZZlpta_load_vvg__setscan_0104r__2
-  if answer is 0
-    call testFldeq 2 0 55
-    if answer is 0
-      set global half 2082 to 98
-      match
-    end
-  end
-place check_asp
+  set global half 2082 to 62
   match
 end
 
 rule indi_ph_va_dur takes 1 from is_dur.obj
   call ZZfence_null
-  set global half 2082 to 52
+  set global half 2082 to 44
   plant test check_right
   call ZZlpta_load_vvg__setscan_0103l__2
   if answer is 0
     call testFldeq 2 0 56
     if answer is 0
-      set global half 2082 to 20
+      set global half 2082 to 18
       match
     end
   end
@@ -273,7 +184,7 @@ place check_right
   if answer is 0
     call testFldeq 2 0 56
     if answer is 0
-      set global half 2082 to 82
+      set global half 2082 to 68
       match
     end
   end
@@ -283,81 +194,22 @@ end
 
 rule indi_ph_h_dur takes 1 from is_dur.obj
   call ZZfence_null
-  set global half 2082 to 60
-  plant test check_right
-  call ZZlpta_load_vvg__setscan_0103l__2
-  if answer is 0
-    call testFldeq 2 0 57
-    if answer is 0
-      set global half 2082 to 20
-      match
-    end
-  end
-place check_right
-  plant test check_asp
-  call ZZlpta_load_vvg__setscan_0104r__2
-  if answer is 0
-    call testFldeq 2 0 57
-    if answer is 0
-      set global half 2082 to 84
-      match
-    end
-  end
-place check_asp
+  set global half 2082 to 48
   match
 end
 
 rule indi_ph_H_dur takes 1 from is_dur.obj
   call ZZfence_null
-  set global half 2082 to 50
-  plant test check_right
-  call ZZlpta_load_vvg__setscan_0103l__2
-  if answer is 0
-    call testFldeq 2 0 58
-    if answer is 0
-      set global half 2082 to 20
-      match
-    end
-  end
-place check_right
-  plant test check_asp
-  call ZZlpta_load_vvg__setscan_0104r__2
-  if answer is 0
-    call testFldeq 2 0 58
-    if answer is 0
-      set global half 2082 to 50
-      match
-    end
-  end
-place check_asp
+  set global half 2082 to 34
   match
 end
 
 rule indi_ph_Q_dur takes 1 from is_dur.obj
   call ZZfence_null
-  set global half 2082 to 54
-  plant test check_right
-  call ZZlpta_load_vvg__setscan_0103l__2
-  if answer is 0
-    call testFldeq 2 0 59
-    if answer is 0
-      set global half 2082 to 20
-      match
-    end
-  end
-place check_right
-  plant test check_asp
-  call ZZlpta_load_vvg__setscan_0104r__2
-  if answer is 0
-    call testFldeq 2 0 59
-    if answer is 0
-      set global half 2082 to 54
-      match
-    end
-  end
-place check_asp
+  set global half 2082 to 36
   match
 end
+
 
 rule ital_cons_durs takes 3 from is_dur.obj
   local p_start bytes 8
@@ -449,7 +301,7 @@ place cd_4
     call testFldeq 2 0 21
     if answer is 0
       plant test cd_apply
-      call ital_ph_r_dur
+      call indi_ph_r_dur
       go to cd_apply
     end
   end
@@ -774,6 +626,24 @@ place cd_33
   end
   go to cd_step
 place cd_apply
+  plant test cd_pre_asp_done
+  call ZZlpta_load_vvg__setscan_0104r__2
+  if answer is 0
+    call testFldeq 2 0 58
+    if answer is 0
+      if global signed half 2082 is more than 40
+        set global half 2082 to 40
+      end
+      go to cd_pre_asp_done
+    end
+    call testFldeq 2 0 59
+    if answer is 0
+      if global signed half 2082 is more than 36
+        set global half 2082 to 36
+      end
+    end
+  end
+place cd_pre_asp_done
   plant test cd_burst
   call insert_dur g2080 g832 g840 g584
 place cd_burst

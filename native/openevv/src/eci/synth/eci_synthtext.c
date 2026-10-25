@@ -231,7 +231,7 @@ static void utf8ToWide(const char *text, uint32_t len, uint16_t *out)
 
         if (c < 0x80) {
             *w++ = c;
-        } else if (c >= 0xc0 && c < 0xdf) {
+        } else if (c >= 0xc0 && c <= 0xdf && i + 1 < len) {
             uint8_t hi = (uint8_t)((c & 0x1c) >> 2);
             uint8_t lo = (uint8_t)(((c & 0x03) << 6)
                                    | ((uint8_t)text[i + 1] & 0x3f));
@@ -239,13 +239,29 @@ static void utf8ToWide(const char *text, uint32_t len, uint16_t *out)
             *w = (uint16_t)((((uint32_t)*w | hi) << 8) | lo);
             w++;
             i++;
-        } else {
+        } else if (c >= 0xf0 && c <= 0xf4 && i + 3 < len) {
+            uint32_t cp = ((uint32_t)(c & 0x07) << 18)
+                        | ((uint32_t)((uint8_t)text[i + 1] & 0x3f) << 12)
+                        | ((uint32_t)((uint8_t)text[i + 2] & 0x3f) << 6)
+                        | (uint32_t)((uint8_t)text[i + 3] & 0x3f);
+            if (cp >= 0x10000 && cp <= 0x10ffff) {
+                cp -= 0x10000;
+                *w++ = (uint16_t)(0xd800 | (cp >> 10));
+                *w++ = (uint16_t)(0xdc00 | (cp & 0x3ff));
+            } else {
+                *w++ = ' ';
+            }
+            i += 3;
+        } else if (i + 2 < len) {
             uint8_t a = (uint8_t)(text[i] & 0x0f);
             uint8_t b = (uint8_t)((uint8_t)text[i + 1] & 0x3f);
             uint8_t c3 = (uint8_t)((uint8_t)text[i + 2] & 0x3f);
 
             *w++ = (uint16_t)((a << 12) | (b << 6) | c3);
             i += 2;
+        } else {
+            *w++ = ' ';
+            break;
         }
     }
 }
@@ -329,10 +345,13 @@ static int utf8ToWestern(const char *text, uint32_t len, char *out,
                 for (m = 0; m < sizeof WESTERN / sizeof WESTERN[0]; m++) {
                     if (WESTERN[m].cp == (uint32_t)cp) {
                         cp = WESTERN[m].byte;
+                        done = 1;
                         break;
                     }
                 }
             }
+            if (!done && (uint32_t)cp > 0xff)
+                cp = ' ';
         }
         *o++ = (char)cp;
     }
@@ -476,10 +495,15 @@ THIS void addTextRun(SynthThread *t, char *text, uint32_t len, int32_t seq,
        the count is in characters and the characters have just changed. */
     filtered = stw_filterText(t, source, (int32_t)ST_ENGINE_ID(t));
     len = filtered ? (uint32_t)strlen(filtered) : 0;
-    if (len < asked)
-        ST_PENDING(t) -= (int32_t)(asked - len);
-    else if (len > asked)
-        ST_PENDING(t) += (int32_t)(len - asked);
+    if (len != asked) {
+        lock = ST_LOCK(t);
+        sy_mutexWait(lock, -1);
+        if (len < asked)
+            ST_PENDING(t) -= (int32_t)(asked - len);
+        else
+            ST_PENDING(t) += (int32_t)(len - asked);
+        sy_mutexRelease(lock);
+    }
 
     if (rz_addText(ST_ROMAN(t), filtered, (int32_t)len, last) == -1) {
         stb_postRomanizerError(t, 0);

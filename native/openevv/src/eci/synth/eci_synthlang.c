@@ -174,12 +174,14 @@ static void wireReporting(SynthThread *t, UserCallback user,
     }
 }
 
-/* The whole engine changes under us. */
+/* The whole engine changes under us. Keep already-started engines cached in
+   EngineArray so switching back and forth between languages does not tear
+   down and rebuild Delta instances on every piece; EngineList's destructor
+   releases every cached engine when the ECI instance itself is deleted. */
 static void switchEngine(SynthThread *t, LangIdentifier *lang)
 {
     LangIdentifier *current = &t->lang;
 
-    ea_removeEngine(ST_ENGINES(t), current);
     if (ST_ROMAN(t))
         rz_removeUnused(ST_ROMAN(t), lang);
 

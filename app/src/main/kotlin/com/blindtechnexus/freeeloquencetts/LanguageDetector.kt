@@ -8,16 +8,16 @@ package com.blindtechnexus.freeeloquencetts
  * Two scripts carry the decision by themselves:
  *
  *  - Devanagari is Hindi or Nepali, the two Indic modules this build
- *    carries. The script alone cannot say which, so each Devanagari run is
- *    scored against two lexicons of words and endings that occur in one
- *    language and not the other -- Nepali verb forms (`हुन्छ`, `गर्छु`,
- *    `भयो` ...), its own particles (`-लाई`, `-बाट`, `-सँग` ...) and its
- *    lexicon (`तपाईं`, `राम्रो`, `कान्छी` ...) against Hindi ones
- *    (`हैं`, `है`, `क्या`, `नहीं`, `वाला` ...). The short postpositions
- *    the two languages share (को, का, ले, मा ...) are deliberately left
- *    out, since substring matching would make every sentence ambiguous. A
- *    run with no marker follows the listener's default Indic language, and
- *    Hindi when that default is a Western one.
+ *    carries. One word alone rarely says which -- the script is shared and
+ *    so is most of the everyday vocabulary -- so the decision is made by
+ *    the sentence: the marked words of a stretch (Nepali `हुन्छ`, `गर्छु`,
+ *    `तपाईं`, `-लाई`, `-बाट`, `-सँग`, `-नुहोस्` ... against Hindi `है`,
+ *    `नहीं`, `मुझे`, `-वाला` ...) vote, and every unmarked word in the
+ *    stretch is spoken in the language they chose. A stretch with no marked
+ *    word follows the previous Devanagari decision, then the listener's
+ *    default Indic language, and Hindi when that default is a Western one.
+ *    Shared greetings and thanks (`नमस्ते`, `धन्यवाद`) are in both lists on
+ *    purpose nowhere: they belong to whichever Indic voice is speaking.
  *
  *  - Latin runs are English, Spanish, French, German or Italian. Diacritics
  *    that only one language owns (ß, ñ, ç, circumflexes ...) vote first,
@@ -130,6 +130,14 @@ object LanguageDetector {
 
 	private class RawRun(val script: Int, val text: String) {
 		var language = 0
+
+		/** How much evidence a Latin word carries of its own: 0 is none, so
+		 *  [resolveRuns] may overrule it with its neighbours'. */
+		var strength = 0
+
+		/** Whether a neutral run ends a sentence, which is where a
+		 *  Devanagari stretch stops and a new one may change language. */
+		var endsSentence = false
 	}
 
 	/** One code-point pass into maximal word runs and neutral runs. */
@@ -150,9 +158,10 @@ object LanguageDetector {
 						at += Character.charCount(text.codePointAt(at))
 					}
 					val word = text.substring(start, at)
-					val run = RawRun(SCRIPT_DEVANAGARI, word)
-					run.language = classifyDevanagari(word, runs, baseLanguage)
-					runs.add(run)
+					// Decided by [resolveRuns], which sees the whole sentence:
+					// one Devanagari word alone rarely says which of the two
+					// languages it is, but the words around it usually do.
+					runs.add(RawRun(SCRIPT_DEVANAGARI, word))
 				}
 				SCRIPT_LATIN -> {
 					flushNeutral(runs, neutral)
@@ -176,7 +185,7 @@ object LanguageDetector {
 					}
 					val word = text.substring(start, at)
 					val run = RawRun(SCRIPT_LATIN, word)
-					run.language = classifyLatin(word, baseLanguage)
+					run.language = classifyLatin(word, baseLanguage, run)
 					runs.add(run)
 				}
 				else -> {
@@ -185,13 +194,30 @@ object LanguageDetector {
 				}
 			}
 		}
-		if (neutral.isNotEmpty()) runs.add(RawRun(SCRIPT_NEUTRAL, neutral.toString()))
+		if (neutral.isNotEmpty()) {
+			val run = RawRun(SCRIPT_NEUTRAL, neutral.toString())
+			for (c in run.text) {
+				if (c == '।' || c == '॥' || c == '.' || c == '!' || c == '?' || c == '\n') {
+					run.endsSentence = true
+					break
+				}
+			}
+			runs.add(run)
+		}
+		resolveRuns(runs, baseLanguage)
 		return runs
 	}
 
 	private fun flushNeutral(runs: MutableList<RawRun>, neutral: StringBuilder) {
 		if (neutral.isNotEmpty()) {
-			runs.add(RawRun(SCRIPT_NEUTRAL, neutral.toString()))
+			val run = RawRun(SCRIPT_NEUTRAL, neutral.toString())
+			for (c in run.text) {
+				if (c == '।' || c == '॥' || c == '.' || c == '!' || c == '?' || c == '\n') {
+					run.endsSentence = true
+					break
+				}
+			}
+			runs.add(run)
 			neutral.setLength(0)
 		}
 	}
@@ -204,50 +230,147 @@ object LanguageDetector {
 	}
 
 	private fun isDevanagari(cp: Int): Boolean =
-		(cp in 0x0900..0x097F) || (cp in 0xA8E0..0xA8FF)
+		// The dandas (। ॥) sit inside the Devanagari block but are sentence
+		// punctuation, not word letters: a word carrying one (`है।`) would
+		// never match a lexicon entry, and the stretch logic needs them in
+		// the neutral run to know the sentence ended.
+		cp != 0x0964 && cp != 0x0965 &&
+			((cp in 0x0900..0x097F) || (cp in 0xA8E0..0xA8FF))
 
 	private fun isLatinLetter(cp: Int): Boolean =
 		(cp in 'a'.code..'z'.code) || (cp in 'A'.code..'Z'.code) || (cp in 0x00C0..0x024F)
 
 	// ---- Devanagari: Hindi versus Nepali ---------------------------------
 
+	/** Strength of evidence a single Devanagari word carries: positive is
+	 *  Nepali, negative is Hindi, zero is shared or unknown vocabulary. Whole
+	 *  words are looked up in hash sets (O(1)); only a short list of clitic and
+	 *  verb endings is matched as a suffix, because Nepali case markers and
+	 *  polite imperatives attach to stems (मानिसहरू, गर्नुहोस्). */
+	private fun devScore(word: String): Int {
+		if (word in NEPALI_WORDS) return 2
+		if (word in HINDI_WORDS) return -2
+		for (ending in NEPALI_ENDINGS) if (word.endsWith(ending)) return 1
+		for (ending in HINDI_ENDINGS) if (word.endsWith(ending)) return -1
+		return 0
+	}
+
 	/**
-	 * Score one Devanagari run. Words and endings distinctive of Nepali are
-	 * weighed against Hindi ones; the previous Devanagari decision breaks a
-	 * tie so a paragraph does not flicker between the two voices word by
-	 * word.
+	 * Decide every Devanagari and Latin word in [runs], using the sentence
+	 * around each word rather than the word alone.
+	 *
+	 * Devanagari words are grouped into stretches -- consecutive words of the
+	 * script with no Latin word and no sentence ender between them. A stretch
+	 * is spoken in the language its marked words vote for, so an unmarked word
+	 * such as `नमस्ते` or `घर` is Hindi inside a Hindi sentence and Nepali
+	 * inside a Nepali one, whichever side of it the copula (है / छ) sits. A
+	 * stretch with no marked word at all takes the previous Devanagari
+	 * decision, then the listener's own Indic language, then Hindi.
+	 *
+	 * Latin words keep their own decision when they carry real evidence (a
+	 * lexicon word, a distinctive letter, a romanized Indic word). A word with
+	 * no evidence of its own -- a product name, a coinage, an unknown English
+	 * word between two French ones -- takes the language of the Latin words
+	 * around it in the same stretch; with nothing around it, it takes English
+	 * when the listener's voice is Indic (a Latin word has no Devanagari
+	 * pronunciation worth giving it), the listener's own Western family when
+	 * there is one, and English otherwise.
 	 */
-	private fun classifyDevanagari(word: String, earlier: List<RawRun>, baseLanguage: Int): Int {
-		var nepali = 0
-		var hindi = 0
-		for (marker in NEPALI_MARKERS) {
-			if (word.contains(marker)) nepali++
-		}
-		for (marker in HINDI_MARKERS) {
-			if (word.contains(marker)) hindi++
-		}
-		if (nepali == hindi) {
-			// Prefer the voice the previous Indic run used; else the
-			// listener's default Indic language; else Hindi.
-			for (at in earlier.indices.reversed()) {
-				val run = earlier[at]
-				if (run.script == SCRIPT_DEVANAGARI) return run.language
+	private fun resolveRuns(runs: MutableList<RawRun>, baseLanguage: Int) {
+		val indicDefault = if (baseLanguage == Eci.NEPALI) Eci.NEPALI else Eci.HINDI
+		var stretchStart = -1
+		var stretchScore = 0
+		var lastIndic = 0
+
+		fun closeStretch(endExclusive: Int) {
+			if (stretchStart < 0) return
+			val language = when {
+				stretchScore > 0 -> Eci.NEPALI
+				stretchScore < 0 -> Eci.HINDI
+				lastIndic != 0 -> lastIndic
+				else -> indicDefault
 			}
-			return if (baseLanguage == Eci.NEPALI) Eci.NEPALI else Eci.HINDI
+			for (at in stretchStart until endExclusive) {
+				if (runs[at].script == SCRIPT_DEVANAGARI) runs[at].language = language
+			}
+			lastIndic = language
+			stretchStart = -1
+			stretchScore = 0
 		}
-		return if (nepali > hindi) Eci.NEPALI else Eci.HINDI
+
+		for (at in runs.indices) {
+			val run = runs[at]
+			when (run.script) {
+				SCRIPT_DEVANAGARI -> {
+					if (stretchStart < 0) stretchStart = at
+					stretchScore += devScore(run.text)
+				}
+				SCRIPT_LATIN -> closeStretch(at)
+				else -> if (run.endsSentence) closeStretch(at)
+			}
+		}
+		closeStretch(runs.size)
+
+		// Latin words with no evidence of their own borrow from their stretch.
+		var latinStart = -1
+		fun closeLatin(endExclusive: Int) {
+			if (latinStart < 0) return
+			// Words with no evidence are un-decided until their neighbours
+			// have had their say, so the guesses [classifyLatin] made for
+			// them are set aside first and only the fallback restores one.
+			for (at in latinStart until endExclusive) {
+				val run = runs[at]
+				if (run.script == SCRIPT_LATIN && run.strength == 0) run.language = 0
+			}
+			var lastStrong = 0
+			for (at in latinStart until endExclusive) {
+				val run = runs[at]
+				if (run.script != SCRIPT_LATIN) continue
+				if (run.strength > 0) lastStrong = run.language
+				else if (lastStrong != 0) run.language = lastStrong
+			}
+			var nextStrong = 0
+			for (at in endExclusive - 1 downTo latinStart) {
+				val run = runs[at]
+				if (run.script != SCRIPT_LATIN) continue
+				if (run.strength > 0) nextStrong = run.language
+				else if (run.language == 0 && nextStrong != 0) run.language = nextStrong
+			}
+			for (at in latinStart until endExclusive) {
+				val run = runs[at]
+				if (run.script == SCRIPT_LATIN && run.language == 0) {
+					run.language = latinFallback(baseLanguage)
+				}
+			}
+			latinStart = -1
+		}
+		for (at in runs.indices) {
+			when (runs[at].script) {
+				SCRIPT_LATIN -> if (latinStart < 0) latinStart = at
+				SCRIPT_DEVANAGARI -> closeLatin(at)
+			}
+		}
+		closeLatin(runs.size)
+	}
+
+	/** Where a Latin word with no evidence and no Latin neighbour goes. */
+	private fun latinFallback(baseLanguage: Int): Int {
+		val family = Eci.languageOf(baseLanguage).iso2Language
+		if (family == "hi" || family == "ne") return Eci.ENGLISH_US
+		if (family in FAMILIES) return familyToModule(family, baseLanguage)
+		return Eci.ENGLISH_US
 	}
 
 	// ---- Latin: the five Western families and romanized Indic ------------
 
-	private fun classifyLatin(word: String, baseLanguage: Int): Int {
+	private fun classifyLatin(word: String, baseLanguage: Int, run: RawRun): Int {
 		val lower = word.lowercase()
 
 		// Romanized Indic words keep their language even in Latin letters:
 		// "Kanchi" is Nepali, "dhanyavad" Hindi, whatever the English words
 		// around them do.
-		if (lower in NEPALI_ROMAN) return Eci.NEPALI
-		if (lower in HINDI_ROMAN) return Eci.HINDI
+		if (lower in NEPALI_ROMAN) { run.strength = 3; return Eci.NEPALI }
+		if (lower in HINDI_ROMAN) { run.strength = 3; return Eci.HINDI }
 
 		val scores = IntArray(5)
 		// Diacritics and punctuation only one family owns -- strong votes.
@@ -276,10 +399,16 @@ object LanguageDetector {
 		// Explicit lexicon words and distinctive diacritics above still switch
 		// normally; romanized Indic words were handled before this point.
 		if (scores.all { it == 0 }) {
+			// No evidence of its own. [resolveRuns] gives it the language of
+			// the Latin words around it where there are any; the bigram vote
+			// and the standing defaults are what is left when there are not,
+			// and they are only a guess, which is why the strength stays at
+			// zero and the neighbours win.
 			val baseFamily = Eci.languageOf(baseLanguage).iso2Language
 			if (baseFamily == "hi" || baseFamily == "ne") return Eci.ENGLISH_US
 			return familyToModule(bigramFamily(lower, baseLanguage), baseLanguage)
 		}
+		run.strength = 3
 		var best = 0
 		for (i in 1 until scores.size) {
 			if (scores[i] > scores[best]) best = i
@@ -348,50 +477,75 @@ object LanguageDetector {
 	 *  the same particles and [contains] matching would misread every Hindi
 	 *  sentence. Everything here is a longer string that occurs in Nepali and
 	 *  not in Hindi, or an ending distinctively Nepali (the oblique -ओ/-ओइ). */
-	private val NEPALI_MARKERS = setOf(
-		"हुन्छ", "हुँदैन", "हुने", "हुनु", "भएको", "भएका", "भएन", "गएन", "भयो", "थियो", "थिई",
-		"गर्छु", "गर्छौं", "गर्छ", "गर्छन्", "पर्छ", "सक्छ", "आउँछ", "जान्छ", "छैन", "हुनसक्छ",
-		"तपाईं", "तपाई", "उहाँ", "हामी", "उनी", "उनीहरू", "हाम्रो", "तिम्रो", "मेरो",
-		"केटा", "केटी", "मान्छे", "मानिस", "राम्रो", "नराम्रो", "ठूलो", "सानो", "नयाँ",
-		"पछि", "अगाडि", "भित्र", "बाहिर", "माथि", "मुनि", "वरिपरि", "देखि", "सम्म",
-		"सँग", "बाट", "लाई", "हरू", "हरु", "रुपैयाँ", "रुपैयां", "काठमाडौं", "काठमाडौँ",
-		"नेपाल", "पोखरा", "लुम्बिनी", "गोरखा", "विक्रम", "संवत्", "तरकारी", "गाउँ",
-		"पहाड", "हिमाल", "चोक", "बजार", "दाजु", "भाइ", "बहिनी", "छोरा", "छोरी", "बुबा",
-		"कान्छी", "कान्छा", "नमस्कार", "अहिले", "किनभने", "विद्यालय", "नुह", "छौं", "हुनुहुन्छ"
+	/** Nepali-only words. Whole-word lookup, so the postpositions the two
+	 *  languages share (को, का, की, ले, मा) are absent on purpose: they say
+	 *  nothing about which language a sentence is in, and the stretch vote in
+	 *  [resolveRuns] is what decides sentences built out of them. */
+	private val NEPALI_WORDS = setOf(
+		"हुन्छ", "हुँदैन", "हुने", "हुनु", "भएको", "भएका", "भएन", "गएन", "भयो", "थियो", "थिई", "थिए", "थिएन",
+		"गर्छु", "गर्छौं", "गर्छ", "गर्छन्", "गर्दै", "गरेको", "गरेर", "पर्छ", "पर्दैन", "सक्छ", "सक्दैन", "सकिन्छ",
+		"आउँछ", "आउँदैन", "आयो", "आएन", "जान्छ", "गयो", "गएन", "खायो", "खाएन", "दियो", "दिएन",
+		"छ", "छु", "छौँ", "छौ", "छन्", "छैन", "छैनन्", "हो", "होइन", "हैन", "चाहिन्छ", "चाहिँदैन", "थाहा",
+		"यो", "यी", "त्यो", "ती", "यिनी", "तिनी", "उनी", "उहाँ", "हामी", "तिमी", "तपाईं", "तपाईँ", "हजुर",
+		"मेरो", "तिम्रो", "हाम्रो", "उनको", "यसको", "त्यसको", "कसको", "कसले", "कसलाई", "कसरी",
+		"केटा", "केटी", "मान्छे", "मानिस", "राम्रो", "नराम्रो", "ठूलो", "ठुलो", "सानो", "नयाँ", "पुरानो", "साथी",
+		"पछि", "पछाडि", "अगाडि", "अघि", "भित्र", "बाहिर", "माथि", "मुनि", "वरिपरि", "देखि", "सम्म", "सँग", "सित",
+		"बाट", "लागि", "बारेमा", "अनुसार", "किनभने", "त्यसैले", "अनि", "अथवा", "सबै", "धेरै", "थोरै", "अझ", "अझै",
+		"कस्तो", "कस्ता", "कति", "कहिले", "कता", "कुन", "कुनै", "कोही", "केही",
+		"रुपैयाँ", "रुपैयां", "काठमाडौँ", "काठमाडौं", "विराटनगर", "पोखरा", "लुम्बिनी", "धरान", "इटहरी", "जनकपुर",
+		"नेपाली", "तरकारी", "गाउँ", "सहर", "पहाड", "हिमाल", "चोक", "बजार", "दाजु", "दाइ", "दिदी", "भाइ",
+		"बहिनी", "छोरा", "छोरी", "बुबा", "बुवा", "आमा", "कान्छी", "कान्छा", "अहिले", "भोलि", "हिजो", "पर्सि",
+		"बिहान", "दिउँसो", "साँझ", "राति", "मिनेट", "सेकेन्ड", "बजे", "बजेर", "चिया", "भात", "दाल",
+		"सगरमाथा", "कोशी", "बागमती", "गण्डकी", "कर्णाली", "मोरङ", "सुनसरी", "झापा", "नेपालगन्ज", "बुटवल", "भरतपुर"
 	)
 
-	/** Hindi-only words, endings and proper nouns. */
-	private val HINDI_MARKERS = setOf(
-		"हैं", "है", "हूँ", "हूं", "होगा", "होगी", "होता", "होती", "हुआ", "हुए", "हुई",
-		"रहा", "रही", "रहे", "था", "थी", "थे", "नहीं", "क्या", "क्यों", "कैसे", "कैसा",
-		"कौन", "मुझे", "मुझको", "हमें", "तुम्हें", "अपने", "वाला", "वाली", "वाले",
-		"लिए", "द्वारा", "चाहिए", "बहुत", "अभी", "फिर", "लोग",
-		"शुक्रिया", "अलविदा", "कृपया", "भारत", "हिंदुस्तान", "हिन्दुस्तान", "दिल्ली",
-		"मुंबई", "बंबई", "लड़का", "लड़की", "सुबह", "दोपहर", "महीना", "हफ्ता", "हफ़्ता",
-		"सप्ताह", "रुपये", "रुपया", "पैसा", "पैसे", "वक़्त", "वक्त", "ज़िंदगी", "दुनिया",
-		"इधर", "उधर", "ऊपर", "नीचे", "सामने", "पुराना", "अंदर", "कहाँ", "कहां", "और",
-		// Short, unmistakably Hindi function and content words. Nepali uses
-		// हो/छ rather than है and यो/त्यो rather than यह/वह, so these do not
-		// collide with the Nepali list.
-		"एक", "यह", "वह", "हिंदी", "हिन्दी", "भाषा", "वाक्य", "करता", "करती", "करते"
+	/** Hindi-only words, on the same whole-word terms. */
+	private val HINDI_WORDS = setOf(
+		"हैं", "है", "हूँ", "हूं", "होगा", "होगी", "होंगे", "होता", "होती", "होते", "हुआ", "हुए", "हुई",
+		"रहा", "रही", "रहे", "रहता", "रहती", "रहते", "जाता", "जाती", "जाते", "करता", "करती", "करते",
+		"था", "थी", "थे", "थीं", "नहीं", "क्या", "क्यों", "कैसे", "कैसा", "कैसी", "कौन", "कब", "कितना", "कितनी",
+		"मुझे", "मुझको", "मुझसे", "हमें", "तुम्हें", "तुझे", "इसे", "उसे", "किसे", "जिसे", "इन्हें", "उन्हें", "किन्हें", "जिन्हें",
+		"मेरे", "तेरा", "तेरी", "तुम्हारा", "तुम्हारी", "आपका", "आपकी", "इसका", "उसका", "इनका", "उनका", "अपना", "अपनी", "अपने",
+		"वाला", "वाली", "वाले", "लिए", "लिये", "द्वारा", "चाहिए", "चाहिये", "चाहता", "चाहती", "बहुत", "अभी", "फिर", "लोग", "लोगों",
+		"शुक्रिया", "अलविदा", "कृपया", "हिंदुस्तान", "हिन्दुस्तान", "दिल्ली", "मुंबई", "बंबई", "कोलकाता", "चेन्नई", "लखनऊ",
+		"लड़का", "लड़की", "लड़के", "बच्चा", "बच्ची", "आदमी", "औरत", "सुबह", "दोपहर", "महीना", "महीने", "हफ़्ता", "हफ्ता",
+		"सप्ताह", "रुपये", "रुपया", "रुपए", "पैसा", "पैसे", "वक़्त", "वक्त", "ज़िंदगी", "जिन्दगी",
+		"इधर", "उधर", "ऊपर", "नीचे", "सामने", "पुराना", "पुरानी", "अंदर", "बाहर",
+		"यह", "ये", "वह", "वे", "इस", "उस", "हिंदी", "हिन्दी", "बात",
+		"अच्छा", "अच्छी", "ज़्यादा", "ज्यादा", "बिल्कुल", "ज़रूर", "शायद", "हमेशा", "कभी"
+	)
+
+	/** Nepali endings that attach to stems: polite imperatives, the plural
+	 *  and the case clitics. Matched as suffixes because the stem in front of
+	 *  them is any noun or verb at all. */
+	private val NEPALI_ENDINGS = listOf(
+		"नुहोस्", "नोस्", "हरू", "हरु", "लाई", "देखि", "सँग", "बाट", "हरूमा", "हरूले", "हरूबाट"
+	)
+
+	/** Hindi endings with no Nepali life: the -वाला family and -रहा forms
+	 *  written as one word. */
+	private val HINDI_ENDINGS = listOf(
+		"वाला", "वाली", "वाले", "रहा", "रही", "रहे", "चाहिए", "चाहिये"
 	)
 
 	/** Romanized words that are Nepali even though they are Latin letters. */
 	private val NEPALI_ROMAN = setOf(
-		"kanchi", "kanchhi", "kanchha", "namaskar", "dhanyabad",
-		"tapai", "tapain", "hunchha", "huncha", "chha", "chaina", "chhaina", "hoina",
-		"kathmandu", "pokhara", "lumbini", "gorkha", "sherpa", "thapa", "gurung",
-		"basnet", "basnyat", "nepal", "nepali", "ramro", "ramri", "sanchai",
-		"dhanyabaad", "hajur", "haina"
+		"kanchi", "kanchhi", "kanchha", "namaskar",
+		"tapai", "tapain", "tapailai", "hunchha", "huncha", "hunxa", "chha", "chhaina", "chaina", "hoina", "haina",
+		"mero", "timro", "hamro", "timi", "hami", "hajur", "sanchai", "ramro", "ramri", "thik",
+		"khana", "pani", "ghar", "bato", "khola", "pahad", "himal", "mauka",
+		"kathmandu", "biratnagar", "pokhara", "dharan", "itahari", "janakpur", "lumbini", "gorkha",
+		"sherpa", "thapa", "gurung", "basnet", "basnyat", "nepal", "nepali", "dhanyabaad"
 	)
 
 	/** Romanized words that are Hindi even though they are Latin letters. */
 	private val HINDI_ROMAN = setOf(
-		"dhanyavad", "dhanyawad", "shukriya", "accha", "acha", "theek", "thik", "kaisa",
-		"kaise", "kahan", "kya", "kyon", "nahin", "nahi", "aap", "hum", "tum", "bhai",
+		"dhanyavad", "dhanyavaad", "dhanyawad", "shukriya", "accha", "acha", "theek", "thik",
+		"kaisa", "kaisi", "kaise", "kahan", "kidhar", "idhar", "udhar", "kya", "kyon", "kyu", "kab",
+		"nahin", "nahi", "aap", "aapka", "hum", "tum", "mera", "meri", "tumhara", "bhai", "bhaiya", "didi",
 		"behan", "mata", "pita", "rupaya", "rupaye", "paise", "paisa", "namaste",
-		"hindi", "hindustan", "bharat", "delhi", "mumbai", "bambai", "kripya", "alvida",
-		"bahut", "abhi", "phir", "log", "chahiye"
+		"hindi", "hindustan", "bharat", "delhi", "mumbai", "bambai", "kolkata", "chennai", "lucknow",
+		"kripya", "alvida", "bahut", "bohot", "abhi", "phir", "log", "chahiye", "mein", "mera"
 	)
 
 	private val LEX_EN = setOf(

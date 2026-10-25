@@ -1310,13 +1310,13 @@ label L2 was at_0x59
   load movl imm 0 into r2
   alu incl none reg r2
   store movw reg r7w ind reg r6 3466
-  store movw imm 65 ind reg r6 3470
-  store movw imm 50 ind reg r6 3474
-  store movw imm 92 ind reg r6 3478
-  store movw imm 50 ind reg r6 3482
-  store movw imm 30 ind reg r6 3486
+  store movw imm 74 ind reg r6 3470
+  store movw imm 54 ind reg r6 3474
+  store movw imm 96 ind reg r6 3478
+  store movw imm 48 ind reg r6 3482
+  store movw imm 55 ind reg r6 3486
   store movw reg r7w ind reg r6 3490
-  store movw reg r7w ind reg r6 3494
+  store movw imm 16 ind reg r6 3494
   store movw reg r7w ind reg r6 3498
   store movw imm 69 ind reg r6 3502
   store movw imm 50 ind reg r6 3506
@@ -1769,13 +1769,13 @@ label L3 was at_0x2d9
   store movw imm 3 ind reg r6 1634
   store movw imm 4 ind reg r6 1638
   store movw imm 5 ind reg r6 1642
-  store movw imm 750 ind reg r6 1952
-  store movw imm 400 ind reg r6 1956
-  store movw imm 250 ind reg r6 1960
-  store movw imm 150 ind reg r6 1964
-  store movw imm 100 ind reg r6 1968
-  store movw imm 50 ind reg r6 1972
-  store movw imm 25 ind reg r6 1976
+  store movw imm 300 ind reg r6 1952
+  store movw imm 140 ind reg r6 1956
+  store movw imm 130 ind reg r6 1960
+  store movw imm 95 ind reg r6 1964
+  store movw imm 65 ind reg r6 1968
+  store movw imm 15 ind reg r6 1972
+  store movw imm 10 ind reg r6 1976
   store movw imm 4 ind reg r6 1928
   store movw imm 3 ind reg r6 1936
   store movw imm 4 ind reg r6 1940

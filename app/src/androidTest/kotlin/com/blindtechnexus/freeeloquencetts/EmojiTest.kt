@@ -24,6 +24,19 @@ class EmojiTest {
 	}
 
 	@Test
+	fun anEmojiIsNamedInTheSegmentsOwnLanguage() {
+		// A Hindi or Nepali segment hears its emoji in its own words, not
+		// in English ones handed to a Devanagari voice.
+		assertEquals("मुस्कुराता चेहरा", Emoji.apply("😀", true, Eci.HINDI))
+		assertEquals("मुस्कुराउने अनुहार", Emoji.apply("😀", true, Eci.NEPALI))
+		assertEquals("लाल दिल", Emoji.apply("❤", true, Eci.HINDI))
+		assertEquals("रातो मुटु", Emoji.apply("❤", true, Eci.NEPALI))
+		assertEquals("Hello मुस्कुराता चेहरा world", Emoji.apply("Hello 😀 world", true, Eci.HINDI))
+		// Another language entirely keeps the English names.
+		assertEquals("grinning face", Emoji.apply("😀", true, Eci.GERMAN))
+	}
+
+	@Test
 	fun anEmojiIsDroppedWhenNotRead() {
 		assertEquals("", Emoji.apply("😀", false))
 		assertEquals("Hello world", Emoji.apply("Hello 😀 world", false))
