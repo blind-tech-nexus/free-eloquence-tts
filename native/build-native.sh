@@ -66,6 +66,14 @@ if [ ! -f "$engine/Makefile" ]; then
 	echo "repository and is not a submodule, so nothing needs fetching." >&2
 	exit 1
 fi
+if [ ! -d "$engine/tools/rules" ]; then
+	echo "native/openevv/tools/rules is missing; rule compilation scripts are required." >&2
+	exit 1
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+	echo "python3 is required to compile openevv language rules" >&2
+	exit 1
+fi
 
 # Every directory the engine's headers sit in, the same set its Makefile builds
 # its own include path from. They stay relative because the link below runs
