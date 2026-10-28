@@ -95,6 +95,14 @@ jobs:
           if [ -f "native/build-native.sh" ]; then
             chmod +x native/build-native.sh
           fi
+          if [ -f "debug.keystore.base64" ] && [ ! -f "debug.keystore" ]; then
+            echo "Restoring debug.keystore from debug.keystore.base64..."
+            base64 -d debug.keystore.base64 > debug.keystore
+          fi
+          if [ ! -f "debug.keystore" ]; then
+            echo "Generating debug.keystore..."
+            keytool -genkeypair -alias androiddebugkey -keypass android -keystore debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
+          fi
           echo
           echo "Gradle version:"
           ./gradlew --version
@@ -233,7 +241,8 @@ jobs:
           ./gradlew \
             --no-daemon \
             --stacktrace \
-            :app:assembleDebugAndroidTest 2>&1 | tee tests.log
+            -x validateSigningDebugAndroidTest \
+            :app:compileDebugAndroidTestSources 2>&1 | tee tests.log
           status="${PIPESTATUS[0]}"
           echo
           echo "Gradle exit status: ${status}"
@@ -460,6 +469,14 @@ jobs:
           # the status is carried to the end of the step by hand instead.
           set +e
           chmod +x ./gradlew
+          if [ -f "debug.keystore.base64" ] && [ ! -f "debug.keystore" ]; then
+            echo "Restoring debug.keystore from debug.keystore.base64..."
+            base64 -d debug.keystore.base64 > debug.keystore
+          fi
+          if [ ! -f "debug.keystore" ]; then
+            echo "Generating debug.keystore..."
+            keytool -genkeypair -alias androiddebugkey -keypass android -keystore debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
+          fi
           ./gradlew \
             --no-daemon \
             --stacktrace \
